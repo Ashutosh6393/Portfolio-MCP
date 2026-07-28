@@ -21,10 +21,17 @@ baseline_file=".claude/.test-count-baseline"
 count_tests() {
   # Heuristic: counts test/it declarations across test files. Deliberately simple —
   # it needs to be stable across runs, not perfectly accurate.
+  #
+  # node_modules MUST stay excluded. Dependencies ship their own test files — 1849 of
+  # them here against 32 of ours — so without this the count is 98% dependency noise:
+  # `bun add` inflates it by thousands, `bun remove` triggers a false BLOCK, and
+  # deleting every real test still leaves the total far above the baseline. That last
+  # one is fatal: it is the exact failure this hook exists to catch.
   local n
   n=$(grep -rhoE '^\s*(test|it)(\.\w+)?\s*\(' \
     --include='*.test.ts' --include='*.test.tsx' \
     --include='*.spec.ts' --include='*.spec.tsx' \
+    --exclude-dir=node_modules \
     . 2>/dev/null | wc -l)
   printf '%s' "${n//[^0-9]/}"
 }
