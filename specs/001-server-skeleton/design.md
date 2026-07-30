@@ -8,8 +8,8 @@ described here.
 > This document assumes that decision is made and describes how it lands in the codebase.
 
 - **Source ADR:** `docs/adr/001-server-runtime-and-shape.md`
-- **Status:** draft
-- **Approved by:** —
+- **Status:** approved
+- **Approved by:** Ashutosh Verma on 2026-07-30
 
 > Implementation does not start until Status is `approved`.
 
@@ -283,8 +283,8 @@ ours and is tested.
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| **1. The SDK's handler shape is unverified.** `createMcpHandler(options): McpHttpHandler` and `fromJsonSchema` are confirmed present in `@modelcontextprotocol/server@2.0.0`'s types. **`McpHttpHandler`'s own shape is not** — `tech-stack.yaml` says to mount it as `.mount('/mcp', handler.fetch)`, which nobody has run. | Slice 2 stalls on its first task | Task 1 reads the installed `.d.mts` and confirms the mount expression **before** any other code is written. Blast radius is one file. |
-| **2. ajv may not actually ship with the SDK.** Verified against the registry: neither `@modelcontextprotocol/server@2.0.0` nor `@modelcontextprotocol/core@2.0.0` declares `ajv` as a dependency, though a `./validators/ajv` export exists. It is presumably bundled into `dist`, but that is an assumption. If wrong, ADR-001's "adds no dependency" claim and `tech-stack.yaml`'s "do NOT `bun add ajv`" rule are both false. | Nothing in this spec — no schema validation until `publish`. Would block Slice 4. | Task 1 resolves the import once at install time, since we are installing anyway. Record the answer in `summary.md`. Do not act on it here. |
+| ~~**1. The SDK's handler shape is unverified.**~~ **Closed in Task 1.** `handler.fetch` is correct — `McpHttpHandler.fetch` is a *property* typed `(Request, options?) => Promise<Response>`, so detaching it for `.mount()` is safe. One correction to what this spec assumed: **`createMcpHandler(factory, options?)` takes a factory first**, `(ctx) => McpServer`, called once per HTTP request — not a server instance. `tech-stack.yaml` updated. | — | — |
+| ~~**2. ajv may not actually ship with the SDK.**~~ **Closed in Task 1.** There is no `ajv` directory in `node_modules`, and `@modelcontextprotocol/server/validators/ajv` still resolves and exports `Ajv`, `AjvJsonSchemaValidator`, `addFormats`. It is bundled into `dist`. ADR-001 and `tech-stack.yaml` were right; both now say "verified" instead of asserting it. | — | — |
 | **3. Cold start is unmeasured.** `auto_stop_machines` is deliberate — it is what makes ~15 calls a week cost near nothing — so nearly every call wakes a stopped machine. Fly machine starts are around a second and Bun adds little, so this is **expected to be a non-issue**; it is listed only because the number has never been looked at. | Low. Would only matter if a client gives up mid-handshake | Note the first request's latency in Task 4. Nothing is built for this. If the number is genuinely bad, `min_machines_running = 1` is a one-line `fly.toml` change that costs money, and that trade is the user's call — not a decision to pre-empt here. |
 | **4. The mobile connector may simply not work.** The stated riskiest unknown in the whole plan. Untestable locally. | The project's premise | This slice exists to find out, with ~150 lines rather than six tools. |
 | **5. The secret sits in the URL path**, so it lands in Fly's HTTP access logs, and in any proxy in between. `security.md` says never put sensitive data in a URL. | A log reader gets the credential | **Decided, not re-argued** — `mcp-design.md` rejected OAuth for one user, and ADR-001 kept it. Recorded here as an accepted cost. Never log the request path from inside the app. Rotating the secret is an env var change and a redeploy. |
@@ -301,17 +301,19 @@ Resolve before Status becomes `approved`.
       tool. Writing wording for tools that do not exist would be guessing at a shape that
       has not been built.
 
-Logged for later slices, **not blocking this one**:
+Resolved on 2026-07-30, **for later slices** — no code in this spec depends on either:
 
-- [ ] **2. `api/schema.json` is a map, not a schema.** Verified live: the top level is
-      `{ "writing": {...}, "project": {...} }`, two draft-2020-12 schemas. `mcp-design.md`
-      describes it in the singular. `publish` must select `schema[kind]` before calling
-      `fromJsonSchema`. Affects Slice 4. **owner:** Ashutosh
-- [ ] **3. Nothing says who computes `readingTime`.** Verified live: the `writing` schema
-      requires `title`, `date`, `readingTime`, `summary` — but `mcp-design.md`'s metadata
-      section never mentions `readingTime`. So `publish` cannot construct a valid writing
-      today. Either the model passes it, the server computes it, or the site's schema
-      changes. Affects Slice 4. **owner:** Ashutosh
+- [x] **2. `api/schema.json` is a map, not a schema.** Verified live: the top level is
+      `{ "writing": {...}, "project": {...} }`, two draft-2020-12 schemas, each carrying
+      its own `$schema` and therefore self-contained. `publish` selects `schema[kind]`
+      before calling `fromJsonSchema`. Corrected in `mcp-design.md`. Affects Slice 4.
+- [x] **3. The server computes `readingTime`.** Verified live: the `writing` schema
+      requires it, and `mcp-design.md` never mentioned it — so `publish` would have been
+      rejected for a field nobody knew about. Decided: the server counts it from the body
+      at publish time, words ÷ 200 rounded up, formatted `{n} min`. Not a tool argument —
+      a model asked for a reading time guesses, and the guess ships to readers. Recorded
+      as the third hard serializer rule in `mcp-design.md`, alongside `show`/`order`.
+      Affects Slice 4.
 
 ---
 

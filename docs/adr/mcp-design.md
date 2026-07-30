@@ -66,11 +66,18 @@ routes are what keep the two from drifting.
 | `api/projects/content.json` | every project: title, slug, summary, stack, status |
 | `api/writing/{slug}` | `{ metadata: {...}, body: "...", }` — body is raw MDX **without** the metadata block |
 | `api/projects/{slug}` | same shape |
-| `api/schema.json` | JSON Schema, generated from the site's own Zod schema |
+| `api/schema.json` | **Two** JSON Schemas in one object, keyed `writing` and `project` |
 
 `api/schema.json` is **mandatory**, not nice-to-have. The server fetches it and
 validates against it. It's the only thing stopping two definitions of "valid
 post" from diverging.
+
+It is **not one schema**. The live route returns `{ "writing": {...}, "project": {...} }`
+— two complete draft-2020-12 documents, each carrying its own `$schema`. So `publish`
+selects `schema[kind]` before validating; handing the whole object to a validator asks
+"does this post have a `writing` key and a `project` key?", which no post ever does.
+Because each is self-contained, lifting one out is safe. This row and this paragraph said
+"schema" singular until the live route was checked on 2026-07-30.
 
 Also add OG image generation with `@vercel/og`, from title + stack. No uploaded
 assets needed.
@@ -89,7 +96,7 @@ that out of a file needs a real JS parser and will bite you. So:
 - Reads get metadata as JSON from the site's API routes, which already import
   the object.
 
-Two hard rules in the serializer:
+Three hard rules in the serializer:
 
 1. **Never let a tool set `show` or `order`.** Those decide what's featured on
    your homepage. A model that just wrote a post is the worst possible judge of
@@ -98,6 +105,14 @@ Two hard rules in the serializer:
    comment says "omit the key entirely if none" — a naive serializer writes
    `repo: ""` and your site renders a dead link. Filter undefined before
    serializing.
+3. **Never let a tool set `readingTime`. The server computes it.** The site's
+   schema requires it on every writing, which nothing here recorded until the
+   live route was checked on 2026-07-30 — so `publish` would have been rejected
+   for a missing field nobody knew about. The server counts it from the body at
+   publish time: words ÷ 200, rounded up, formatted `{n} min` to match the
+   existing posts. Same principle as rule 1 — a reading time is a **fact about
+   the text, not an opinion about it**, and a model asked for one guesses. The
+   guess ships to real readers.
 
 **Settled.** Writings have a date; projects don't. There are **no tags** — this document
 guessed at them, and nothing on the site renders one. The site's Zod schemas are the

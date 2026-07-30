@@ -167,7 +167,15 @@ mcp:
     transport: Streamable HTTP, web-standard Request/Response
     rules:
       - Patch-only range (`~2.0.0`). 2.0.0 is a new major — read a minor before taking it.
-      - Mount into Elysia with `.mount('/mcp', handler.fetch)`. No Node compat shim.
+      - >-
+        Mount into Elysia with `.mount('/mcp', handler.fetch)`. No Node compat shim.
+        Verified against the installed types on 2026-07-30: `McpHttpHandler.fetch` is a
+        property holding `(Request, options?) => Promise<Response>`, not a prototype
+        method, so passing it detached is safe.
+      - >-
+        `createMcpHandler(factory, options?)` takes a FACTORY first, not a server
+        instance: `(ctx) => McpServer | Server | Promise<...>`, invoked once per HTTP
+        request. Build and register tools inside the factory.
       - Tool argument schemas are Zod. Errors are returned as tool results, never thrown.
 
   github:
@@ -195,8 +203,17 @@ mcp:
     tool: "@modelcontextprotocol/server (fromJsonSchema + validators/ajv)"
     role: Validate metadata against `api/schema.json`, fetched at runtime from the site.
     rules:
-      - Do NOT `bun add ajv`. It ships bundled inside the MCP SDK.
+      - >-
+        Do NOT `bun add ajv`. It ships bundled inside the MCP SDK. Confirmed on
+        2026-07-30: neither the SDK nor `@modelcontextprotocol/core` declares `ajv` as a
+        dependency and there is no `ajv` directory in `node_modules`, yet
+        `@modelcontextprotocol/server/validators/ajv` resolves and exports `Ajv`,
+        `AjvJsonSchemaValidator`, and `addFormats`. It is bundled into `dist`.
       - Import `fromJsonSchema` and `AjvJsonSchemaValidator` from the SDK.
+      - >-
+        `api/schema.json` holds TWO schemas keyed `writing` and `project`, each a
+        self-contained draft-2020-12 document. Pass `schema[kind]` to `fromJsonSchema`,
+        never the whole object.
     note: >-
       Zod cannot do this job: the schema arrives from another repo at runtime, so it
       cannot be a compile-time type without copying a definition that would then drift.

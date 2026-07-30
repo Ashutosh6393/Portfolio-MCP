@@ -5,10 +5,10 @@ reads this file first and picks up from it.
 
 Update it after every task. Never batch updates.
 
-- **Status:** not-started
+- **Status:** in-progress
 - **Branch:** `feat/server-skeleton`
 - **Spec:** `design.md` · **ADR:** `docs/adr/001-server-runtime-and-shape.md`
-- **Current task:** none — waiting on spec approval
+- **Current task:** 2 — `src/lib/env.ts`
 
 ---
 
@@ -34,7 +34,7 @@ In dependency order. Each task must be independently testable and map to test ID
 
 | # | Task | Depends on | Tests | Slice | State | Attempts | Commit |
 |---|---|---|---|---|---|---|---|
-| 1 | Scaffold: Bun, TS strict, Biome, scripts, deps | — | — | 1 | `pending` | 0/3 | — |
+| 1 | Scaffold: Bun, TS strict, Biome, scripts, deps | — | — | 1 | `done` | 1/3 | (this commit) |
 | 2 | `src/lib/env.ts` — Zod env schema, parsed at boot | 1 | T-01, T-02, T-03 | 1 | `pending` | 0/3 | — |
 | 3 | `src/index.ts` — Elysia, `GET /health`, secret prefix, `GET /{secret}/health` with empty checks, one 404 shape | 2 | T-04, T-05, T-06, T-07 | 1 | `pending` | 0/3 | — |
 | 4 | `Dockerfile`, `.dockerignore`, `fly.toml`, `.env.example`; deploy; measure cold start | 3 | — | 1 | `pending` | 0/3 | — |
@@ -121,18 +121,31 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 
 Newest first. Keep entries short — this is a handoff, not a diary.
 
-### 2026-07-30
+### 2026-07-30 — Task 1 done
 
-- **Done:** Spec scaffolded from ADR-001. No code written.
-- **State:** Waiting at the spec gate. `design.md` is `draft`.
-- **Next:** Human approves the slice plan, then Task 1.
-- **Watch out for:** Three live facts checked while writing this spec contradict the
-  design docs. All are recorded in `design.md`:
-  1. `api/schema.json` is a **map** of two schemas keyed `writing` and `project`, not a
-     single schema as `mcp-design.md` describes. Bites at `publish`, not here.
-  2. The `writing` schema **requires `readingTime`**, which `mcp-design.md`'s metadata
-     section never mentions. `publish` cannot build a valid writing until that is
-     answered.
-  3. `ajv` is not a declared dependency of the MCP SDK or its core package, despite
-     ADR-001 and `tech-stack.yaml` both stating it ships bundled. Presumed bundled into
-     `dist`; unconfirmed.
+- **Done:** Spec approved. Task 1: flat package (no Turborepo, per ADR-001), TS strict
+  with `noUncheckedIndexedAccess`, Biome 2.5.6, `bun.lock` committed. Installed
+  `elysia@1.4.29`, `zod@4.4.3`, `@modelcontextprotocol/server@~2.0.0`, and dev
+  `typescript@7.0.2`, `@types/bun`. **Not** installed: `octokit` and `@mdx-js/mdx` — ADR-001
+  lists them, but nothing in this spec touches GitHub or MDX.
+- **State:** Scaffold green. Both Task 1 verifications came back positive.
+- **Next:** Task 2 — write `src/lib/env.test.ts` first (T-01, T-02, T-03), confirm it fails
+  for the right reason, then `src/lib/env.ts`.
+- **Watch out for:**
+  - **`bun test` and `bun run typecheck` both error on an empty `src/`** — "0 test files"
+    and `TS18003: No inputs were found`. Expected at this commit; both go green the moment
+    Task 2 creates the first file. Not a broken scaffold.
+  - **`createMcpHandler` takes a factory, not a server.** Signature is
+    `(factory: (ctx) => McpServer | Server | Promise<...>, options?)`, and the factory runs
+    **once per HTTP request**. Task 7 builds the server inside it. This spec originally
+    assumed a single options argument.
+  - `zod@4.4.3` here matches the `portfolio` repo's version exactly, and the SDK requires
+    `^4.2.0`. Keep them aligned.
+
+### 2026-07-30 — spec scaffolded
+
+- **Done:** Spec written from ADR-001. Four live facts checked against the real site and
+  the real package; all four are recorded in `design.md`.
+- **Resolved at the gate:** server computes `readingTime`; `publish` selects
+  `schema[kind]`; both corrected in `mcp-design.md`. `list_content`'s description written.
+  Slice 1's 10-file count accepted.
