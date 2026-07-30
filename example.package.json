@@ -1,22 +1,22 @@
 {
-  "name": "{project-name}",
-  "private": true,
-  "packageManager": "bun@1.2.0",
-  "workspaces": ["apps/*", "packages/*"],
-  "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "biome check .",
-    "format": "biome check --write .",
-    "typecheck": "turbo run typecheck",
-    "test": "bun test",
-    "docs:sync": "bash .claude/hooks/sync-docs.sh",
-    "docs:check": "bash .claude/hooks/sync-docs.sh --check",
-    "prepare": "bash .claude/hooks/install-git-hooks.sh"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "latest",
-    "turbo": "latest",
-    "typescript": "latest"
-  }
+	"name": "{project-name}",
+	"private": true,
+	"packageManager": "bun@1.2.0",
+	"workspaces": ["apps/*", "packages/*"],
+	"scripts": {
+		"build": "turbo run build",
+		"dev": "turbo run dev",
+		"lint": "biome check .",
+		"format": "biome check --write .",
+		"typecheck": "turbo run typecheck",
+		"test": "bun test",
+		"docs:sync": "bash .claude/hooks/sync-docs.sh",
+		"docs:check": "bash .claude/hooks/sync-docs.sh --check",
+		"prepare": "bash .claude/hooks/install-git-hooks.sh"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "latest",
+		"turbo": "latest",
+		"typescript": "latest"
+	}
 }
