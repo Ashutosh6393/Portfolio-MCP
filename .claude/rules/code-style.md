@@ -67,15 +67,32 @@ Separate them clearly.
 ## Layer discipline (server)
 
 ```
-routes → controllers → services → repository
+tools → services → lib
 ```
 
-- Never skip downward: a controller must not touch the repository.
-- Never call upward.
-- Only the repository layer imports the database client.
+- One file per tool in `tools/`. It is the **only** layer that imports the MCP SDK.
+- `services/` owns all business logic. Every tool goes through one, including the thin
+  ones — "is this enough logic to need a service?" is a question that gets answered
+  differently twice.
+- `lib/` holds the GitHub App client, the site fetcher, env parsing, the MDX parse.
+- Never skip downward: a tool must not touch `lib`. Never call upward.
 
-This is what makes services testable without a database and repositories swappable
-without touching business logic.
+**Services take their dependencies as an argument**, never by importing a module
+singleton:
+
+```ts
+export async function publishWriting(
+  deps: { github: Github; site: Site },
+  args: PublishArgs,
+) { ... }
+```
+
+That is the seam. A test passes an object literal — no mocking framework, no
+`mock.module()`. See [testing.md](testing.md) for which layer gets tested how.
+
+There is no `repository/` layer in this repo, and no database. The default layout in
+[tech-stack.yaml](../../tech-stack.yaml) has one; the deviation is recorded in
+[ADR-001](../../docs/adr/001-server-runtime-and-shape.md).
 
 ---
 

@@ -1,7 +1,7 @@
 # ADR-001: Server runtime and repo shape
 
 - **Date:** 2026-07-30
-- **Status:** proposed
+- **Status:** accepted
 - **Deciders:** Ashutosh Verma
 
 ## Context
@@ -45,10 +45,13 @@ the choice was free. The constraints in play:
    already applies, so there is nothing new to decide. `@mdx-js/mdx` is the same
    compiler Next uses, so the pre-publish parse is the real check and not an
    approximation. Tool arguments are Zod schemas — the library the site's schema is
-   written in. The SDK's web-standard handler takes a `Request` and returns a
-   `Response`, which mounts into Elysia in one line.
-   *Against:* the web-standard entry point (`@modelcontextprotocol/server`) is newer
-   than the Node/Express path and still pre-1.0, so it needs an exact pin.
+   written in. `createMcpHandler` returns a web-standard handler that takes a `Request`
+   and returns a `Response`, which mounts into Elysia in one line.
+   *Against:* `@modelcontextprotocol/server` reached `2.0.0` on 2026-07-27 — a major
+   restructure, three days old when this was decided. The mature alternative,
+   `@modelcontextprotocol/sdk@1.30.0`, ships a Node `req`/`res` Streamable HTTP
+   transport, which would need a compat bridge under Bun. A new major beats a compat
+   shim, but it earns a narrow version range.
 
 3. **Hand-rolled JSON-RPC on one POST route, no SDK.** Tempting — six tools is not much
    code. *Against:* you inherit protocol version negotiation, notifications, SSE
@@ -62,17 +65,48 @@ The deciding argument is MDX parsing. Python cannot do it without a JS subproces
 once there is a JS subprocess the Python is decoration. Sharing Zod with the site and
 reusing the mandated stack are the tie-breakers, not the reason.
 
-Two shape decisions that follow, both deviations from `tech-stack.yaml`'s default
-server layout — flagged here rather than made quietly:
+### Shape
+
+Three shape decisions follow. The first two are deviations from `tech-stack.yaml`'s
+default server layout — flagged here rather than made quietly.
 
 - **One flat package at the repo root. No Turborepo, no `apps/*`.** Turborepo caches
   tasks across workspaces. There is one workspace. Add it when a second one exists.
 - **No `repository/` layer.** That layer exists to be the only thing importing a
-  database client, and there is no database. The GitHub App client and the site fetcher
-  live in `lib/`; services own all business logic; the tool definitions are the only
-  thing that talks to the MCP SDK.
+  database client, and there is no database.
+- **The chain is `tools → services → lib`.** One file per tool in `tools/`, and it is
+  the only layer that touches the MCP SDK. `services/` owns all business logic.
+  `lib/` holds the GitHub App client, the site fetcher, env parsing, and the MDX parse.
+  Never skip downward, never call upward — the same rule as the default layout, one
+  layer shorter.
 
-Dependencies this adds, and what each is for:
+**Services take their dependencies as an argument**, not by importing a module
+singleton:
+
+```ts
+export async function publishWriting(
+  deps: { github: Github; site: Site },
+  args: PublishArgs,
+) { ... }
+```
+
+That is the test seam. A service test passes a plain object literal — no mocking
+framework, no `mock.module()`, and the seam is visible in the signature. Module mocking
+would work too, but it leaks across test files unless every one cleans up, and a flaky
+suite costs more than one extra parameter.
+
+### Hosting
+
+**Fly.io, from a Dockerfile.** One small machine, auto-stop when idle and auto-start on
+a request, which is the right shape for ~15 calls a week. Stable hostname plus a custom
+domain for `mcp.ashutoshverma.dev`.
+
+Cloudflare Workers was the cheaper answer and the SDK supports it directly — it ships a
+`workerd` shim and a `./validators/cf-worker` export. It was rejected here because it
+replaces Bun *and* Elysia and puts `@mdx-js/mdx` under a bundle-size limit. That is a
+different decision than this one, and it would need its own ADR.
+
+### Dependencies
 
 | Package | For |
 |---|---|
@@ -81,33 +115,71 @@ Dependencies this adds, and what each is for:
 | `zod` | Tool argument schemas, env validation at boot |
 | `octokit` | GitHub App installation tokens, contents and pulls API |
 | `@mdx-js/mdx` | Parse MDX in `publish` before the PR is opened |
-| `ajv` | Validate metadata against the fetched `api/schema.json` |
 
-`ajv` is the one that looks redundant next to Zod and is not. `schema.json` arrives at
-runtime from another repo — it cannot be a compile-time Zod type without copying the
-definition here, which is exactly the drift the route exists to prevent.
+Pinned as `~2.0.0` — patch-only. Bug fixes on a three-day-old major arrive without
+work; a minor gets read before it lands. `bun.lock` is committed, so builds are
+reproducible regardless.
+
+**Validating against `api/schema.json` adds no dependency.** The obvious move is
+`bun add ajv`, and it is wrong: ajv ships bundled inside the MCP SDK, and the SDK
+exposes the exact API this needs.
+
+```ts
+import { fromJsonSchema } from "@modelcontextprotocol/server"
+import { AjvJsonSchemaValidator } from "@modelcontextprotocol/server/validators/ajv"
+```
+
+`fromJsonSchema(schema, validator)` exists for a JSON Schema you did not have at
+compile time — which is precisely what `schema.json` is, since it arrives at runtime
+from another repo and cannot become a Zod type without copying a definition that would
+then drift. Its failure result is `{ valid: false, errorMessage: string }`: one
+flattened string, which is the shape a tool result wants anyway.
 
 ## Tradeoffs
 
-- **Tied to Bun.** Fine on Fly or Railway with a Dockerfile; a host that only offers a
-  Node buildpack would need one.
-- **A pre-1.0 SDK package.** Pinned exactly, and the surface used is small — one handler
-  and `registerTool`. If it churns, the blast radius is one file.
+- **Tied to Bun.** Fine on Fly with a Dockerfile; a host that only offers a Node
+  buildpack would need one.
+- **A three-day-old major.** `2.0.0` is stable, not pre-release, but it is a
+  restructure of the SDK and the ecosystem has barely used it. The surface consumed is
+  small — `createMcpHandler`, `registerTool`, `fromJsonSchema` — so if it churns, the
+  blast radius is one file plus the validator import.
 - **Elysia barely earns its place.** Two routes. It stays because it is the mandated
-  framework and because `onError` is the single place tool failures become text the
-  model can read — which the design requires anyway.
+  framework and because a route table is easier to read than a `switch` on
+  `url.pathname` — **not** because of `onError`. An earlier draft of this ADR claimed
+  `onError` was the one place tool failures become model-readable text. That is wrong:
+  tool errors are returned as tool *results* and never become HTTP errors, so `onError`
+  never sees them. It catches genuine faults — a crash inside the handler — and nothing
+  more.
 - **Skipping Turborepo means re-adding it later** if the workshop tooling ever wants to
   share code. That is a `bun init` worth of work, not a migration.
+- **Fly is a paid host.** Auto-stop keeps a single idle machine near nothing, but
+  "free tier" is no longer the honest description.
 
 ## Consequences
 
-- `tech-stack.yaml` gains an `mcp` section for the six packages above. Nothing is
-  removed; Postgres, Prisma, Better Auth, Redis, and BullMQ stay listed and stay
-  uninstalled, because this project has no database, no accounts, and no queue.
+- `tech-stack.yaml`'s `mcp` section needs three corrections: the version rule becomes
+  patch-only and drops the "pre-1.0" reason, the `json_schema` entry stops naming `ajv`
+  as a dependency and points at the SDK export instead, and `hosting / deploy target`
+  moves out of `undecided` to Fly.io. Nothing else is removed; Postgres, Prisma, Better
+  Auth, Redis, and BullMQ stay listed and stay uninstalled, because this project has no
+  database, no accounts, and no queue.
+- `.claude/rules/code-style.md` states the chain as
+  `routes → controllers → services → repository`. That is now false for this repo and
+  is corrected in the same commit.
 - Auth is the secret URL path and nothing else. Better Auth is for telling many users
   apart; there is one user. Already rejected in `mcp-design.md`.
-- Slice 1 is unblocked: server skeleton, secret path, `/health`, and `get_skill` only.
-  The riskiest unknown — whether a custom connector behaves in the mobile app — gets
-  answered with ~80 lines instead of after six tools exist.
-- The `workshop` repo must exist and have the GitHub App installed before Slice 1 can
-  return a skill. That is the one external prerequisite left.
+- **`/health` splits in two.** `GET /health` returns 200 and does no I/O — that is what
+  Fly's liveness probe hits. The three real checks (mint a GitHub token, fetch
+  `schema.json`, reach both repos) live at `GET /{secret}/health`, the URL opened by
+  hand on a phone. A public endpoint making three outbound calls per request is
+  unauthenticated and expensive at once, which is the combination `security.md` says to
+  rate-limit; moving it behind the secret removes the problem instead of managing it.
+- **Slice 1 is reordered to unblock it.** As `mcp-design.md` had it, Slice 1's one tool
+  was `get_skill`, which reads from `workshop` — and `workshop` does not exist and the
+  GitHub App is not installed. That coupled the cheapest, riskiest experiment (does a
+  custom connector work in the mobile app?) to external setup it does not need. Slice 1
+  is now the skeleton, the secret path, both `/health` routes with the site check only,
+  and one read tool against the site's live JSON routes. Same tools, different order.
+- **The `workshop` repo and the GitHub App move to Slice 2**, along with `get_skill`,
+  draft reads, and `/health`'s remaining two checks. That is where the external
+  prerequisite belongs, because that is the first slice that cannot ship without it.

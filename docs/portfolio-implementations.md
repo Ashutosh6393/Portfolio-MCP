@@ -1,6 +1,7 @@
 # Implementation tracker
 
-Work for [`design.md`](./design.md). Update the status column when something lands.
+Slice 0 of [`adr/mcp-design.md`](adr/mcp-design.md), done in the `portfolio` repo and
+copied here as the record of what the server can rely on. Statuses below are final.
 Statuses: `done` · `in progress` · `todo` · `blocked` · `dropped`.
 
 **Where we are:** all 11 tasks done. Every route is built, prerendered, and passing

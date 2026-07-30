@@ -166,7 +166,7 @@ mcp:
     package: "@modelcontextprotocol/server"
     transport: Streamable HTTP, web-standard Request/Response
     rules:
-      - Pin an exact version. The web-standard entry point is pre-1.0.
+      - Patch-only range (`~2.0.0`). 2.0.0 is a new major — read a minor before taking it.
       - Mount into Elysia with `.mount('/mcp', handler.fetch)`. No Node compat shim.
       - Tool argument schemas are Zod. Errors are returned as tool results, never thrown.
 
@@ -177,16 +177,30 @@ mcp:
       - Never clone a repo. Every read and write goes through the API.
       - Set the commit author to the user's own name and email on every write.
 
+  hosting:
+    provider: Fly.io
+    build: Dockerfile (Bun base image)
+    rules:
+      - One small machine, auto-stop when idle, auto-start on request.
+      - Fly's liveness probe points at `GET /health` — the cheap one, no I/O.
+      - The deep check lives at `GET /{secret}/health`. Never expose it unauthenticated.
+    note: See docs/adr/001-server-runtime-and-shape.md. Cloudflare Workers was rejected
+      there because it replaces both Bun and Elysia.
+
   mdx:
     tool: "@mdx-js/mdx"
     role: Parse MDX in `publish` so a syntax error fails in a tool response, not a build.
 
   json_schema:
-    tool: ajv
+    tool: "@modelcontextprotocol/server (fromJsonSchema + validators/ajv)"
     role: Validate metadata against `api/schema.json`, fetched at runtime from the site.
+    rules:
+      - Do NOT `bun add ajv`. It ships bundled inside the MCP SDK.
+      - Import `fromJsonSchema` and `AjvJsonSchemaValidator` from the SDK.
     note: >-
-      Not redundant with Zod. The schema arrives from another repo at runtime, so it
+      Zod cannot do this job: the schema arrives from another repo at runtime, so it
       cannot be a compile-time type without copying a definition that would then drift.
+      `fromJsonSchema` exists for exactly that case and costs no dependency.
 
 # ---------------------------------------------------------------------------
 # Web (apps/web)
@@ -243,7 +257,6 @@ undecided:
   - analytics
   - feature flags
   - CI/CD provider
-  - hosting / deploy target
   - rate limiting strategy
   - i18n
 
