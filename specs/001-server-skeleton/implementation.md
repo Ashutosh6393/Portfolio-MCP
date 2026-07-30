@@ -8,7 +8,7 @@ Update it after every task. Never batch updates.
 - **Status:** in-progress
 - **Branch:** `feat/server-skeleton`
 - **Spec:** `design.md` · **ADR:** `docs/adr/001-server-runtime-and-shape.md`
-- **Current task:** 3 — `src/index.ts`
+- **Current task:** 4 — Dockerfile, .dockerignore, fly.toml, .env.example
 
 ---
 
@@ -36,7 +36,7 @@ In dependency order. Each task must be independently testable and map to test ID
 |---|---|---|---|---|---|---|---|
 | 1 | Scaffold: Bun, TS strict, Biome, scripts, deps | — | — | 1 | `done` | 1/3 | (this commit) |
 | 2 | `src/lib/env.ts` — Zod env schema, parsed at boot | 1 | T-01, T-02, T-03 | 1 | `done` | 1/3 | (this commit) |
-| 3 | `src/index.ts` — Elysia, `GET /health`, secret prefix, `GET /{secret}/health` with empty checks, one 404 shape | 2 | T-04, T-05, T-06, T-07 | 1 | `pending` | 0/3 | — |
+| 3 | `src/index.ts` — Elysia, `GET /health`, secret prefix, `GET /{secret}/health` with empty checks, one 404 shape | 2 | T-04, T-05, T-06, T-07 | 1 | `done` | 1/3 | (this commit) |
 | 4 | `Dockerfile`, `.dockerignore`, `fly.toml`, `.env.example`; deploy; measure cold start | 3 | — | 1 | `pending` | 0/3 | — |
 | 5 | `src/lib/site.ts` — fetch the two `content.json` routes, parse with Zod at the boundary | 4 | T-14 | 2 | `pending` | 0/3 | — |
 | 6 | `src/services/list-content.ts` — `listContent(deps, args)`, error paths as return values | 5 | T-11, T-12, T-13, T-14 | 2 | `pending` | 0/3 | — |
@@ -113,13 +113,28 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 
 | Date | Test | Change | Why |
 |---|---|---|---|
-| | | | |
+| 2026-07-30 | `src/index.test.ts` (T-04, T-05) | T-04: swapped the `as typeof fetch` double-cast on the fetch stand-in for `Object.assign(spy, { preconnect: originalFetch.preconnect })`, carrying the real property across instead of asserting an unchecked shape. T-05: added `typeof`/`null`/`in` guards to narrow the `unknown` body from `response.json()` before reading `.checks`, instead of trusting an unverified shape. | Made the file typecheck under tsgo + `@types/bun` (`lib: ["ESNext"]`, no `dom`), which types `Response.json()` as `Promise<unknown>` and the Bun `fetch` type as a call signature plus a `preconnect` static method. No assertion changed — same expectations, same failure conditions, just reached through a real guard instead of a cast. |
 
 ---
 
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-30 — Task 3 done
+
+- **Done:** `createApp(env)` is the seam — env passed as an argument, boot guarded by
+  `import.meta.main` so importing the module binds no port.
+- **The 404 needed zero code.** The secret is a literal `.group()` prefix, so a wrong
+  secret matches no route and gets Elysia's own unmatched-route 404 — byte-identical to
+  any typo, including content-type. If anyone later adds an `onError` for `NOT_FOUND`,
+  T-06 and T-07 are what catch the regression.
+- **`Response.json()` types as `unknown`** under tsgo + `@types/bun` with
+  `lib: ["ESNext"]`. Test bodies must be narrowed with a guard. Expect this in every
+  future HTTP test.
+- **Next:** Task 4 — Dockerfile, `.dockerignore`, `fly.toml`, `.env.example`, deploy, and
+  **measure cold start** (design.md Risk 3). No automated test; verified by hand and
+  written into `summary.md`.
 
 ### 2026-07-30 — Task 2 done
 
