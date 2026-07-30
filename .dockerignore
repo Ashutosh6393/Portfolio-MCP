@@ -1,0 +1,23 @@
+# Keep the build context to what actually runs: package.json, bun.lock, src.
+# Everything else is docs, tooling, or secrets.
+
+node_modules
+.git
+.gitignore
+
+# Secrets never enter an image layer. .env.example is excluded too — it is
+# documentation, and the image has no use for it.
+.env
+.env.*
+
+# Docs and process. None of it is read at runtime.
+.claude
+docs
+specs
+*.md
+
+# Repo-setup leftovers.
+example.*
+
+# Dev-only tooling config.
+biome.json

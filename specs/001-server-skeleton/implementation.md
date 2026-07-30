@@ -37,7 +37,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 1 | Scaffold: Bun, TS strict, Biome, scripts, deps | — | — | 1 | `done` | 1/3 | (this commit) |
 | 2 | `src/lib/env.ts` — Zod env schema, parsed at boot | 1 | T-01, T-02, T-03 | 1 | `done` | 1/3 | (this commit) |
 | 3 | `src/index.ts` — Elysia, `GET /health`, secret prefix, `GET /{secret}/health` with empty checks, one 404 shape | 2 | T-04, T-05, T-06, T-07 | 1 | `done` | 1/3 | (this commit) |
-| 4 | `Dockerfile`, `.dockerignore`, `fly.toml`, `.env.example`; deploy; measure cold start | 3 | — | 1 | `pending` | 0/3 | — |
+| 4 | `Dockerfile`, `.dockerignore`, `fly.toml`, `.env.example`; deploy; measure cold start | 3 | — | 1 | `green` (config written; deploy pending — human) | 0/3 | — |
 | 5 | `src/lib/site.ts` — fetch the two `content.json` routes, parse with Zod at the boundary | 4 | T-14 | 2 | `pending` | 0/3 | — |
 | 6 | `src/services/list-content.ts` — `listContent(deps, args)`, error paths as return values | 5 | T-11, T-12, T-13, T-14 | 2 | `pending` | 0/3 | — |
 | 7 | `src/tools/list-content.ts` + `src/tools/index.ts` — build the `McpServer`, register the tool, `createMcpHandler` | 6 | T-10, T-15 | 2 | `pending` | 0/3 | — |
@@ -120,6 +120,29 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-30 — Task 4 config written, deploy pending
+
+- **Done:** `Dockerfile`, `.dockerignore`, `fly.toml`, `.env.example`. Base image pinned to
+  `oven/bun:1.3.14-alpine`, matching `packageManager`; the tag was confirmed to exist on
+  Docker Hub, not assumed. No build step — Bun runs the TypeScript directly.
+- **Region is `bom`,** matching the user's existing Fly apps. Noted at the time that the
+  real caller is Anthropic's cloud, not the phone, so a US region would cut a round trip
+  per tool call. The user chose `bom` with that trade in front of them. Revisit only if
+  latency actually bites.
+- **Watch out for:** `fly.toml` has an `[[http_service.checks]]` block, and it is
+  **unverified** whether proxy-issued checks keep an `auto_stop_machines` machine awake.
+  If it never stops, the cost model in ADR-001 breaks. Acceptance criterion 1 measures a
+  cold start from a stopped machine, so the first deploy settles it — the fix is deleting
+  the block. Marked with a `ponytail:` comment in the file.
+- **VM is 512mb,** not the 256mb minimum. Deliberate: an OOM would land inside the
+  mobile-connector experiment this slice exists to run, and idle machines cost nothing.
+- **Not done:** the deploy itself, the custom hostname, and the cold-start number. The
+  human runs those — `flyctl` is installed and authenticated, but creating a billable
+  machine and setting `MCP_SECRET_PATH` are not an agent's call. The secret is generated
+  by the human and set with `fly secrets set`; it never passes through an agent or a file.
+- **Next:** deploy, then record the cold-start timing here and in `summary.md`. Task 4 is
+  not `done` until acceptance criteria 1 and 5 are met.
 
 ### 2026-07-30 — Task 3 done
 

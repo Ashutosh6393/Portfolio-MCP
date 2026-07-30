@@ -1,0 +1,42 @@
+# Fly config for the portfolio MCP server.
+# Decision and rationale: docs/adr/001-server-runtime-and-shape.md.
+
+app = "portfolio-mcp"
+primary_region = "bom"
+
+[build]
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+
+  # Roughly 15 calls a week. The machine sleeps between them and wakes on the
+  # next request — that is what makes this cost near nothing, and it is why
+  # nearly every real call pays a cold start. See design.md Risk 3.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    # The cheap probe: GET /health does no I/O and lives outside the secret
+    # path, so it leaks nothing. The deep check at /{secret}/health is never
+    # wired here — an unauthenticated prober must not be able to reach it.
+    #
+    # ponytail: unverified whether these proxy-issued checks keep an
+    # auto-stop machine awake. Acceptance criterion 1 measures a cold start
+    # from a stopped machine, so the first deploy settles it. If the machine
+    # never stops, delete this block — Fly restarts a dead process on the next
+    # request anyway.
+    path = "/health"
+    method = "GET"
+    protocol = "http"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  # 256mb is probably enough for Bun and Elysia, but an OOM would land in the
+  # middle of the mobile-connector experiment this whole slice exists to run.
+  # Idle machines cost nothing, so the headroom is close to free.
+  memory = "512mb"
