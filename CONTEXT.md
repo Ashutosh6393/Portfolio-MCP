@@ -99,7 +99,7 @@ like initiative.
 |---|---|
 | Users / scale | One human. ~15 tool calls a week. Scale is not a design input |
 | Reachability | Connectors are called from Anthropic's cloud, not the device. No localhost, no tunnels |
-| Deployment | One always-on process. Free or near-free tier is the ceiling |
+| Deployment | Fly.io, one small machine, auto-stop when idle. Near-free is the ceiling, not free |
 | Secrets | GitHub App private key and the path secret are env vars. Never in git |
 | Team | One person, who is also the reviewer |
 
@@ -117,7 +117,7 @@ Things we depend on that we do not control.
 | GitHub API | Every read and write. No repo is ever cloned | Tools return an error string; nothing is queued |
 | `ashutoshverma.dev` JSON routes | Published content and `api/schema.json` | `publish` must refuse — it cannot validate without the schema |
 | Vercel preview builds | The second validation layer: broken imports, missing components | Merge blind, or don't merge |
-| The host (Fly or Railway) | Running the process | The connector is simply down. `/health` says which layer |
+| Fly.io | Running the process | The connector is simply down. `/{secret}/health` says which layer |
 
 ---
 
@@ -127,8 +127,9 @@ Things we depend on that we do not control.
 - **Live:** not yet
 - **Users:** none yet
 - **Done:** Slice 0, the site prep, in the `portfolio` repo
-- **Next:** Slice 1 — skeleton, secret path, `/health`, `get_skill` only, deployed and
-  reachable from all three clients
+- **Next:** Slice 1 — skeleton, secret path, both `/health` routes, and one read tool
+  against the site's live JSON routes. Deployed to Fly and reachable from all three
+  clients. No GitHub yet — that's Slice 2
 
 ---
 

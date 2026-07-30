@@ -166,8 +166,16 @@ mcp:
     package: "@modelcontextprotocol/server"
     transport: Streamable HTTP, web-standard Request/Response
     rules:
-      - Pin an exact version. The web-standard entry point is pre-1.0.
-      - Mount into Elysia with `.mount('/mcp', handler.fetch)`. No Node compat shim.
+      - Patch-only range (`~2.0.0`). 2.0.0 is a new major — read a minor before taking it.
+      - >-
+        Mount into Elysia with `.mount('/mcp', handler.fetch)`. No Node compat shim.
+        Verified against the installed types on 2026-07-30: `McpHttpHandler.fetch` is a
+        property holding `(Request, options?) => Promise<Response>`, not a prototype
+        method, so passing it detached is safe.
+      - >-
+        `createMcpHandler(factory, options?)` takes a FACTORY first, not a server
+        instance: `(ctx) => McpServer | Server | Promise<...>`, invoked once per HTTP
+        request. Build and register tools inside the factory.
       - Tool argument schemas are Zod. Errors are returned as tool results, never thrown.
 
   github:
@@ -177,16 +185,39 @@ mcp:
       - Never clone a repo. Every read and write goes through the API.
       - Set the commit author to the user's own name and email on every write.
 
+  hosting:
+    provider: Fly.io
+    build: Dockerfile (Bun base image)
+    rules:
+      - One small machine, auto-stop when idle, auto-start on request.
+      - Fly's liveness probe points at `GET /health` — the cheap one, no I/O.
+      - The deep check lives at `GET /{secret}/health`. Never expose it unauthenticated.
+    note: See docs/adr/001-server-runtime-and-shape.md. Cloudflare Workers was rejected
+      there because it replaces both Bun and Elysia.
+
   mdx:
     tool: "@mdx-js/mdx"
     role: Parse MDX in `publish` so a syntax error fails in a tool response, not a build.
 
   json_schema:
-    tool: ajv
+    tool: "@modelcontextprotocol/server (fromJsonSchema + validators/ajv)"
     role: Validate metadata against `api/schema.json`, fetched at runtime from the site.
+    rules:
+      - >-
+        Do NOT `bun add ajv`. It ships bundled inside the MCP SDK. Confirmed on
+        2026-07-30: neither the SDK nor `@modelcontextprotocol/core` declares `ajv` as a
+        dependency and there is no `ajv` directory in `node_modules`, yet
+        `@modelcontextprotocol/server/validators/ajv` resolves and exports `Ajv`,
+        `AjvJsonSchemaValidator`, and `addFormats`. It is bundled into `dist`.
+      - Import `fromJsonSchema` and `AjvJsonSchemaValidator` from the SDK.
+      - >-
+        `api/schema.json` holds TWO schemas keyed `writing` and `project`, each a
+        self-contained draft-2020-12 document. Pass `schema[kind]` to `fromJsonSchema`,
+        never the whole object.
     note: >-
-      Not redundant with Zod. The schema arrives from another repo at runtime, so it
+      Zod cannot do this job: the schema arrives from another repo at runtime, so it
       cannot be a compile-time type without copying a definition that would then drift.
+      `fromJsonSchema` exists for exactly that case and costs no dependency.
 
 # ---------------------------------------------------------------------------
 # Web (apps/web)
@@ -243,7 +274,6 @@ undecided:
   - analytics
   - feature flags
   - CI/CD provider
-  - hosting / deploy target
   - rate limiting strategy
   - i18n
 

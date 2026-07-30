@@ -31,7 +31,9 @@ API. A checkout on disk means stale state and surprise merge conflicts.
 
 ## Runtime
 
-- Always-on Node process on Fly or Railway.
+- Always-on Bun process on Fly.io, from a Dockerfile. (Runtime and host decided in
+  [ADR-001](001-server-runtime-and-shape.md); this line said "Node process on Fly or
+  Railway" before that.)
 - Streamable HTTP MCP.
 - Auth: unguessable secret in the URL path — `https://mcp.ashutoshverma.dev/k7f2.../mcp`
 - GitHub credential: a **GitHub App** installed on `portfolio` and `workshop`.
@@ -60,15 +62,22 @@ routes are what keep the two from drifting.
 
 | Route | Returns |
 |---|---|
-| `api/writings/content.json` | every writing: title, slug, date, tags, summary |
+| `api/writing/content.json` | every writing: title, slug, date, summary |
 | `api/projects/content.json` | every project: title, slug, summary, stack, status |
-| `api/writings/{slug}` | `{ metadata: {...}, body: "...", }` — body is raw MDX **without** the metadata block |
+| `api/writing/{slug}` | `{ metadata: {...}, body: "...", }` — body is raw MDX **without** the metadata block |
 | `api/projects/{slug}` | same shape |
-| `api/schema.json` | JSON Schema, generated from the site's own Zod schema |
+| `api/schema.json` | **Two** JSON Schemas in one object, keyed `writing` and `project` |
 
 `api/schema.json` is **mandatory**, not nice-to-have. The server fetches it and
 validates against it. It's the only thing stopping two definitions of "valid
 post" from diverging.
+
+It is **not one schema**. The live route returns `{ "writing": {...}, "project": {...} }`
+— two complete draft-2020-12 documents, each carrying its own `$schema`. So `publish`
+selects `schema[kind]` before validating; handing the whole object to a validator asks
+"does this post have a `writing` key and a `project` key?", which no post ever does.
+Because each is self-contained, lifting one out is safe. This row and this paragraph said
+"schema" singular until the live route was checked on 2026-07-30.
 
 Also add OG image generation with `@vercel/og`, from title + stack. No uploaded
 assets needed.
@@ -87,7 +96,7 @@ that out of a file needs a real JS parser and will bite you. So:
 - Reads get metadata as JSON from the site's API routes, which already import
   the object.
 
-Two hard rules in the serializer:
+Three hard rules in the serializer:
 
 1. **Never let a tool set `show` or `order`.** Those decide what's featured on
    your homepage. A model that just wrote a post is the worst possible judge of
@@ -96,9 +105,20 @@ Two hard rules in the serializer:
    comment says "omit the key entirely if none" — a naive serializer writes
    `repo: ""` and your site renders a dead link. Filter undefined before
    serializing.
+3. **Never let a tool set `readingTime`. The server computes it.** The site's
+   schema requires it on every writing, which nothing here recorded until the
+   live route was checked on 2026-07-30 — so `publish` would have been rejected
+   for a missing field nobody knew about. The server counts it from the body at
+   publish time: words ÷ 200, rounded up, formatted `{n} min` to match the
+   existing posts. Same principle as rule 1 — a reading time is a **fact about
+   the text, not an opinion about it**, and a model asked for one guesses. The
+   guess ships to real readers.
 
-**Still open:** the metadata shape for writings. Projects have no date field, so
-writings presumably have date and tags. Paste one and the schema gets finished.
+**Settled.** Writings have a date; projects don't. There are **no tags** — this document
+guessed at them, and nothing on the site renders one. The site's Zod schemas are the
+definition, and `z.strictObject` gives `additionalProperties: false`, which is what makes
+"a tool can never set `show`" a fact rather than a rule someone remembers. See
+[`portfolio-implementations.md`](../portfolio-implementations.md).
 
 ---
 
@@ -227,9 +247,11 @@ be the first write tool of a session.
 - **Errors are tool results, not HTTP 500s.** A thrown error gives the client a
   bare "tool failed" and the conversation dead-ends. A returned error string
   lands in context, so the model can fix it and retry in the same turn.
-- **A `/health` route** that really checks: can it mint a GitHub App token, can
-  it fetch `schema.json`, can it reach both repos. One URL on your phone tells
-  you which layer is dead.
+- **Two `/health` routes.** `GET /health` returns 200 and does no I/O — that is Fly's
+  liveness probe. `GET /{secret}/health` really checks: can it mint a GitHub App token,
+  can it fetch `schema.json`, can it reach both repos. One URL on your phone tells you
+  which layer is dead. The deep one sits behind the secret because a public endpoint
+  making three outbound calls per request is unauthenticated and expensive at once.
 - Platform logs are enough.
 
 ---
@@ -240,10 +262,17 @@ Plumbing before anything interesting.
 
 - **Slice 0 — site prep.** All the API routes above, OG images, and move your
   skills into `workshop`.
-- **Slice 1 — plumbing only.** Server skeleton, secret path auth, `/health`, and
-  exactly one tool: `get_skill`. Deploy. Connect from Claude Code, claude.ai,
-  and your phone. Read a skill back on each.
-- **Slice 2 — reads.** `list_content`, `get_content`.
+- **Slice 1 — plumbing only.** Server skeleton, secret path auth, both `/health` routes
+  with the site check only, and one read tool against the site's **live** JSON routes.
+  Deploy to Fly. Connect from Claude Code, claude.ai, and your phone. Read a published
+  post back on each. No GitHub, so nothing external blocks it.
+- **Slice 2 — GitHub arrives.** Create the private `workshop` repo, install the GitHub
+  App on it and on the site repo, then `get_skill`, draft reads, and `/health`'s
+  remaining two checks. This is the first slice with an external prerequisite.
+
+  > Slice 1 originally carried `get_skill`, which reads from `workshop` — a repo that
+  > did not exist yet. That tied the cheapest and riskiest experiment to setup it does
+  > not need. Reordered in [ADR-001](001-server-runtime-and-shape.md).
 - **Slice 3 — cheap writes.** `save_draft`, `discard_draft`.
 - **Slice 4 — publish.** Validation, branch, PR, idempotency.
 - **Slice 5 — polish.** Lazy reconciliation, response nudges, Claude Project.
@@ -279,7 +308,8 @@ Keep this list. It's cheaper than re-arguing.
 
 ## Open items
 
-1. Metadata shape for writings/blogs.
-2. Whether `mcp-server` is public or private (public is fine — secrets are env vars).
+1. ~~Metadata shape for writings/blogs.~~ Settled — see Metadata handling above.
+2. ~~Whether `mcp-server` is public or private.~~ Settled — **public**, at
+   `Ashutosh6393/Portfolio-MCP`. Secrets are env vars.
 3. Exact wording of the six tool descriptions. Worth drafting carefully; it's
-   the only thing the model reads before deciding what to call.
+   the only thing the model reads before deciding what to call. **Still open.**

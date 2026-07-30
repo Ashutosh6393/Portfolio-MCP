@@ -101,9 +101,13 @@ Cover the error paths and edge cases, not just the happy path:
 
 ## Layer boundaries
 
-- **Services** — tested with repositories mocked.
-- **Repositories** — tested against a real test database.
-- **Controllers** — tested through the route, not by calling the handler directly.
+- **Services** — tested with `lib` passed in as a fake object literal. No network.
+- **`lib`** — the GitHub client and site fetcher are thin wrappers over someone else's
+  API. Don't unit-test them against a mock of that API; that tests the mock.
+- **Tools** — tested through the MCP handler, not by calling the tool function directly.
+
+There is no repository layer and no database in this repo. See
+[code-style.md](code-style.md) for the chain.
 
 Mock the boundary, not the internals. A test that mocks the thing it's testing tests
 nothing.
