@@ -24,11 +24,14 @@ primary_region = "bom"
     # path, so it leaks nothing. The deep check at /{secret}/health is never
     # wired here — an unauthenticated prober must not be able to reach it.
     #
-    # ponytail: unverified whether these proxy-issued checks keep an
-    # auto-stop machine awake. Acceptance criterion 1 measures a cold start
-    # from a stopped machine, so the first deploy settles it. If the machine
-    # never stops, delete this block — Fly restarts a dead process on the next
-    # request anyway.
+    # Verified 2026-07-30: a 30s check does NOT keep an auto-stop machine
+    # awake. The machine stopped on its own after ~9 idle minutes with this
+    # block active, so the cost model in ADR-001 holds.
+    #
+    # Untested: whether grace_period delays routing to a machine the proxy has
+    # just woken. Cold start measures ~5.4s and nobody has ruled this block out
+    # as part of that. Dropping it is the first thing to try if the number
+    # needs to come down.
     path = "/health"
     method = "GET"
     protocol = "http"

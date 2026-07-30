@@ -156,9 +156,23 @@ Live at `https://ashutoshverma-mcp.fly.dev`. One machine, `bom`, health check pa
 | 4 | Refuses to boot on a missing or short secret | met — exit 1, and the error's `path` names `MCP_SECRET_PATH` |
 | 5 | Cold start measured and written down | met — ~5.4s, above |
 
-**Still open before Slice 1 closes:** the custom hostname, and whether the machine
-actually auto-stops with a 30s health check running. If it never stops, ADR-001's cost
-model breaks and the `[[http_service.checks]]` block should go.
+**Auto-stop is verified.** The machine stopped on its own after ~9 idle minutes with the
+30s health check active, so proxy-issued checks do **not** hold it awake and ADR-001's
+cost model holds. A fourth cold-start sample taken against that naturally-idle machine —
+the truest measurement, since it is exactly what a real tool call pays — came in at
+**5.66s**, matching the three forced-stop samples.
+
+**Untested hypothesis on the cold start:** `[[http_service.checks]]` sets
+`grace_period = "10s"`, and Fly's proxy may wait for a check to pass before routing to a
+machine it has just woken. Nobody has ruled that block out as a contributor to the 5.4s.
+Deleting it and re-measuring is the cheapest experiment if the number needs to come down.
+Not done here — Risk 3 says to record the number and build nothing.
+
+**Still open before Slice 1 closes:** the custom hostname. `mcp.ashutoshverma.dev`
+currently resolves to Vercel (`64.29.17.1`, `216.198.79.1`), not Fly. Repointing it is a
+change to the live domain at the registrar and is the user's to make; then
+`fly certs add mcp.ashutoshverma.dev`. Slice 1 otherwise meets every criterion on
+`ashutoshverma-mcp.fly.dev`, which works identically as a connector URL.
 
 ### 2026-07-30 — Task 4 config written, deploy pending
 
