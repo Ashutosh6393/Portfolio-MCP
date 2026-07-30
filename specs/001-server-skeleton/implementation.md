@@ -8,7 +8,7 @@ Update it after every task. Never batch updates.
 - **Status:** in-progress
 - **Branch:** `feat/server-skeleton`
 - **Spec:** `design.md` · **ADR:** `docs/adr/001-server-runtime-and-shape.md`
-- **Current task:** 2 — `src/lib/env.ts`
+- **Current task:** 3 — `src/index.ts`
 
 ---
 
@@ -35,7 +35,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | # | Task | Depends on | Tests | Slice | State | Attempts | Commit |
 |---|---|---|---|---|---|---|---|
 | 1 | Scaffold: Bun, TS strict, Biome, scripts, deps | — | — | 1 | `done` | 1/3 | (this commit) |
-| 2 | `src/lib/env.ts` — Zod env schema, parsed at boot | 1 | T-01, T-02, T-03 | 1 | `pending` | 0/3 | — |
+| 2 | `src/lib/env.ts` — Zod env schema, parsed at boot | 1 | T-01, T-02, T-03 | 1 | `done` | 1/3 | (this commit) |
 | 3 | `src/index.ts` — Elysia, `GET /health`, secret prefix, `GET /{secret}/health` with empty checks, one 404 shape | 2 | T-04, T-05, T-06, T-07 | 1 | `pending` | 0/3 | — |
 | 4 | `Dockerfile`, `.dockerignore`, `fly.toml`, `.env.example`; deploy; measure cold start | 3 | — | 1 | `pending` | 0/3 | — |
 | 5 | `src/lib/site.ts` — fetch the two `content.json` routes, parse with Zod at the boundary | 4 | T-14 | 2 | `pending` | 0/3 | — |
@@ -120,6 +120,22 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-30 — Task 2 done
+
+- **Done:** `src/lib/env.ts` with `parseEnv(source = process.env)` as the test seam — env
+  is an argument so tests pass an object literal, no `process.env` mutation. Schema is
+  `MCP_SECRET_PATH` (min 32) and `PORT` (coerced, default 3000), nothing else. Type is
+  `z.infer<typeof envSchema>`, not hand-written.
+- **Watch out for:** Zod's raw `ZodError` message already contains both the variable name
+  and `32`, so `parseEnv` does a bare `parse` with no try/catch. A future custom error
+  message must still contain both, or T-01 and T-02 regress.
+- **Correction to the Task 1 note below:** it claims `bun test` and `bun run typecheck`
+  "both go green the moment Task 2 creates the first file." That was wrong about
+  typecheck — `tsconfig.json` needed `"types": ["bun"]` because tsgo does not
+  auto-discover `@types/bun`. Fixed in this commit.
+- **Next:** Task 3 — `src/index.ts`, tests T-04…T-07. The 404 shape is the
+  security-relevant part; T-06 and T-07 compare bodies byte for byte.
 
 ### 2026-07-30 — Task 1 done
 

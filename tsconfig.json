@@ -1,19 +1,23 @@
 {
-  "compilerOptions": {
-    "lib": ["ESNext"],
-    "target": "ESNext",
-    "module": "Preserve",
-    "moduleResolution": "bundler",
-    "moduleDetection": "force",
-    "verbatimModuleSyntax": true,
-    "noEmit": true,
+	"compilerOptions": {
+		"lib": ["ESNext"],
+		"target": "ESNext",
+		"module": "Preserve",
+		"moduleResolution": "bundler",
+		"moduleDetection": "force",
+		"verbatimModuleSyntax": true,
+		"noEmit": true,
 
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-    "noFallthroughCasesInSwitch": true,
+		// tsgo does not auto-discover @types/bun, so `bun:test` and `process`
+		// fail to resolve without naming it here.
+		"types": ["bun"],
 
-    "skipLibCheck": true
-  },
-  "include": ["src"]
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"noImplicitOverride": true,
+		"noFallthroughCasesInSwitch": true,
+
+		"skipLibCheck": true
+	},
+	"include": ["src"]
 }
