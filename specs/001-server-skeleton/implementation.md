@@ -121,6 +121,45 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 
 Newest first. Keep entries short — this is a handoff, not a diary.
 
+### 2026-07-30 — Task 4 deployed
+
+Live at `https://ashutoshverma-mcp.fly.dev`. One machine, `bom`, health check passing.
+
+- **Cold start is ~5.4s, not ~1s.** Three samples from a deliberately stopped machine:
+  5.62s, 5.48s, 5.38s. Warm is ~0.75s. **`design.md` Risk 3 assumed "around a second" and
+  called it "expected to be a non-issue" — that assumption is wrong by roughly 5×.** The
+  number is recorded, nothing was built for it, and the `min_machines_running = 1` trade
+  is the user's call exactly as Risk 3 says. Re-measure from Slice 2, when a real tool
+  call also pays a site fetch on top of this.
+- **App is `ashutoshverma-mcp`, not `portfolio-mcp`** — the latter is taken, Fly app names
+  are global. Cosmetic; the intended hostname is `mcp.ashutoshverma.dev` via CNAME.
+- **The first deploy failed on the `prepare` script.** `package.json` runs
+  `bash .claude/hooks/install-git-hooks.sh` on install; the Alpine image has no bash and
+  no `.git`. Fixed with `--ignore-scripts` in the Dockerfile. None of the three runtime
+  dependencies is native, so nothing else needed a lifecycle script.
+- **`fly deploy` tries to create a second machine for HA** and it failed with "no capacity
+  available in bom". Harmless — one machine is what ADR-001 asked for — but it makes the
+  deploy exit non-zero. **Use `fly deploy --ha=false`.** `min_machines_running = 0` does
+  not suppress it, despite what Fly's own hint says.
+- **Bun auto-loads `.env`.** No dotenv package is needed, and `bun --watch src/index.ts`
+  just works locally. It also means unsetting a variable in the shell does **not** unset
+  it for the process — a boot-failure check has to use
+  `bun --env-file=<empty> src/index.ts` or it silently passes.
+
+**Acceptance criteria**
+
+| # | Criterion | State |
+|---|---|---|
+| 1 | 200 from a stopped machine | met on `ashutoshverma-mcp.fly.dev`; **custom hostname not set up** — needs a CNAME at the DNS provider, then `fly certs add` |
+| 2 | `GET /{secret}/health` → 200 with `checks` | met — returns `{"checks":{}}` |
+| 3 | Every other path is the same 404 | met — `/`, `/some-typo-path` and a wrong secret all return `NOT_FOUND` / 404 / `text/plain;charset=utf-8`, byte-identical in production |
+| 4 | Refuses to boot on a missing or short secret | met — exit 1, and the error's `path` names `MCP_SECRET_PATH` |
+| 5 | Cold start measured and written down | met — ~5.4s, above |
+
+**Still open before Slice 1 closes:** the custom hostname, and whether the machine
+actually auto-stops with a 30s health check running. If it never stops, ADR-001's cost
+model breaks and the `[[http_service.checks]]` block should go.
+
 ### 2026-07-30 — Task 4 config written, deploy pending
 
 - **Done:** `Dockerfile`, `.dockerignore`, `fly.toml`, `.env.example`. Base image pinned to

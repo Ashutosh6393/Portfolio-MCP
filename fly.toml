@@ -1,7 +1,9 @@
 # Fly config for the portfolio MCP server.
 # Decision and rationale: docs/adr/001-server-runtime-and-shape.md.
 
-app = "portfolio-mcp"
+# "portfolio-mcp" was already taken — Fly app names are global. The name is
+# cosmetic here; the real hostname is mcp.ashutoshverma.dev via CNAME.
+app = "ashutoshverma-mcp"
 primary_region = "bom"
 
 [build]
