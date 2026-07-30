@@ -132,6 +132,37 @@ sees a tool failure — it catches genuine faults only, as ADR-001 states.
 
 The HTTP status for a tool that failed is still 200. That is not a bug; it is the protocol.
 
+### The tool description
+
+`CONTEXT.md` says the model is the real caller and that tool wording is "part of the
+product, not polish". So the description is specified here rather than left to whoever
+writes the file.
+
+**A description may only mention tools that are registered.** Naming `get_content` before
+it exists teaches the model to call something that isn't there, and it burns a turn
+finding out. Descriptions get revised as tools land, in the slice that lands them.
+
+The one real hazard is vocabulary. `CONTEXT.md` is strict: a **writing** is a blog entry,
+a **post** is a social post, and they are different things. A model asked to "list my blog
+posts" will reach for `post` unless the description closes that door.
+
+```
+List the published content on ashutoshverma.dev.
+
+Returns one entry per item with its slug, title and summary. This is the
+catalogue, not the text — use it to see what exists and to get a slug.
+
+kind:
+  "writing"  a blog entry, live at /writing/{slug}
+  "project"  a portfolio project page, live at /projects/{slug}
+
+Only published content is reachable. Drafts and social posts are not
+available from this server yet.
+```
+
+The last line exists to stop a retry loop, not to be polite. A model that gets a bare
+"invalid kind" will guess again; one that is told drafts are unreachable will stop.
+
 ### Data model
 
 **No change.** No database, no Prisma, no migration. ADR-001 records the deviation.
@@ -254,7 +285,7 @@ ours and is tested.
 |---|---|---|
 | **1. The SDK's handler shape is unverified.** `createMcpHandler(options): McpHttpHandler` and `fromJsonSchema` are confirmed present in `@modelcontextprotocol/server@2.0.0`'s types. **`McpHttpHandler`'s own shape is not** — `tech-stack.yaml` says to mount it as `.mount('/mcp', handler.fetch)`, which nobody has run. | Slice 2 stalls on its first task | Task 1 reads the installed `.d.mts` and confirms the mount expression **before** any other code is written. Blast radius is one file. |
 | **2. ajv may not actually ship with the SDK.** Verified against the registry: neither `@modelcontextprotocol/server@2.0.0` nor `@modelcontextprotocol/core@2.0.0` declares `ajv` as a dependency, though a `./validators/ajv` export exists. It is presumably bundled into `dist`, but that is an assumption. If wrong, ADR-001's "adds no dependency" claim and `tech-stack.yaml`'s "do NOT `bun add ajv`" rule are both false. | Nothing in this spec — no schema validation until `publish`. Would block Slice 4. | Task 1 resolves the import once at install time, since we are installing anyway. Record the answer in `summary.md`. Do not act on it here. |
-| **3. Cold start may exceed the client's timeout.** ~15 calls a week means nearly every call wakes a stopped machine. If waking takes longer than the connector's patience, Fly auto-stop is the wrong setting — or Fly is the wrong host. | Would invalidate ADR-001's hosting decision | Measure it in Slice 1, the cheapest possible moment. Record the number. If it fails, `min_machines_running = 1` is a one-line `fly.toml` change with a cost, and that trade is the user's call. |
+| **3. Cold start is unmeasured.** `auto_stop_machines` is deliberate — it is what makes ~15 calls a week cost near nothing — so nearly every call wakes a stopped machine. Fly machine starts are around a second and Bun adds little, so this is **expected to be a non-issue**; it is listed only because the number has never been looked at. | Low. Would only matter if a client gives up mid-handshake | Note the first request's latency in Task 4. Nothing is built for this. If the number is genuinely bad, `min_machines_running = 1` is a one-line `fly.toml` change that costs money, and that trade is the user's call — not a decision to pre-empt here. |
 | **4. The mobile connector may simply not work.** The stated riskiest unknown in the whole plan. Untestable locally. | The project's premise | This slice exists to find out, with ~150 lines rather than six tools. |
 | **5. The secret sits in the URL path**, so it lands in Fly's HTTP access logs, and in any proxy in between. `security.md` says never put sensitive data in a URL. | A log reader gets the credential | **Decided, not re-argued** — `mcp-design.md` rejected OAuth for one user, and ADR-001 kept it. Recorded here as an accepted cost. Never log the request path from inside the app. Rotating the secret is an env var change and a redeploy. |
 
@@ -264,11 +295,11 @@ ours and is tested.
 
 Resolve before Status becomes `approved`.
 
-- [ ] **1. `list_content`'s tool description is unwritten.** `mcp-design.md`'s open item 3
-      says the six descriptions are "worth drafting carefully; it's the only thing the
-      model reads before deciding what to call" — and `CONTEXT.md` calls their wording
-      "part of the product, not polish". Slice 2 needs one. Blocking for T-10.
-      **owner:** Ashutosh
+- [x] **1. `list_content`'s tool description.** Written — see Approach → The tool
+      description. `mcp-design.md`'s open item 3 asks for all six descriptions; only this
+      one is needed now, and the other five are drafted in the slice that registers the
+      tool. Writing wording for tools that do not exist would be guessing at a shape that
+      has not been built.
 
 Logged for later slices, **not blocking this one**:
 

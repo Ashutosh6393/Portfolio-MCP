@@ -82,6 +82,11 @@ produce the same status and the same bytes. Anything that distinguishes them tel
 attacker the secret path exists. This is the whole auth model — see
 [`security.md`](../../.claude/rules/security.md).
 
+**The tool description is specified, not yours to invent.** `design.md` → Approach → The
+tool description holds the exact text. Two rules behind it: never name a tool that is not
+registered, and never let `writing` and `post` blur — they are different things in
+`CONTEXT.md` and a model will conflate them given the chance.
+
 **Live facts, already checked — do not re-derive them:**
 
 - `api/writing/content.json` is a bare array; keys are `slug`, `title`, `date`,
