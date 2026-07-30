@@ -1,0 +1,10 @@
+node_modules/
+.next/
+dist/
+build/
+.turbo/
+.env
+.env.*
+!.env.example
+.claude/.test-count-baseline
+.claude/agent-memory-local/

@@ -69,4 +69,8 @@ not what we know now.}
 
 | # | Title | Status | Date |
 |---|---|---|---|
-| — | _none yet_ | | |
+| [001](001-server-runtime-and-shape.md) | Server runtime and repo shape | proposed | 2026-07-30 |
+
+[`mcp-design.md`](mcp-design.md) is unnumbered on purpose. It is the design discussion the
+server was settled in, kept as reference — the numbered ADRs are the decisions taken from
+it.

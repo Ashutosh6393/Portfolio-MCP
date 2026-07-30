@@ -14,7 +14,7 @@
 # stack becomes four state libraries and two date libraries.
 
 version: 2
-updated: 2026-07-18
+updated: 2026-07-30
 
 # ---------------------------------------------------------------------------
 # Principles
@@ -156,6 +156,37 @@ server:
       - Workers are separate processes, never inline in the request path.
       - Job payloads are Zod-validated on enqueue AND on process.
       - Jobs must be idempotent. Set attempts and backoff explicitly.
+
+# ---------------------------------------------------------------------------
+# MCP server — this project's core. See docs/adr/001-server-runtime-and-shape.md
+# ---------------------------------------------------------------------------
+mcp:
+  protocol:
+    name: MCP TypeScript SDK
+    package: "@modelcontextprotocol/server"
+    transport: Streamable HTTP, web-standard Request/Response
+    rules:
+      - Pin an exact version. The web-standard entry point is pre-1.0.
+      - Mount into Elysia with `.mount('/mcp', handler.fetch)`. No Node compat shim.
+      - Tool argument schemas are Zod. Errors are returned as tool results, never thrown.
+
+  github:
+    tool: octokit
+    role: GitHub App installation tokens, contents and pulls API
+    rules:
+      - Never clone a repo. Every read and write goes through the API.
+      - Set the commit author to the user's own name and email on every write.
+
+  mdx:
+    tool: "@mdx-js/mdx"
+    role: Parse MDX in `publish` so a syntax error fails in a tool response, not a build.
+
+  json_schema:
+    tool: ajv
+    role: Validate metadata against `api/schema.json`, fetched at runtime from the site.
+    note: >-
+      Not redundant with Zod. The schema arrives from another repo at runtime, so it
+      cannot be a compile-time type without copying a definition that would then drift.
 
 # ---------------------------------------------------------------------------
 # Web (apps/web)

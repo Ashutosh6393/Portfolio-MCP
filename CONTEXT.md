@@ -1,4 +1,4 @@
-# CONTEXT.md — {Project Name}
+# CONTEXT.md — portfolio-mcp
 
 What we're building and why. Read this first in any session.
 
@@ -9,34 +9,58 @@ structure, file names, or APIs — those live in the code and go stale here.
 
 ## In one sentence
 
-{What this product does, for whom.}
+A remote MCP server that lets one person read, draft, and publish content on
+`ashutoshverma.dev` from Claude Code, Claude Desktop, claude.ai, or a phone.
 
 ## The problem
 
-{What is broken or missing today, for the people who will use this. Concrete, not
-aspirational.}
+Publishing means opening the laptop, finding the repo, copying a template, getting the
+`export const metadata` block exactly right, committing, pushing, waiting for Vercel.
+Drafting from a phone is not possible at all.
+
+So the posts that get written are the ones that survive that friction. The idea you had
+on a train does not survive it.
 
 ## Who uses it
 
 | User | What they're trying to do | What they care about |
 |---|---|---|
-| {role} | {job to be done} | {speed / accuracy / cost / trust} |
+| Ashutosh — the only human user | Draft on a phone, publish from anywhere, keep the site as the single source of truth | Never shipping a half-finished post; the merge button stays his |
+| The model — any Claude client | Call the tools: read content, load a skill, save a draft, open a PR | Errors it can act on in the same turn, not "tool failed" |
+
+The model is the actual caller. Tool descriptions and error strings are its only
+interface, which makes their wording part of the product, not polish.
 
 ## What success looks like
 
-{Observable outcomes. How we'd know this worked.}
+- A post goes from idea to a Vercel preview URL without a laptop.
+- Every publish arrives as a PR that gets merged by hand.
+- A confused tool call can never overwrite a published post or flatten a good draft.
+- Saying "publish it" twice leaves exactly one PR.
 
 ---
 
 ## Domain language
 
-The vocabulary of this project. Use these exact terms in code, tests, commits, and
-conversation. If you find yourself inventing a synonym, use the term here instead — or
-propose adding one.
+Use these exact terms in code, tests, commits, and conversation. If you find yourself
+inventing a synonym, use the term here instead — or propose adding one.
 
 | Term | Means | Does **not** mean |
 |---|---|---|
-| {Term} | {precise definition} | {the near-miss it gets confused with} |
+| **writing** | A blog entry on the site. Lives at `/writing/{slug}` | "post" — that's social |
+| **project** | A portfolio project page. Has stack and status, no date | A repo |
+| **post** | A social post (LinkedIn, X). Never rendered by the site | A writing |
+| **kind** | One of `project`, `writing`, `post` | A file type |
+| **draft** | An unpublished file in `workshop`. Private | A PR that isn't merged |
+| **published** | Merged into `portfolio` and live on the site | Committed to a branch |
+| **publish** | Open a PR on `portfolio`. The tool never merges | Deploy |
+| **publish gate** | The merge button. Deliberately unreachable by the model | A confirmation prompt |
+| **revise** | The explicit flag needed to touch an already-published slug | An edit to a draft |
+| **slug** | The kebab-case URL segment. Immutable once published | A title |
+| **skill** | Voice and structure instructions plus its template, served as one unit | An MCP prompt |
+| **lazy reconciliation** | Checking on read whether a draft's PR merged, then archiving it | A webhook or cron |
+| **portfolio** | The public site repo. The server opens PRs, never commits to main | This repo |
+| **workshop** | The private repo holding drafts, skills, templates, post archive | This repo |
 
 Ambiguous domain terms are the most common cause of an agent building the wrong thing
 correctly. Add to this table whenever a misunderstanding surfaces.
@@ -47,14 +71,25 @@ correctly. Add to this table whenever a misunderstanding surfaces.
 
 ### We are building
 
-- {thing}
+- The MCP server, and only that. **This repo is the server.**
+- Six tools: `list_content`, `get_content`, `get_skill`, `save_draft`, `publish`,
+  `discard_draft`.
+- Secret-path auth, a `/health` route that really checks its three dependencies, and
+  GitHub App token minting.
+- The `publish` path: schema validation, MDX parse, branch, PR, idempotency.
 
 ### We are explicitly not building
 
-- {thing} — {why, or what we use instead}
+- **The site.** `portfolio` is a separate repo and its part is **done** — all five JSON
+  routes and OG images ship. See [`docs/portfolio-implementations.md`](docs/portfolio-implementations.md).
+- **Skills, templates, drafts.** Content. They live in `workshop`.
+- **Anything that merges a PR.** That is the entire safety model.
+- A database, search, auth beyond the secret path, auto-posting to LinkedIn or X, image
+  uploads, per-platform draft tools, a merge webhook, or tracing. Each was argued and
+  rejected — the reasons are in [`docs/adr/mcp-design.md`](docs/adr/mcp-design.md).
 
-Second list matters more than the first. It is what stops scope creep from looking like
-initiative.
+The second list matters more than the first. It is what stops scope creep from looking
+like initiative.
 
 ---
 
@@ -62,11 +97,14 @@ initiative.
 
 | Constraint | Detail |
 |---|---|
-| Users / scale | {expected load, growth} |
-| Compliance / data residency | {if any} |
-| Budget | {infra ceilings that rule options out} |
-| Deadlines | {if real} |
-| Team | {size, who reviews} |
+| Users / scale | One human. ~15 tool calls a week. Scale is not a design input |
+| Reachability | Connectors are called from Anthropic's cloud, not the device. No localhost, no tunnels |
+| Deployment | One always-on process. Free or near-free tier is the ceiling |
+| Secrets | GitHub App private key and the path secret are env vars. Never in git |
+| Team | One person, who is also the reviewer |
+
+The phone is the dangerous client: no diff to read, and a distracted user. Every refusal
+in the design exists for that case.
 
 ---
 
@@ -76,15 +114,21 @@ Things we depend on that we do not control.
 
 | System | Used for | If it goes down |
 |---|---|---|
-| {service} | {purpose} | {degradation strategy} |
+| GitHub API | Every read and write. No repo is ever cloned | Tools return an error string; nothing is queued |
+| `ashutoshverma.dev` JSON routes | Published content and `api/schema.json` | `publish` must refuse — it cannot validate without the schema |
+| Vercel preview builds | The second validation layer: broken imports, missing components | Merge blind, or don't merge |
+| The host (Fly or Railway) | Running the process | The connector is simply down. `/health` says which layer |
 
 ---
 
 ## Current state
 
-- **Stage:** prototype | beta | production
-- **Live:** {url or "not yet"}
-- **Users:** {number or "none yet"}
+- **Stage:** prototype — no server code yet
+- **Live:** not yet
+- **Users:** none yet
+- **Done:** Slice 0, the site prep, in the `portfolio` repo
+- **Next:** Slice 1 — skeleton, secret path, `/health`, `get_skill` only, deployed and
+  reachable from all three clients
 
 ---
 
