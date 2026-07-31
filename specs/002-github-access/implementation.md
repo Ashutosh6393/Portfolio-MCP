@@ -116,7 +116,7 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 
 | Date | Test | Change | Why |
 |---|---|---|---|
-| | | | |
+| 2026-07-31 | Spec 001 T-03 (both cases), `src/lib/env.test.ts` | Added `GITHUB_TOKEN` to the environment object each one passes to `parseEnv`. No assertion changed. | Task 1 makes `GITHUB_TOKEN` required. Their input was a complete environment when written and stopped being one; without this they would fail on a missing variable instead of on PORT coercion and defaulting, which is what they exist to assert. Landed before Task 1's red test, while the suite was still green — the revision passes against the old schema and the new one. |
 
 ---
 
