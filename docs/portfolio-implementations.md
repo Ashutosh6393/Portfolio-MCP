@@ -80,7 +80,7 @@ Listed so nobody picks them up by mistake. All of these live in `mcp-server` or
 `workshop`:
 
 - the MCP server, its six tools, secret-path auth, `/health`
-- the GitHub App and installation tokens
+- the GitHub credential and every call made with it
 - drafts, PRs, idempotency, lazy reconciliation
 - skills and templates (they move to `workshop`)
 - the `show`/`order` carry-over on `publish` — the hazard is written up in
