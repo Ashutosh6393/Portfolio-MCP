@@ -258,14 +258,21 @@ extension. Entries of type `dir` are skipped, and so is anything that is not `.m
 **A name** → two round trips.
 
 ```
-round 1 (3 in parallel)   list skills/ · list templates/ · read skills/be-human.md
-round 2 (1)               read whichever path the name resolved to
+round 1 (2 in parallel)   list skills/ · list templates/
+round 2 (2 in parallel)   read skills/be-human.{ext} · read the resolved path
 ```
 
 Resolving against the listing rather than guessing a path is what makes the extension a
 non-issue and what makes the error message free — an unknown name already has both real
-lists in hand and never needs a third call to build its answer. When the name **is**
-`be-human`, round 2 is skipped and it is returned once, not twice.
+lists in hand and never needs a third call to build its answer.
+
+> **Corrected in Task 5.** This block first read `skills/be-human.md` in round 1, on a
+> hardcoded path. That contradicted the rule immediately above it, and for no gain: the
+> voice moved to round 2 alongside the target, so it is still four calls across two round
+> trips and the `.md` is no longer written into the code. One rule, no exception to it.
+
+When the name **is** `be-human`, round 2 reads one file instead of two and it comes back
+once, under `voice` — not duplicated under a second key.
 
 **The voice always comes back.** `be-human.md` is attached to every named answer, and this
 is the part worth protecting. A model handed the writing template and no voice produces a
@@ -286,12 +293,18 @@ type Result =
   | { ok: true; skills: string[]; templates: string[] }
   | { ok: true; voice: string; instructions: string }
   | { ok: true; voice: string; template: string }
+  | { ok: true; voice: string }                          // be-human itself
   | { ok: false; error: string };
 ```
 
-No discriminator tag. The three success shapes are told apart by which key is present —
-`"skills" in result`, then `"template" in result` — and TypeScript is satisfied without
-inventing a vocabulary word. A tag named `kind` would be actively harmful here: `kind`
+No discriminator tag. The four success shapes are told apart by which key is present —
+`"skills" in result`, `"instructions" in result`, `"template" in result` — and TypeScript
+is satisfied without inventing a vocabulary word.
+
+The fourth shape was added in Task 5. T-10d requires that asking for `be-human` returns it
+**once**, and the alternative was putting the same text under `voice` and `instructions`
+together — 6 KB of duplicate in every such answer, and a tool that has to compare two
+strings to decide whether to print one or two sections. A tag named `kind` would be actively harmful here: `kind`
 already means `project | writing | post` in [CONTEXT.md](../../CONTEXT.md) and must not be
 overloaded.
 
@@ -449,7 +462,7 @@ Three rules carried from [testing.md](../../.claude/rules/testing.md), all uncha
 | T-10 | Fetching a named skill | unit | Fake listing `linkedin-post.md` and returning distinct bodies → `getSkill({github}, {name:"linkedin-post"})` → `instructions` and `voice` both present, non-empty, and **not swapped**; no `template` key |
 | T-10b | Fetching a named template | unit | Fake listing `writing.mdx` → `getSkill({github}, {name:"writing"})` → `template` and `voice` both present and not swapped; **no `instructions` key** |
 | T-10c | The extension is never guessed | unit | Fake listing the template as `writing.md`, not `.mdx` → `getSkill({github}, {name:"writing"})` → resolves and returns it |
-| T-10d | Asking for the voice itself | unit | `getSkill({github}, {name:"be-human"})` → returned once, as `instructions`; `be-human.md` read **exactly once** |
+| T-10d | Asking for the voice itself | unit | `getSkill({github}, {name:"be-human"})` → returned once, under `voice`, with no `instructions` or `template` key; `be-human.md` read **exactly once**. (Said `as instructions` when written; corrected in Task 5 — see The result shape) |
 | T-11 | Unknown name | unit | Fake listing two skills and one template, name matching neither → error result naming the bad name **and** listing what does exist, in one turn and with no extra call |
 | T-12 | The voice is missing | unit | Fake resolving the name but 404-ing on `skills/be-human.md` → error result naming the missing voice; **no partial success, no structure returned without it** |
 | T-13 | GitHub is down | unit | Fake throwing a non-404 error → error **result** naming GitHub, nothing thrown |

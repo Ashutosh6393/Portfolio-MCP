@@ -41,7 +41,9 @@ primary_region = "bom"
 
 [[vm]]
   size = "shared-cpu-1x"
-  # 256mb is probably enough for Bun and Elysia, but an OOM would land in the
-  # middle of the mobile-connector experiment this whole slice exists to run.
-  # Idle machines cost nothing, so the headroom is close to free.
-  memory = "512mb"
+  # Dropped from 512mb once the mobile-connector experiment was over. That
+  # headroom existed so an OOM could not be mistaken for a connector failure
+  # mid-experiment; the question is answered, so the headroom is no longer
+  # buying anything. Bun and Elysia sit well inside 256mb here.
+  # If the server starts OOMing, this is the first line to look at.
+  memory = "256mb"

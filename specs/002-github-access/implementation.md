@@ -5,12 +5,12 @@ reads this file first and picks up from it.
 
 Update it after every task. Never batch updates.
 
-- **Status:** Slice 1 complete, deployed and verified. **At the human gate.**
-- **Branch:** `feat/github-access` → PR 1. Slice 2 continues on
-  `feat/github-access-skill`, branched from this tip.
+- **Status:** both slices complete, deployed and verified. **At the human gate.**
+- **Branch:** `feat/github-access-skill` → PR 2, stacked on `feat/github-access` (PR 1).
 - **Spec:** `design.md` · **ADRs:** `docs/adr/002-github-access-and-workshop.md`,
   `docs/adr/003-skills-and-templates-are-separate.md`
-- **Current task:** none in this slice. Next is Task 4, on the Slice 2 branch.
+- **Current task:** none. Outstanding: the client half of Task 7 — driving `get_skill` from
+  Claude Code, claude.ai and the mobile app, which only a human can do.
 
 ---
 
@@ -51,10 +51,10 @@ In dependency order. Each task must be independently testable and map to test ID
 | 1 | `GITHUB_TOKEN` in the env schema, and in `.env.example` by name only | — | T-01, T-02, T-03 | 1 | `done` | 1/3 | (this commit) |
 | 2 | `src/lib/github.ts` — `createGithub`, `listDirectory`, `readFile`, `GithubNotFoundError` — plus the `github` deep check wired into `src/index.ts` | 1 | T-04, T-05, T-06 | 1 | `done` | 1/3 | (this commit) |
 | 3 | Set the token on Fly, deploy, verify `checks.github` against the **real** repos | 2, P-2, P-1 | — (manual) | 1 | `done` | 0/3 | deployed, no code |
-| 4 | `entryListSchema` in `lib/github.ts`, and `getSkill`'s list mode over `skills/` and `templates/` | 2 | T-07, T-08, T-09, T-14 | 2 | `pending` | 0/3 | — |
-| 5 | `getSkill`'s named mode — resolve from the listing, bundle the voice — and its error paths | 4 | T-10, T-10b, T-10c, T-10d, T-11, T-12, T-13 | 2 | `pending` | 0/3 | — |
-| 6 | `src/tools/get-skill.ts` and its registration in `src/tools/index.ts` | 5 | T-15, T-16, T-17 | 2 | `pending` | 0/3 | — |
-| 7 | Verify `get_skill` on Claude Code, claude.ai, and the mobile app | 6 | — (manual) | 2 | `pending` | 0/3 | — |
+| 4 | `entryListSchema` in `lib/github.ts`, and `getSkill`'s list mode over `skills/` and `templates/` | 2 | T-07, T-08, T-09, T-13, T-14 | 2 | `done` | 1/3 | (this commit) |
+| 5 | `getSkill`'s named mode — resolve from the listing, bundle the voice — and its error paths | 4 | T-10, T-10b, T-10c, T-10d, T-11, T-12 | 2 | `done` | 1/3 | (this commit) |
+| 6 | `src/tools/get-skill.ts` and its registration in `src/tools/index.ts` | 5 | T-15, T-16, T-17 | 2 | `done` | 1/3 | (this commit) |
+| 7 | Verify `get_skill` on Claude Code, claude.ai, and the mobile app | 6 | — (manual) | 2 | `green` | 0/3 | deployed, no code |
 
 ### Notes on specific tasks
 
@@ -112,13 +112,16 @@ Max 5–7 files (excluding tests) and 500 lines per slice.
 
 | Slice | Contains | Files | State | PR |
 |---|---|---|---|---|
-| 1 | Tasks 1–3 — the credential works | 4 | complete, **at the gate** | this branch |
-| 2 | Tasks 4–7 — `get_skill` | 4 | complete, stacked on this one | `feat/github-access-skill` |
+| 1 | Tasks 1–3 — the credential works | 4 | complete, at the gate | `feat/github-access` |
+| 2 | Tasks 4–7 — `get_skill` | 5 | complete, at the gate | `feat/github-access-skill` |
 
-**Slice 2 is stacked, not merged into this PR.** Both slices were built in one session and
-together came to 8 source files and 410 lines, over the 5–7 file ceiling. They were split
-back apart at this commit. Slice 2 uses `lib/github.ts` and nothing else from here, so the
-halves review and revert independently — review this one first.
+**These are stacked PRs. Review and merge 1 first.** Both slices were built in one session
+and together came to 8 source files and 410 lines, over the 5–7 file ceiling, so they were
+split back apart at `feat/github-access`'s tip. Slice 2 uses `lib/github.ts` and nothing
+else from Slice 1, so the halves review and revert independently.
+
+Slice 2's file count is 5, not the 4 planned: `fly.toml` rode along with it. The VM drop to
+256mb belongs to neither slice and had to go somewhere.
 
 ---
 
@@ -137,6 +140,7 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 
 | Date | Test | Change | Why |
 |---|---|---|---|
+| 2026-07-31 | `postJsonRpc`, `src/tools/index.test.ts` | Passed `github` alongside `site` into the single `createHandler` call the helper makes. No assertion changed, no test body touched. | Task 6 registers `get_skill`, so `createHandler`'s deps grew — the same required-injection design as `createApp`. One call site, one field. |
 | 2026-07-31 | The eight `createApp` calls, `src/index.test.ts` | Replaced the inline `{ site: fakeSite }` with a shared `testDeps` holding both fakes. No assertion changed, no test body touched. | Task 2 adds `github` to `createApp`'s deps, which by design makes a missing injection a compile error. Pure plumbing, and the same revision spec 001 made when `deps` became required — its note is three lines above this one in the file. |
 | 2026-07-31 | `testEnv`, `src/index.test.ts` | Added `GITHUB_TOKEN` to the shared environment const. No assertion changed, no test body touched. | Task 1 adds the variable to `Env`, so an environment without it stops type-checking — `bun test` was green while `bun run typecheck` failed in all eight `createApp` calls. One const, one field. No route under test reads its value. |
 | 2026-07-31 | Spec 001 T-03 (both cases), `src/lib/env.test.ts` | Added `GITHUB_TOKEN` to the environment object each one passes to `parseEnv`. No assertion changed. | Task 1 makes `GITHUB_TOKEN` required. Their input was a complete environment when written and stopped being one; without this they would fail on a missing variable instead of on PORT coercion and defaulting, which is what they exist to assert. Landed before Task 1's red test, while the suite was still green — the revision passes against the old schema and the new one. |
@@ -147,19 +151,60 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 
 Newest first. Keep entries short — this is a handoff, not a diary.
 
-### 2026-07-31 — Task 3 complete, Slice 1 deployed
+### 2026-07-31 — split into two PRs, deployed and verified
 
-- **Deployed and verified in production:** deep health 200 with `site` and `github` both
-  `ok`, 1.27s cold. `checks.site` unchanged from spec 001.
-- **Two deploys failed identically** on Fly's depot builder (`context deadline exceeded`) —
-  infrastructure, not code. `--depot=false` built and released first try. The same failure
-  signature twice was the signal to change method rather than retry a third time.
-- **Not verified in production: the 503 path.** It was observed locally against the real
-  API by pointing a repo constant at a name that does not exist. Reproducing it on the
-  deployed server would mean deliberately breaking production.
-- **Note for the reviewer:** the deployed build also contains Slice 2, because both were
-  built before the branch was split. Slice 1 stands alone in code — 33 tests pass at this
-  commit with nothing from Slice 2 present.
+- **Deployed.** Two attempts failed identically on Fly's depot builder
+  (`context deadline exceeded`) — infrastructure, not code. `--depot=false` released first
+  try. The same failure signature twice was the signal to change method, not retry again.
+- **Verified in production:** deep health 200 with `site` and `github` both `ok`;
+  `tools/list` returns `list_content` **and** `get_skill`; `get_skill` lists three skills
+  and two templates; an unknown name answers HTTP 200 with `isError: true` naming what
+  exists.
+- **Not verified in production: the 503 path.** Observed locally against the real API by
+  pointing a repo constant at a name that does not exist. Reproducing it on the deployed
+  server would mean deliberately breaking production.
+- **Branch split.** Slice 1 stayed on `feat/github-access`; Slice 2's four commits were
+  rebased onto its tip as `feat/github-access-skill`. The doc conflicts were resolved to
+  the incoming side and the combined state fixed here, in one commit, rather than by hand
+  in each replayed commit.
+- **Outstanding:** the client half of Task 7. Only a human can drive Claude Code, claude.ai
+  and the mobile app.
+
+### 2026-07-31 — Task 6
+
+- **Done:** `src/tools/get-skill.ts` and its registration. 4 tests added (48 total, was
+  44). The description is the specified text, verbatim.
+- **`name` is optional** in the input schema — a required one would make the listing mode
+  unreachable, which is the mode a model needs first.
+- **Rendering:** voice first under its own heading, then the rules or the template.
+  Asking for `be-human` prints one section, not two.
+- **Next:** Task 7 — verify on Claude Code, claude.ai and mobile. Needs the deploy, which
+  is still failing on Fly's builder queue rather than on anything in this repo.
+
+### 2026-07-31 — Task 5
+
+- **Done:** `getSkill`'s named mode. 6 tests added (44 total, was 38).
+- **Two corrections to `design.md`, both recorded there:**
+  1. The voice is resolved from the listing like everything else, not read on a hardcoded
+     `skills/be-human.md`. The original sketch contradicted its own "never guess a path"
+     rule, and moving it to round 2 costs nothing — still four calls, two round trips.
+  2. Asking for `be-human` returns it under `voice` alone. The spec said `instructions`,
+     which would have meant the same 6 KB under two keys in every such answer.
+- **Refactor:** the first green used `template as Entry`. Replaced with a resolved `target`
+  that carries its own `isSkill` flag, so there is no unchecked cast — `code-style.md`
+  bans them and the ban is worth more than the two lines it cost.
+- **Next:** Task 6, the tool and its registration.
+
+### 2026-07-31 — Task 4
+
+- **Done:** `entryListSchema` in `lib/github.ts`, and `getSkill`'s no-name mode listing
+  `skills/` and `templates/` in parallel. 5 tests added (38 total, was 33).
+- **`type` is `z.string()`, not an enum.** GitHub also returns `symlink` and `submodule`;
+  an enum would fail a whole listing over one odd entry. Callers filter on `"file"`. Same
+  reasoning as `status` in `site.ts`.
+- **T-13 was pulled forward** from Task 5 — the GitHub-failure catch is shared between both
+  modes, so it existed the moment the list mode did and would have gone untested otherwise.
+- **Next:** Task 5, the named mode: resolve from the listing, bundle the voice, error paths.
 
 ### 2026-07-31 — Task 3, local half
 
