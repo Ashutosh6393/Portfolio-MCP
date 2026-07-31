@@ -53,7 +53,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 2 | `src/lib/github.ts` — `createGithub`, `listDirectory`, `readFile`, `GithubNotFoundError` — plus the `github` deep check wired into `src/index.ts` | 1 | T-04, T-05, T-06 | 1 | `done` | 1/3 | (this commit) |
 | 3 | Set the token on Fly, deploy, verify `checks.github` against the **real** repos | 2, P-2, P-1 | — (manual) | 1 | `green` | 0/3 | — |
 | 4 | `entryListSchema` in `lib/github.ts`, and `getSkill`'s list mode over `skills/` and `templates/` | 2 | T-07, T-08, T-09, T-13, T-14 | 2 | `done` | 1/3 | (this commit) |
-| 5 | `getSkill`'s named mode — resolve from the listing, bundle the voice — and its error paths | 4 | T-10, T-10b, T-10c, T-10d, T-11, T-12, T-13 | 2 | `pending` | 0/3 | — |
+| 5 | `getSkill`'s named mode — resolve from the listing, bundle the voice — and its error paths | 4 | T-10, T-10b, T-10c, T-10d, T-11, T-12 | 2 | `done` | 1/3 | (this commit) |
 | 6 | `src/tools/get-skill.ts` and its registration in `src/tools/index.ts` | 5 | T-15, T-16, T-17 | 2 | `pending` | 0/3 | — |
 | 7 | Verify `get_skill` on Claude Code, claude.ai, and the mobile app | 6 | — (manual) | 2 | `pending` | 0/3 | — |
 
@@ -147,6 +147,20 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-31 — Task 5
+
+- **Done:** `getSkill`'s named mode. 6 tests added (44 total, was 38).
+- **Two corrections to `design.md`, both recorded there:**
+  1. The voice is resolved from the listing like everything else, not read on a hardcoded
+     `skills/be-human.md`. The original sketch contradicted its own "never guess a path"
+     rule, and moving it to round 2 costs nothing — still four calls, two round trips.
+  2. Asking for `be-human` returns it under `voice` alone. The spec said `instructions`,
+     which would have meant the same 6 KB under two keys in every such answer.
+- **Refactor:** the first green used `template as Entry`. Replaced with a resolved `target`
+  that carries its own `isSkill` flag, so there is no unchecked cast — `code-style.md`
+  bans them and the ban is worth more than the two lines it cost.
+- **Next:** Task 6, the tool and its registration.
 
 ### 2026-07-31 — Task 4
 
