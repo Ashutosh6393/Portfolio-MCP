@@ -35,7 +35,7 @@ slice they gate can be signed off.
 | # | Prerequisite | Gates | State |
 |---|---|---|---|
 | P-1 | `workshop` exists, private, with `skills/linkedin-post/` and `skills/writing/`, each holding `instructions.md` and `template.mdx` | Slice 2 | **done** — 2026-07-31 |
-| P-2 | Fine-grained PAT, scoped to both repos, Contents: read-only, set with `fly secrets set` | Slice 1, Task 3 | pending |
+| P-2 | Fine-grained PAT, scoped to both repos, Contents: read-only, set with `fly secrets set` | Slice 1, Task 3 | **done** — 2026-07-31. Scope unconfirmed, see Risk 2b |
 
 ---
 
@@ -61,8 +61,10 @@ against the real API and record the answer in `design.md` in the same commit:
 
 1. Does `Accept: application/vnd.github.raw` return the raw file body? (Risk 3 — the whole
    no-base64 design depends on it.)
-2. What is the site repo's real name? (Risk 2 / Open question 1.)
-3. Does a directory listing carry `name` and `type` as assumed?
+2. Does a directory listing carry `name` and `type` as assumed?
+
+~~What is the site repo's real name?~~ Closed before Task 1: **`Portfolio-new`**. See
+`design.md` → Approach → Owner and repo names.
 
 **Task 3 is a human step and cannot be automated.** The token is set by hand, straight into
 Fly. It never passes through an agent or a file. Criterion 3 of Slice 1 — the 503 path —
@@ -125,11 +127,13 @@ Newest first. Keep entries short — this is a handoff, not a diary.
 ### 2026-07-31
 
 - **Done:** Spec scaffolded from ADR-002. Four files written, branch created off
-  `docs/adr-002`.
+  `docs/adr-002`. P-1 and P-2 both satisfied. Open question 1 closed — the site repo is
+  `Portfolio-new`.
 - **State:** Awaiting the human gate on the slice plan. `design.md` Status is still
-  `draft`.
-- **Next:** Answer Open question 1 (the site repo's real name), set `design.md` Status to
-  `approved`, then start Task 1.
+  `draft`. No open questions remain.
+- **Next:** Set `design.md` Status to `approved`, then start Task 1.
 - **Watch out for:** GitHub returns **404, not 403**, for a private repo the token cannot
   see. A mis-scoped token and a missing file are the same response. Never write an error
-  message that claims a skill does not exist as a certainty.
+  message that claims a skill does not exist as a certainty. Risk 2b is the live version of
+  this: if the PAT was scoped to `Portfolio` rather than `Portfolio-new`, Task 3 fails and
+  the cause will not look like a scoping mistake.

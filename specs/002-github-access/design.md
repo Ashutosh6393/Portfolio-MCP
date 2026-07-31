@@ -79,7 +79,7 @@ Neither can be proved by a test inside this repo, and the loop cannot finish wit
 | # | Prerequisite | Owner | State |
 |---|---|---|---|
 | P-1 | Private `workshop` repo exists, holding `skills/linkedin-post/` and `skills/writing/`, each with `instructions.md` and `template.mdx` | Ashutosh | **done** — 2026-07-31 |
-| P-2 | Fine-grained PAT issued, scoped to both repos, **Contents: read-only**, set on Fly with `fly secrets set` | Ashutosh | pending — Task 3 |
+| P-2 | Fine-grained PAT issued, scoped to both repos, **Contents: read-only**, set on Fly with `fly secrets set` | Ashutosh | **done** — 2026-07-31. Scope unconfirmed: see Risk 2b |
 
 **P-2 never passes through an agent or a file.** Set by hand, straight into Fly's secret
 store. See [security.md](../../.claude/rules/security.md).
@@ -161,9 +161,26 @@ cast and still exercise the real schema.
 Per ADR-002: one user, two repos, they will not change. An environment variable for a value
 that never varies is configuration nobody asked for. The owner is `Ashutosh6393`.
 
-> **The `portfolio` repo's real name is unverified.** `CONTEXT.md` calls it `portfolio`,
-> but this repo's own remote is `Portfolio-MCP` — capitalised, and not what `CONTEXT.md`
-> would suggest. Confirm before Status becomes `approved`. See Open questions 1.
+**The domain word and the GitHub name are not the same, and the code keeps both:**
+
+```ts
+export type Repo = "portfolio" | "workshop";
+
+const repoNames = { portfolio: "Portfolio-new", workshop: "workshop" } as const;
+```
+
+`Repo` stays the [CONTEXT.md](../../CONTEXT.md) vocabulary — `portfolio` means "the public
+site repo" everywhere in this project, and every doc, ADR, and error message says
+`portfolio`. `repoNames` is the one place that word becomes a real GitHub path. Spreading
+`"Portfolio-new"` through the codebase would put a deployment detail into the domain
+language.
+
+> **Verified 2026-07-31, and it was not the obvious answer.** The account holds
+> `Portfolio`, `Portfolio2`, `Portfolio-new`, and `Portfolio-MCP`. `Portfolio-new` is the
+> site: its homepage is `ashutoshverma.dev` and its `app/api/` holds exactly `writing`,
+> `projects`, and `schema.json`. `Portfolio` is a 2025 GSAP site on GitHub Pages. Guessing
+> `portfolio` from the docs would have pointed the reader at the wrong repo — and, per
+> Risk 1, that failure arrives looking like a token problem.
 
 ### 404 is the only status worth distinguishing
 
@@ -414,7 +431,8 @@ Three rules carried from [testing.md](../../.claude/rules/testing.md), all uncha
 | Risk | Impact | Mitigation |
 |---|---|---|
 | **1. A bad token is indistinguishable from a missing file.** GitHub answers 404, not 403, for a private repo the token cannot see. "Your token is wrong" arrives disguised as "no such skill". | A confusing debugging session, most likely right after P-2 | The `github_pat_` format check at boot catches the common versions (classic token, truncated paste, empty). The `github` health check catches the rest — but only when a human opens it. Accepted, and written here so the next reader is not surprised. |
-| **2. The site repo's real name is unverified.** `CONTEXT.md` says `portfolio`; this repo's own remote is `Portfolio-MCP`. A wrong constant makes the `github` check fail permanently and look like a token problem — see Risk 1. | Slice 1 cannot pass | **Open question 1.** Confirm before approval, then verify against the live API in Task 2. |
+| ~~**2. The site repo's real name is unverified.**~~ **Closed 2026-07-31.** It is `Portfolio-new`, not `portfolio` — confirmed by its `ashutoshverma.dev` homepage and its `app/api/{writing,projects,schema.json}` tree. Three other `Portfolio*` repos exist on the account, so this was a real coin-flip and the docs would have lost it. | — | — |
+| **2b. The token may be scoped to the wrong `Portfolio`.** The residue of Risk 2. If the PAT was scoped by picking a repo named `Portfolio` from a list, it points at a 2025 GSAP site and cannot see `Portfolio-new`. | `checks.github` fails permanently, looking exactly like Risk 1 | Confirm the PAT's repository list names **`Portfolio-new`** and **`workshop`**. Task 3 catches it either way, but the fix is in GitHub's UI, not the code. |
 | **3. `Accept: application/vnd.github.raw` is assumed, not verified.** The whole no-base64 design rests on it. | The reader needs a decode step after all — a small change, but in Slice 1 | Verify in **Task 2**, first thing, against the real API. Spec 001's precedent: SDK and API assumptions get checked in the task that first depends on them, never assumed. If it does not hold, add the decode and record the correction here. |
 | **4. The token expires silently, within a year.** Carried from ADR-002 → Tradeoffs. Nothing watches it. | The connector starts returning errors and nothing announced it | **Nothing is built for this, on purpose.** The `github` health check is the only thing that will ever say so. It was the App's real advantage and it was given up knowingly. Do not "fix" this inside the slice. |
 | **5. Rate limits.** 5,000 requests/hour for an authenticated token; this server makes ~15 tool calls a week at two calls each. | None | Stated so nobody builds a cache or a retry for it. Three orders of magnitude of headroom is not a design input. |
@@ -427,12 +445,17 @@ Three rules carried from [testing.md](../../.claude/rules/testing.md), all uncha
 Resolve before Status becomes `approved`. Unanswered questions here are the most common
 cause of a blocked task later.
 
-- [ ] **1. What is the site repo actually called on GitHub?** `CONTEXT.md` and
-      `mcp-design.md` both say `portfolio`. This repo's remote is
-      `github.com/Ashutosh6393/Portfolio-MCP`, so the naming convention is not obvious from
-      here. The constant in `lib/github.ts` must match exactly. — **owner:** Ashutosh
+**None open.** All four are resolved below.
 
 Resolved during planning, recorded so they are not re-opened:
+
+- [x] **1. What is the site repo actually called on GitHub?** **`Portfolio-new`.** Verified
+      2026-07-31 against the account: it is the only `Portfolio*` repo whose homepage is
+      `ashutoshverma.dev` and whose `app/api/` holds `writing`, `projects`, and
+      `schema.json`. `Portfolio` is a 2025 GSAP site on GitHub Pages; `Portfolio2` has no
+      API routes. The domain word `portfolio` is unchanged everywhere — only
+      `repoNames` in `lib/github.ts` knows the real name. See Approach → Owner and repo
+      names.
 
 - [x] **2. What are the two files inside `skills/{name}/` called?** ADR-002 said
       "instructions and template as two files" and never named them. Decided 2026-07-31:

@@ -107,6 +107,10 @@ registered, and never blur `writing` and `post` — they are different things in
 **Facts already established — do not re-derive them:**
 
 - Owner handle: `Ashutosh6393`. Repo constants live in `lib/github.ts`, **not** in env.
+- **The site repo is `Portfolio-new`, not `portfolio`.** Verified 2026-07-31. The account
+  also holds `Portfolio` (a 2025 GSAP site) and `Portfolio2` — do not guess from the docs.
+  Keep the domain word `portfolio` in the `Repo` type and in every message; only
+  `repoNames` maps it to `"Portfolio-new"`.
 - `workshop` exists and holds `skills/linkedin-post/` and `skills/writing/`, each with
   `instructions.md` and `template.mdx`.
 - The GitHub contents endpoint is `GET /repos/{owner}/{repo}/contents/{path}`. A directory
