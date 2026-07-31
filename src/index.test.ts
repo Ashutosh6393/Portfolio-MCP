@@ -8,7 +8,15 @@ import type { Site } from "./lib/site";
 
 const secret = "a".repeat(32);
 const wrongSecret = "b".repeat(32);
-const testEnv = { MCP_SECRET_PATH: secret, PORT: 3000 };
+// Test revision, 2026-07-31 — see Test revisions table in
+// specs/002-github-access/implementation.md. Spec 002 Task 1 adds GITHUB_TOKEN
+// to Env, so an environment without it no longer type-checks. Never a real
+// token (.claude/rules/security.md); no route below reads its value.
+const testEnv = {
+	MCP_SECRET_PATH: secret,
+	GITHUB_TOKEN: `github_pat_${"x".repeat(22)}`,
+	PORT: 3000,
+};
 
 // Test revision, 2026-07-31 — see Test revisions table in implementation.md.
 // `createApp`'s `deps` parameter is now required. T-04..T-07 were written when
