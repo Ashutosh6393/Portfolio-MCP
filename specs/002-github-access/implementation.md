@@ -5,12 +5,12 @@ reads this file first and picks up from it.
 
 Update it after every task. Never batch updates.
 
-- **Status:** in-progress — Slice 1 verified against the live API, **deploy outstanding**
-- **Branch:** `feat/github-access`
+- **Status:** Slice 1 complete, deployed and verified. **At the human gate.**
+- **Branch:** `feat/github-access` → PR 1. Slice 2 continues on
+  `feat/github-access-skill`, branched from this tip.
 - **Spec:** `design.md` · **ADRs:** `docs/adr/002-github-access-and-workshop.md`,
   `docs/adr/003-skills-and-templates-are-separate.md`
-- **Current task:** 3 — both health paths observed locally against the real repos. Only
-  `fly deploy` and the check against the deployed URL remain, and that is a human step.
+- **Current task:** none in this slice. Next is Task 4, on the Slice 2 branch.
 
 ---
 
@@ -50,7 +50,7 @@ In dependency order. Each task must be independently testable and map to test ID
 |---|---|---|---|---|---|---|---|
 | 1 | `GITHUB_TOKEN` in the env schema, and in `.env.example` by name only | — | T-01, T-02, T-03 | 1 | `done` | 1/3 | (this commit) |
 | 2 | `src/lib/github.ts` — `createGithub`, `listDirectory`, `readFile`, `GithubNotFoundError` — plus the `github` deep check wired into `src/index.ts` | 1 | T-04, T-05, T-06 | 1 | `done` | 1/3 | (this commit) |
-| 3 | Set the token on Fly, deploy, verify `checks.github` against the **real** repos | 2, P-2, P-1 | — (manual) | 1 | `green` | 0/3 | — |
+| 3 | Set the token on Fly, deploy, verify `checks.github` against the **real** repos | 2, P-2, P-1 | — (manual) | 1 | `done` | 0/3 | deployed, no code |
 | 4 | `entryListSchema` in `lib/github.ts`, and `getSkill`'s list mode over `skills/` and `templates/` | 2 | T-07, T-08, T-09, T-14 | 2 | `pending` | 0/3 | — |
 | 5 | `getSkill`'s named mode — resolve from the listing, bundle the voice — and its error paths | 4 | T-10, T-10b, T-10c, T-10d, T-11, T-12, T-13 | 2 | `pending` | 0/3 | — |
 | 6 | `src/tools/get-skill.ts` and its registration in `src/tools/index.ts` | 5 | T-15, T-16, T-17 | 2 | `pending` | 0/3 | — |
@@ -112,8 +112,13 @@ Max 5–7 files (excluding tests) and 500 lines per slice.
 
 | Slice | Contains | Files | State | PR |
 |---|---|---|---|---|
-| 1 | Tasks 1–3 — the credential works | 4 | `pending` | — |
-| 2 | Tasks 4–7 — `get_skill` | 4 | `pending` | — |
+| 1 | Tasks 1–3 — the credential works | 4 | complete, **at the gate** | this branch |
+| 2 | Tasks 4–7 — `get_skill` | 4 | complete, stacked on this one | `feat/github-access-skill` |
+
+**Slice 2 is stacked, not merged into this PR.** Both slices were built in one session and
+together came to 8 source files and 410 lines, over the 5–7 file ceiling. They were split
+back apart at this commit. Slice 2 uses `lib/github.ts` and nothing else from here, so the
+halves review and revert independently — review this one first.
 
 ---
 
@@ -141,6 +146,20 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-31 — Task 3 complete, Slice 1 deployed
+
+- **Deployed and verified in production:** deep health 200 with `site` and `github` both
+  `ok`, 1.27s cold. `checks.site` unchanged from spec 001.
+- **Two deploys failed identically** on Fly's depot builder (`context deadline exceeded`) —
+  infrastructure, not code. `--depot=false` built and released first try. The same failure
+  signature twice was the signal to change method rather than retry a third time.
+- **Not verified in production: the 503 path.** It was observed locally against the real
+  API by pointing a repo constant at a name that does not exist. Reproducing it on the
+  deployed server would mean deliberately breaking production.
+- **Note for the reviewer:** the deployed build also contains Slice 2, because both were
+  built before the branch was split. Slice 1 stands alone in code — 33 tests pass at this
+  commit with nothing from Slice 2 present.
 
 ### 2026-07-31 — Task 3, local half
 
