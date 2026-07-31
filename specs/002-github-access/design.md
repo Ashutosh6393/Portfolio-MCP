@@ -8,8 +8,8 @@ described here.
 > This document assumes that decision is made and describes how it lands in the codebase.
 
 - **Source ADR:** `docs/adr/002-github-access-and-workshop.md`
-- **Status:** draft
-- **Approved by:** {human} on {date}
+- **Status:** approved
+- **Approved by:** Ashutosh Verma on 2026-07-31
 
 > Implementation does not start until Status is `approved`.
 
@@ -79,7 +79,7 @@ Neither can be proved by a test inside this repo, and the loop cannot finish wit
 | # | Prerequisite | Owner | State |
 |---|---|---|---|
 | P-1 | Private `workshop` repo exists, holding `skills/linkedin-post/` and `skills/writing/`, each with `instructions.md` and `template.mdx` | Ashutosh | **done** — 2026-07-31 |
-| P-2 | Fine-grained PAT issued, scoped to both repos, **Contents: read-only**, set on Fly with `fly secrets set` | Ashutosh | **done** — 2026-07-31. Scope unconfirmed: see Risk 2b |
+| P-2 | Fine-grained PAT issued, scoped to `Portfolio-new` and `workshop`, **Contents: read-only**, set on Fly with `fly secrets set` | Ashutosh | **done** — 2026-07-31, scope confirmed |
 
 **P-2 never passes through an agent or a file.** Set by hand, straight into Fly's secret
 store. See [security.md](../../.claude/rules/security.md).
@@ -432,7 +432,7 @@ Three rules carried from [testing.md](../../.claude/rules/testing.md), all uncha
 |---|---|---|
 | **1. A bad token is indistinguishable from a missing file.** GitHub answers 404, not 403, for a private repo the token cannot see. "Your token is wrong" arrives disguised as "no such skill". | A confusing debugging session, most likely right after P-2 | The `github_pat_` format check at boot catches the common versions (classic token, truncated paste, empty). The `github` health check catches the rest — but only when a human opens it. Accepted, and written here so the next reader is not surprised. |
 | ~~**2. The site repo's real name is unverified.**~~ **Closed 2026-07-31.** It is `Portfolio-new`, not `portfolio` — confirmed by its `ashutoshverma.dev` homepage and its `app/api/{writing,projects,schema.json}` tree. Three other `Portfolio*` repos exist on the account, so this was a real coin-flip and the docs would have lost it. | — | — |
-| **2b. The token may be scoped to the wrong `Portfolio`.** The residue of Risk 2. If the PAT was scoped by picking a repo named `Portfolio` from a list, it points at a 2025 GSAP site and cannot see `Portfolio-new`. | `checks.github` fails permanently, looking exactly like Risk 1 | Confirm the PAT's repository list names **`Portfolio-new`** and **`workshop`**. Task 3 catches it either way, but the fix is in GitHub's UI, not the code. |
+| ~~**2b. The token may be scoped to the wrong `Portfolio`.**~~ **Closed 2026-07-31.** The PAT names `Portfolio-new` and `workshop`, confirmed by the token's owner. Had it been scoped to `Portfolio`, the failure would have surfaced as a 404 and read as Risk 1 — which is why it was worth checking before Task 1 rather than discovering it in Task 3. | — | — |
 | **3. `Accept: application/vnd.github.raw` is assumed, not verified.** The whole no-base64 design rests on it. | The reader needs a decode step after all — a small change, but in Slice 1 | Verify in **Task 2**, first thing, against the real API. Spec 001's precedent: SDK and API assumptions get checked in the task that first depends on them, never assumed. If it does not hold, add the decode and record the correction here. |
 | **4. The token expires silently, within a year.** Carried from ADR-002 → Tradeoffs. Nothing watches it. | The connector starts returning errors and nothing announced it | **Nothing is built for this, on purpose.** The `github` health check is the only thing that will ever say so. It was the App's real advantage and it was given up knowingly. Do not "fix" this inside the slice. |
 | **5. Rate limits.** 5,000 requests/hour for an authenticated token; this server makes ~15 tool calls a week at two calls each. | None | Stated so nobody builds a cache or a retry for it. Three orders of magnitude of headroom is not a design input. |

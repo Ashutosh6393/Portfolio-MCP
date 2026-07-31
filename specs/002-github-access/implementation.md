@@ -35,7 +35,7 @@ slice they gate can be signed off.
 | # | Prerequisite | Gates | State |
 |---|---|---|---|
 | P-1 | `workshop` exists, private, with `skills/linkedin-post/` and `skills/writing/`, each holding `instructions.md` and `template.mdx` | Slice 2 | **done** — 2026-07-31 |
-| P-2 | Fine-grained PAT, scoped to both repos, Contents: read-only, set with `fly secrets set` | Slice 1, Task 3 | **done** — 2026-07-31. Scope unconfirmed, see Risk 2b |
+| P-2 | Fine-grained PAT, scoped to `Portfolio-new` and `workshop`, Contents: read-only, set with `fly secrets set` | Slice 1, Task 3 | **done** — 2026-07-31, scope confirmed |
 
 ---
 
@@ -129,11 +129,12 @@ Newest first. Keep entries short — this is a handoff, not a diary.
 - **Done:** Spec scaffolded from ADR-002. Four files written, branch created off
   `docs/adr-002`. P-1 and P-2 both satisfied. Open question 1 closed — the site repo is
   `Portfolio-new`.
-- **State:** Awaiting the human gate on the slice plan. `design.md` Status is still
-  `draft`. No open questions remain.
-- **Next:** Set `design.md` Status to `approved`, then start Task 1.
+- **State:** `design.md` **approved** by Ashutosh Verma on 2026-07-31. No open questions,
+  no unmet prerequisites. The loop is clear to start.
+- **Next:** Task 1 — `GITHUB_TOKEN` in the env schema and `.env.example`. Red test first
+  (T-01, T-02, T-03).
 - **Watch out for:** GitHub returns **404, not 403**, for a private repo the token cannot
   see. A mis-scoped token and a missing file are the same response. Never write an error
-  message that claims a skill does not exist as a certainty. Risk 2b is the live version of
-  this: if the PAT was scoped to `Portfolio` rather than `Portfolio-new`, Task 3 fails and
-  the cause will not look like a scoping mistake.
+  message that claims a skill does not exist as a certainty. The token's scope is confirmed
+  correct, so a 404 in Task 3 means a wrong path or a wrong repo constant — not the
+  credential.
