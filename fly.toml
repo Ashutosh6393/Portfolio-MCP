@@ -1,0 +1,47 @@
+# Fly config for the portfolio MCP server.
+# Decision and rationale: docs/adr/001-server-runtime-and-shape.md.
+
+# "portfolio-mcp" was already taken — Fly app names are global. The name is
+# cosmetic here; the real hostname is mcp.ashutoshverma.dev via CNAME.
+app = "ashutoshverma-mcp"
+primary_region = "bom"
+
+[build]
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+
+  # Roughly 15 calls a week. The machine sleeps between them and wakes on the
+  # next request — that is what makes this cost near nothing, and it is why
+  # nearly every real call pays a cold start. See design.md Risk 3.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    # The cheap probe: GET /health does no I/O and lives outside the secret
+    # path, so it leaks nothing. The deep check at /{secret}/health is never
+    # wired here — an unauthenticated prober must not be able to reach it.
+    #
+    # Verified 2026-07-30: a 30s check does NOT keep an auto-stop machine
+    # awake. The machine stopped on its own after ~9 idle minutes with this
+    # block active, so the cost model in ADR-001 holds.
+    #
+    # Untested: whether grace_period delays routing to a machine the proxy has
+    # just woken. Cold start measures ~5.4s and nobody has ruled this block out
+    # as part of that. Dropping it is the first thing to try if the number
+    # needs to come down.
+    path = "/health"
+    method = "GET"
+    protocol = "http"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  # 256mb is probably enough for Bun and Elysia, but an OOM would land in the
+  # middle of the mobile-connector experiment this whole slice exists to run.
+  # Idle machines cost nothing, so the headroom is close to free.
+  memory = "512mb"

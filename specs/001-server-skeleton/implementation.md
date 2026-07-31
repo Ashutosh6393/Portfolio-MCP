@@ -8,7 +8,7 @@ Update it after every task. Never batch updates.
 - **Status:** in-progress
 - **Branch:** `feat/server-skeleton`
 - **Spec:** `design.md` · **ADR:** `docs/adr/001-server-runtime-and-shape.md`
-- **Current task:** 2 — `src/lib/env.ts`
+- **Current task:** 5 — `src/lib/site.ts` (Slice 2, starts after the Slice 1 PR merges)
 
 ---
 
@@ -35,9 +35,9 @@ In dependency order. Each task must be independently testable and map to test ID
 | # | Task | Depends on | Tests | Slice | State | Attempts | Commit |
 |---|---|---|---|---|---|---|---|
 | 1 | Scaffold: Bun, TS strict, Biome, scripts, deps | — | — | 1 | `done` | 1/3 | (this commit) |
-| 2 | `src/lib/env.ts` — Zod env schema, parsed at boot | 1 | T-01, T-02, T-03 | 1 | `pending` | 0/3 | — |
-| 3 | `src/index.ts` — Elysia, `GET /health`, secret prefix, `GET /{secret}/health` with empty checks, one 404 shape | 2 | T-04, T-05, T-06, T-07 | 1 | `pending` | 0/3 | — |
-| 4 | `Dockerfile`, `.dockerignore`, `fly.toml`, `.env.example`; deploy; measure cold start | 3 | — | 1 | `pending` | 0/3 | — |
+| 2 | `src/lib/env.ts` — Zod env schema, parsed at boot | 1 | T-01, T-02, T-03 | 1 | `done` | 1/3 | (this commit) |
+| 3 | `src/index.ts` — Elysia, `GET /health`, secret prefix, `GET /{secret}/health` with empty checks, one 404 shape | 2 | T-04, T-05, T-06, T-07 | 1 | `done` | 1/3 | (this commit) |
+| 4 | `Dockerfile`, `.dockerignore`, `fly.toml`, `.env.example`; deploy; measure cold start | 3 | — | 1 | `done` | 0/3 | `cf732e3`, `d0ebbfc`, `0277d01` |
 | 5 | `src/lib/site.ts` — fetch the two `content.json` routes, parse with Zod at the boundary | 4 | T-14 | 2 | `pending` | 0/3 | — |
 | 6 | `src/services/list-content.ts` — `listContent(deps, args)`, error paths as return values | 5 | T-11, T-12, T-13, T-14 | 2 | `pending` | 0/3 | — |
 | 7 | `src/tools/list-content.ts` + `src/tools/index.ts` — build the `McpServer`, register the tool, `createMcpHandler` | 6 | T-10, T-15 | 2 | `pending` | 0/3 | — |
@@ -90,7 +90,7 @@ Each slice ships independently: summary → human review → PR → CI review.
 
 | Slice | Contains | Files | State | PR |
 |---|---|---|---|---|
-| 1 | Tasks 1–4 — deployed server, health routes, secret path | 10 | `pending` | — |
+| 1 | Tasks 1–4 — deployed server, health routes, secret path | 10 | `in review` | — |
 | 2 | Tasks 5–10 — MCP handler, `list_content`, deep health check | 5 | `pending` | — |
 
 **Slice 1 exceeds the 5–7 file limit at 10 files.** Eight are config with no logic and the
@@ -113,13 +113,129 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 
 | Date | Test | Change | Why |
 |---|---|---|---|
-| | | | |
+| 2026-07-30 | `src/index.test.ts` (T-04, T-05) | T-04: swapped the `as typeof fetch` double-cast on the fetch stand-in for `Object.assign(spy, { preconnect: originalFetch.preconnect })`, carrying the real property across instead of asserting an unchecked shape. T-05: added `typeof`/`null`/`in` guards to narrow the `unknown` body from `response.json()` before reading `.checks`, instead of trusting an unverified shape. | Made the file typecheck under tsgo + `@types/bun` (`lib: ["ESNext"]`, no `dom`), which types `Response.json()` as `Promise<unknown>` and the Bun `fetch` type as a call signature plus a `preconnect` static method. No assertion changed — same expectations, same failure conditions, just reached through a real guard instead of a cast. |
 
 ---
 
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-31 — Slice 1 closed, PR opened
+
+Task 4's row said `green` / "deploy pending" while the note below it recorded a finished
+deploy and all five acceptance criteria met. The row was the stale one; corrected to `done`
+with its three commits. No code changed — 8 tests pass, `docs:check` clean.
+
+Slice 2 starts from Task 5 **after** the Slice 1 PR merges, on a fresh branch. Do not build
+it onto `feat/server-skeleton` — that PR is already over the file limit on its own.
+
+### 2026-07-30 — Task 4 deployed
+
+Live at `https://ashutoshverma-mcp.fly.dev`. One machine, `bom`, health check passing.
+
+- **Cold start is ~5.4s, not ~1s.** Three samples from a deliberately stopped machine:
+  5.62s, 5.48s, 5.38s. Warm is ~0.75s. **`design.md` Risk 3 assumed "around a second" and
+  called it "expected to be a non-issue" — that assumption is wrong by roughly 5×.** The
+  number is recorded, nothing was built for it, and the `min_machines_running = 1` trade
+  is the user's call exactly as Risk 3 says. Re-measure from Slice 2, when a real tool
+  call also pays a site fetch on top of this.
+- **App is `ashutoshverma-mcp`, not `portfolio-mcp`** — the latter is taken, Fly app names
+  are global. Cosmetic; the intended hostname is `mcp.ashutoshverma.dev` via CNAME.
+- **The first deploy failed on the `prepare` script.** `package.json` runs
+  `bash .claude/hooks/install-git-hooks.sh` on install; the Alpine image has no bash and
+  no `.git`. Fixed with `--ignore-scripts` in the Dockerfile. None of the three runtime
+  dependencies is native, so nothing else needed a lifecycle script.
+- **`fly deploy` tries to create a second machine for HA** and it failed with "no capacity
+  available in bom". Harmless — one machine is what ADR-001 asked for — but it makes the
+  deploy exit non-zero. **Use `fly deploy --ha=false`.** `min_machines_running = 0` does
+  not suppress it, despite what Fly's own hint says.
+- **Bun auto-loads `.env`.** No dotenv package is needed, and `bun --watch src/index.ts`
+  just works locally. It also means unsetting a variable in the shell does **not** unset
+  it for the process — a boot-failure check has to use
+  `bun --env-file=<empty> src/index.ts` or it silently passes.
+
+**Acceptance criteria**
+
+| # | Criterion | State |
+|---|---|---|
+| 1 | 200 from a stopped machine | met on `ashutoshverma-mcp.fly.dev`; **custom hostname not set up** — needs a CNAME at the DNS provider, then `fly certs add` |
+| 2 | `GET /{secret}/health` → 200 with `checks` | met — returns `{"checks":{}}` |
+| 3 | Every other path is the same 404 | met — `/`, `/some-typo-path` and a wrong secret all return `NOT_FOUND` / 404 / `text/plain;charset=utf-8`, byte-identical in production |
+| 4 | Refuses to boot on a missing or short secret | met — exit 1, and the error's `path` names `MCP_SECRET_PATH` |
+| 5 | Cold start measured and written down | met — ~5.4s, above |
+
+**Auto-stop is verified.** The machine stopped on its own after ~9 idle minutes with the
+30s health check active, so proxy-issued checks do **not** hold it awake and ADR-001's
+cost model holds. A fourth cold-start sample taken against that naturally-idle machine —
+the truest measurement, since it is exactly what a real tool call pays — came in at
+**5.66s**, matching the three forced-stop samples.
+
+**Untested hypothesis on the cold start:** `[[http_service.checks]]` sets
+`grace_period = "10s"`, and Fly's proxy may wait for a check to pass before routing to a
+machine it has just woken. Nobody has ruled that block out as a contributor to the 5.4s.
+Deleting it and re-measuring is the cheapest experiment if the number needs to come down.
+Not done here — Risk 3 says to record the number and build nothing.
+
+**Still open before Slice 1 closes:** the custom hostname. `mcp.ashutoshverma.dev`
+currently resolves to Vercel (`64.29.17.1`, `216.198.79.1`), not Fly. Repointing it is a
+change to the live domain at the registrar and is the user's to make; then
+`fly certs add mcp.ashutoshverma.dev`. Slice 1 otherwise meets every criterion on
+`ashutoshverma-mcp.fly.dev`, which works identically as a connector URL.
+
+### 2026-07-30 — Task 4 config written, deploy pending
+
+- **Done:** `Dockerfile`, `.dockerignore`, `fly.toml`, `.env.example`. Base image pinned to
+  `oven/bun:1.3.14-alpine`, matching `packageManager`; the tag was confirmed to exist on
+  Docker Hub, not assumed. No build step — Bun runs the TypeScript directly.
+- **Region is `bom`,** matching the user's existing Fly apps. Noted at the time that the
+  real caller is Anthropic's cloud, not the phone, so a US region would cut a round trip
+  per tool call. The user chose `bom` with that trade in front of them. Revisit only if
+  latency actually bites.
+- **Watch out for:** `fly.toml` has an `[[http_service.checks]]` block, and it is
+  **unverified** whether proxy-issued checks keep an `auto_stop_machines` machine awake.
+  If it never stops, the cost model in ADR-001 breaks. Acceptance criterion 1 measures a
+  cold start from a stopped machine, so the first deploy settles it — the fix is deleting
+  the block. Marked with a `ponytail:` comment in the file.
+- **VM is 512mb,** not the 256mb minimum. Deliberate: an OOM would land inside the
+  mobile-connector experiment this slice exists to run, and idle machines cost nothing.
+- **Not done:** the deploy itself, the custom hostname, and the cold-start number. The
+  human runs those — `flyctl` is installed and authenticated, but creating a billable
+  machine and setting `MCP_SECRET_PATH` are not an agent's call. The secret is generated
+  by the human and set with `fly secrets set`; it never passes through an agent or a file.
+- **Next:** deploy, then record the cold-start timing here and in `summary.md`. Task 4 is
+  not `done` until acceptance criteria 1 and 5 are met.
+
+### 2026-07-30 — Task 3 done
+
+- **Done:** `createApp(env)` is the seam — env passed as an argument, boot guarded by
+  `import.meta.main` so importing the module binds no port.
+- **The 404 needed zero code.** The secret is a literal `.group()` prefix, so a wrong
+  secret matches no route and gets Elysia's own unmatched-route 404 — byte-identical to
+  any typo, including content-type. If anyone later adds an `onError` for `NOT_FOUND`,
+  T-06 and T-07 are what catch the regression.
+- **`Response.json()` types as `unknown`** under tsgo + `@types/bun` with
+  `lib: ["ESNext"]`. Test bodies must be narrowed with a guard. Expect this in every
+  future HTTP test.
+- **Next:** Task 4 — Dockerfile, `.dockerignore`, `fly.toml`, `.env.example`, deploy, and
+  **measure cold start** (design.md Risk 3). No automated test; verified by hand and
+  written into `summary.md`.
+
+### 2026-07-30 — Task 2 done
+
+- **Done:** `src/lib/env.ts` with `parseEnv(source = process.env)` as the test seam — env
+  is an argument so tests pass an object literal, no `process.env` mutation. Schema is
+  `MCP_SECRET_PATH` (min 32) and `PORT` (coerced, default 3000), nothing else. Type is
+  `z.infer<typeof envSchema>`, not hand-written.
+- **Watch out for:** Zod's raw `ZodError` message already contains both the variable name
+  and `32`, so `parseEnv` does a bare `parse` with no try/catch. A future custom error
+  message must still contain both, or T-01 and T-02 regress.
+- **Correction to the Task 1 note below:** it claims `bun test` and `bun run typecheck`
+  "both go green the moment Task 2 creates the first file." That was wrong about
+  typecheck — `tsconfig.json` needed `"types": ["bun"]` because tsgo does not
+  auto-discover `@types/bun`. Fixed in this commit.
+- **Next:** Task 3 — `src/index.ts`, tests T-04…T-07. The 404 shape is the
+  security-relevant part; T-06 and T-07 compare bodies byte for byte.
 
 ### 2026-07-30 — Task 1 done
 
