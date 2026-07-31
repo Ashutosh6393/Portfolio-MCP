@@ -74,8 +74,13 @@ for genuine crashes only — it will never see a tool failure, and ADR-001 says 
 explicitly.
 
 **Every external response is parsed, not trusted.** The site is a separate repo deployed
-separately. Its JSON gets a Zod schema at the boundary in `lib/site.ts`. Types come from
-`z.infer`; never hand-write a type next to a schema.
+separately. Its JSON gets a Zod schema in `lib/site.ts`. Types come from `z.infer`; never
+hand-write a type next to a schema.
+
+**The schemas live in `lib/site.ts`; the parse runs in the service.** `fetchContent`
+returns `unknown` deliberately — that is what lets a test hand `listContent` a fake site
+returning a bad shape without a cast, and still exercise the real schema. Settled in
+Task 5; see `design.md` → Request flow.
 
 **The 404 must be identical everywhere.** A wrong secret, an unknown path, and a typo all
 produce the same status and the same bytes. Anything that distinguishes them tells an

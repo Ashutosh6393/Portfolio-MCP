@@ -177,6 +177,24 @@ mcp:
         instance: `(ctx) => McpServer | Server | Promise<...>`, invoked once per HTTP
         request. Build and register tools inside the factory.
       - Tool argument schemas are Zod. Errors are returned as tool results, never thrown.
+      - >-
+        The handler answers a stateless POST as SSE, NOT as a JSON body. Verified on
+        2026-07-31 against the running handler: with
+        `Accept: application/json, text/event-stream` the response is `text/event-stream`,
+        one `event: message` frame whose `data:` line holds the JSON-RPC response.
+        `response.json()` on it will fail — parse the `data:` line.
+      - >-
+        No `initialize` handshake is needed before a bare `tools/list` or `tools/call`
+        POST. `CreateMcpHandlerOptions.legacy` defaults to `'stateless'`, answering each
+        legacy request from a fresh factory instance. Pass no options unless a test fails
+        without them.
+      - >-
+        The SDK validates tool arguments against `inputSchema` itself and folds a Zod
+        failure into a normal tool result — `isError: true`, allowed enum values in the
+        text, HTTP 200. Do NOT hand-roll argument validation in a tool callback.
+      - >-
+        `registerTool(name, config, cb)` wants `inputSchema` as a `z.object({...})`. The
+        bare raw-shape record form is deprecated in 2.0.0.
 
   github:
     tool: octokit

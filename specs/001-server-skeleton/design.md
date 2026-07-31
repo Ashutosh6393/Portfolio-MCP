@@ -94,11 +94,18 @@ Elysia
                             services/  (deps passed as an argument)
                                      │
                                      ▼
-                            lib/site.ts  (fetch + parse the boundary)
+                            lib/site.ts  (fetch; the schemas live here)
 ```
 
 The chain is `tools → services → lib`, per ADR-001. There is no `repository/` layer and no
 database.
+
+> **Corrected in Task 5.** This line originally read `lib/site.ts (fetch + parse the
+> boundary)`. `site.ts` fetches and owns the schemas, but the **service** runs the parse:
+> `fetchContent` returns `unknown`. T-14 hands `listContent` a fake site returning
+> `[{nope:1}]` — if `site.ts` parsed internally, that fake would need a banned cast to
+> typecheck and would bypass the real parse anyway, so the test would assert nothing.
+> Recorded rather than silently rewritten, per the Risk 1 and 2 precedent above.
 
 ### The secret path
 
