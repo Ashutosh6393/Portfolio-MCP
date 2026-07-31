@@ -314,6 +314,13 @@ fail, exactly as the `site` check already behaves.
 Checking `portfolio` matters even though no tool reads it this slice: it is what catches a
 token scoped to only one repo, which is the mistake P-2 is most likely to produce.
 
+Both repos are reached with `listDirectory(repo, "")` — the repo root. One caveat, found
+live in Task 2 and recorded because it will look like a bug otherwise: **a repo with no
+commits answers 404**, so the check reports `unreachable` for a `workshop` that exists and
+is perfectly readable. That is the state the repo is in right now (Risk 7). It resolves the
+moment `skills/` is pushed, which P-1 requires anyway, so nothing in the code special-cases
+it.
+
 ### Validation
 
 | Boundary | Schema | Lives in |
@@ -433,7 +440,8 @@ Three rules carried from [testing.md](../../.claude/rules/testing.md), all uncha
 | **1. A bad token is indistinguishable from a missing file.** GitHub answers 404, not 403, for a private repo the token cannot see. "Your token is wrong" arrives disguised as "no such skill". | A confusing debugging session, most likely right after P-2 | The `github_pat_` format check at boot catches the common versions (classic token, truncated paste, empty). The `github` health check catches the rest — but only when a human opens it. Accepted, and written here so the next reader is not surprised. |
 | ~~**2. The site repo's real name is unverified.**~~ **Closed 2026-07-31.** It is `Portfolio-new`, not `portfolio` — confirmed by its `ashutoshverma.dev` homepage and its `app/api/{writing,projects,schema.json}` tree. Three other `Portfolio*` repos exist on the account, so this was a real coin-flip and the docs would have lost it. | — | — |
 | ~~**2b. The token may be scoped to the wrong `Portfolio`.**~~ **Closed 2026-07-31.** The PAT names `Portfolio-new` and `workshop`, confirmed by the token's owner. Had it been scoped to `Portfolio`, the failure would have surfaced as a 404 and read as Risk 1 — which is why it was worth checking before Task 1 rather than discovering it in Task 3. | — | — |
-| **3. `Accept: application/vnd.github.raw` is assumed, not verified.** The whole no-base64 design rests on it. | The reader needs a decode step after all — a small change, but in Slice 1 | Verify in **Task 2**, first thing, against the real API. Spec 001's precedent: SDK and API assumptions get checked in the task that first depends on them, never assumed. If it does not hold, add the decode and record the correction here. |
+| ~~**3. `Accept: application/vnd.github.raw` is assumed, not verified.**~~ **Closed 2026-07-31, Task 2.** It holds. `GET /repos/Ashutosh6393/Portfolio-new/contents/package.json` with that header returned 200, `content-type: application/vnd.github.raw`, and the file's actual bytes — no base64 wrapper, no `content`/`encoding` envelope. The no-decode design stands as written. Directory listings were checked in the same pass: an array whose entries carry `name` and `type`, and `type` is `"dir"` or `"file"` exactly as assumed. | — | — |
+| **7. `workshop` is empty, so the `github` health check fails today.** Found in Task 2 against the live API: the repo exists and the token can see it (`private: true`, metadata 200) but holds no commits — `size: 0`, and `contents/` answers 404 "This repository is empty." | `checks.github` reports `unreachable` on a correctly-scoped token, and Task 3 cannot pass | **Not a code problem and nothing is built for it.** P-1 is unmet, not wrong: pushing `skills/` to `workshop` fixes it and is a prerequisite of Slice 2 regardless. Special-casing an empty repo would be complexity for a state that exists only until the first commit lands. Re-verify Task 3 after P-1 is genuinely satisfied. |
 | **4. The token expires silently, within a year.** Carried from ADR-002 → Tradeoffs. Nothing watches it. | The connector starts returning errors and nothing announced it | **Nothing is built for this, on purpose.** The `github` health check is the only thing that will ever say so. It was the App's real advantage and it was given up knowingly. Do not "fix" this inside the slice. |
 | **5. Rate limits.** 5,000 requests/hour for an authenticated token; this server makes ~15 tool calls a week at two calls each. | None | Stated so nobody builds a cache or a retry for it. Three orders of magnitude of headroom is not a design input. |
 | **6. Cold start now does more work.** The deep check goes from one outbound call to three. | Only affects `/{secret}/health`, which no tool call touches | The three run in parallel. No tool path got slower. Note the timing in Task 3 alongside the Slice 1 verification. |

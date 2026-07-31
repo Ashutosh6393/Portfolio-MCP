@@ -5,10 +5,10 @@ reads this file first and picks up from it.
 
 Update it after every task. Never batch updates.
 
-- **Status:** in-progress — Slice 1
+- **Status:** in-progress — Slice 1, code complete, **Task 3 blocked on P-1**
 - **Branch:** `feat/github-access`
 - **Spec:** `design.md` · **ADR:** `docs/adr/002-github-access-and-workshop.md`
-- **Current task:** 2 — `src/lib/github.ts` and the `github` deep check
+- **Current task:** 3 — blocked. `workshop` has no commits; see Blocked below.
 
 ---
 
@@ -34,7 +34,7 @@ slice they gate can be signed off.
 
 | # | Prerequisite | Gates | State |
 |---|---|---|---|
-| P-1 | `workshop` exists, private, with `skills/linkedin-post/` and `skills/writing/`, each holding `instructions.md` and `template.mdx` | Slice 2 | **done** — 2026-07-31 |
+| P-1 | `workshop` exists, private, with `skills/linkedin-post/` and `skills/writing/`, each holding `instructions.md` and `template.mdx` | Slice 2 | **NOT met** — reopened 2026-07-31 in Task 2. The repo exists and the token reads it (metadata 200, `private: true`), but it has **no commits**: `size: 0`, and `contents/` answers 404 "This repository is empty." There is no `skills/` yet. Blocks Slice 2 and Task 3. |
 | P-2 | Fine-grained PAT, scoped to `Portfolio-new` and `workshop`, Contents: read-only, set with `fly secrets set` | Slice 1, Task 3 | **done** — 2026-07-31, scope confirmed |
 
 ---
@@ -47,8 +47,8 @@ In dependency order. Each task must be independently testable and map to test ID
 | # | Task | Depends on | Tests | Slice | State | Attempts | Commit |
 |---|---|---|---|---|---|---|---|
 | 1 | `GITHUB_TOKEN` in the env schema, and in `.env.example` by name only | — | T-01, T-02, T-03 | 1 | `done` | 1/3 | (this commit) |
-| 2 | `src/lib/github.ts` — `createGithub`, `listDirectory`, `readFile`, `GithubNotFoundError` — plus the `github` deep check wired into `src/index.ts` | 1 | T-04, T-05, T-06 | 1 | `pending` | 0/3 | — |
-| 3 | Set the token on Fly, deploy, verify `checks.github` against the **real** repos | 2, P-2 | — (manual) | 1 | `pending` | 0/3 | — |
+| 2 | `src/lib/github.ts` — `createGithub`, `listDirectory`, `readFile`, `GithubNotFoundError` — plus the `github` deep check wired into `src/index.ts` | 1 | T-04, T-05, T-06 | 1 | `done` | 1/3 | (this commit) |
+| 3 | Set the token on Fly, deploy, verify `checks.github` against the **real** repos | 2, P-2, **P-1** | — (manual) | 1 | `blocked` | 0/3 | — |
 | 4 | `skillListSchema` in `lib/github.ts`, and `getSkill`'s list mode | 2 | T-07, T-08, T-09, T-14 | 2 | `pending` | 0/3 | — |
 | 5 | `getSkill`'s named mode and its error paths | 4 | T-10, T-11, T-12, T-13 | 2 | `pending` | 0/3 | — |
 | 6 | `src/tools/get-skill.ts` and its registration in `src/tools/index.ts` | 5 | T-15, T-16, T-17 | 2 | `pending` | 0/3 | — |
@@ -56,15 +56,22 @@ In dependency order. Each task must be independently testable and map to test ID
 
 ### Notes on specific tasks
 
-**Task 2 carries the spec's three live unknowns.** Before writing the reader, confirm each
-against the real API and record the answer in `design.md` in the same commit:
+**Task 2 carries the spec's three live unknowns.** All closed 2026-07-31 against the live
+API, before the reader was written. Recorded in `design.md` → Risks 3.
 
-1. Does `Accept: application/vnd.github.raw` return the raw file body? (Risk 3 — the whole
-   no-base64 design depends on it.)
-2. Does a directory listing carry `name` and `type` as assumed?
+1. ~~Does `Accept: application/vnd.github.raw` return the raw file body?~~ **Yes.** 200,
+   `content-type: application/vnd.github.raw`, the file's real bytes — no base64 envelope.
+   No decoder is written, as the design says.
+2. ~~Does a directory listing carry `name` and `type` as assumed?~~ **Yes.** An array;
+   `type` is `"dir"` or `"file"`.
+3. ~~What is the site repo's real name?~~ Closed before Task 1: **`Portfolio-new`**.
 
-~~What is the site repo's real name?~~ Closed before Task 1: **`Portfolio-new`**. See
-`design.md` → Approach → Owner and repo names.
+The same pass turned up the unknown nobody was looking for: **`workshop` is empty.** See
+P-1 above and `design.md` → Risk 7.
+
+**Task 3 is blocked on P-1, not on anything in the code.** The `github` check reads both
+repo roots, and a repo with no commits answers 404. It will report `unreachable` until
+`skills/` is pushed to `workshop`. Deploying before then would verify nothing.
 
 **Task 3 is a human step and cannot be automated.** The token is set by hand, straight into
 Fly. It never passes through an agent or a file. Criterion 3 of Slice 1 — the 503 path —
@@ -105,7 +112,20 @@ Max 5–7 files (excluding tests) and 500 lines per slice.
 
 ## Blocked
 
-Nothing is blocked.
+**Task 3 — deploy and verify `checks.github` against the real repos.** Blocked on P-1, not
+on an attempt budget. No code attempt was made or needed.
+
+- **What is true:** the token is valid and correctly scoped. `Portfolio-new` metadata and
+  `contents/` both answer 200; `workshop` metadata answers 200 with `private: true`, so the
+  token can see the private repo.
+- **What is not:** `workshop` has no commits. `size: 0`, and
+  `GET /repos/Ashutosh6393/workshop/contents/` answers 404 "This repository is empty."
+- **Consequence:** `checks.github` is `unreachable` on a healthy setup, so Slice 1
+  acceptance criterion 2 cannot be observed and Slice 2 has nothing to read.
+- **Unblocks when:** `skills/linkedin-post/` and `skills/writing/`, each with
+  `instructions.md` and `template.mdx`, are pushed to `workshop` — which P-1 already
+  required. Then re-run Task 3.
+- **Not a code change.** Nothing in `lib/github.ts` or the health check needs to differ.
 
 ---
 
@@ -116,6 +136,7 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 
 | Date | Test | Change | Why |
 |---|---|---|---|
+| 2026-07-31 | The eight `createApp` calls, `src/index.test.ts` | Replaced the inline `{ site: fakeSite }` with a shared `testDeps` holding both fakes. No assertion changed, no test body touched. | Task 2 adds `github` to `createApp`'s deps, which by design makes a missing injection a compile error. Pure plumbing, and the same revision spec 001 made when `deps` became required — its note is three lines above this one in the file. |
 | 2026-07-31 | `testEnv`, `src/index.test.ts` | Added `GITHUB_TOKEN` to the shared environment const. No assertion changed, no test body touched. | Task 1 adds the variable to `Env`, so an environment without it stops type-checking — `bun test` was green while `bun run typecheck` failed in all eight `createApp` calls. One const, one field. No route under test reads its value. |
 | 2026-07-31 | Spec 001 T-03 (both cases), `src/lib/env.test.ts` | Added `GITHUB_TOKEN` to the environment object each one passes to `parseEnv`. No assertion changed. | Task 1 makes `GITHUB_TOKEN` required. Their input was a complete environment when written and stopped being one; without this they would fail on a missing variable instead of on PORT coercion and defaulting, which is what they exist to assert. Landed before Task 1's red test, while the suite was still green — the revision passes against the old schema and the new one. |
 
@@ -124,6 +145,18 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-31 — Task 2
+
+- **Done:** `src/lib/github.ts` — `createGithub`, `listDirectory`, `readFile`,
+  `GithubNotFoundError` — and the `github` deep check in `src/index.ts`, covering both
+  repos in parallel with the site check. 3 tests added (33 total, was 30).
+- **Verified live before writing anything:** the raw `Accept` header works, so no base64
+  decoder exists; listings carry `name` and `type`. Both recorded in `design.md`.
+- **Found:** `workshop` is empty. P-1 is reopened and Task 3 is blocked on it. Nothing in
+  the code needs to change — see Blocked above.
+- **Next:** a human pushes `skills/` to `workshop`, then Task 3. Slice 2 (Tasks 4–7) cannot
+  start before that either.
 
 ### 2026-07-31 — Task 1
 

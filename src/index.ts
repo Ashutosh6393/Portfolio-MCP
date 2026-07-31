@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { type Env, parseEnv } from "./lib/env";
+import { createGithub, type Github } from "./lib/github";
 import { type Site, site } from "./lib/site";
 import { createHandler } from "./tools";
 
@@ -11,7 +12,7 @@ import { createHandler } from "./tools";
 // as a fallback, defeating the seam a test relies on to inject a fake (code-style.md
 // → Layer discipline). Forgetting to inject is now a compile error, not a silent
 // call to ashutoshverma.dev.
-export function createApp(env: Env, deps: { site: Site }) {
+export function createApp(env: Env, deps: { site: Site; github: Github }) {
 	const handler = createHandler(deps);
 	return new Elysia()
 		.get("/health", () => new Response(null, { status: 200 }))
@@ -19,13 +20,27 @@ export function createApp(env: Env, deps: { site: Site }) {
 			app
 				.get("/health", async () => {
 					// Deep check: 200 all-pass / 503 any-fail (design.md → API surface).
-					// Only the site check exists — the two GitHub checks can't exist
-					// before the GitHub App does (design.md → Scope).
-					const siteCheck = await deps.site
-						.fetchContent("writing")
-						.then(() => "ok" as const)
-						.catch(() => "unreachable" as const);
-					const checks = { site: siteCheck };
+					// All three outbound calls run in parallel, so adding GitHub cost
+					// this route nothing in wall time and no tool path at all.
+					//
+					// `github` is one entry covering both repos, not two: one URL should
+					// say which *layer* is dead, and two repos are not two layers.
+					// portfolio is checked even though no tool reads it yet — a token
+					// scoped to only one repo is the likeliest setup mistake, and this
+					// is the only thing that would ever catch it.
+					const [siteCheck, githubCheck] = await Promise.all([
+						deps.site
+							.fetchContent("writing")
+							.then(() => "ok" as const)
+							.catch(() => "unreachable" as const),
+						Promise.all([
+							deps.github.listDirectory("portfolio", ""),
+							deps.github.listDirectory("workshop", ""),
+						])
+							.then(() => "ok" as const)
+							.catch(() => "unreachable" as const),
+					]);
+					const checks = { site: siteCheck, github: githubCheck };
 					const allPass = Object.values(checks).every(
 						(check) => check === "ok",
 					);
@@ -42,5 +57,6 @@ export function createApp(env: Env, deps: { site: Site }) {
 // CLAUDE.md and design.md → Files touched).
 if (import.meta.main) {
 	const env = parseEnv();
-	createApp(env, { site }).listen(env.PORT);
+	const github = createGithub(env.GITHUB_TOKEN);
+	createApp(env, { site, github }).listen(env.PORT);
 }
