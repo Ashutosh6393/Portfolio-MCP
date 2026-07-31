@@ -5,10 +5,10 @@ reads this file first and picks up from it.
 
 Update it after every task. Never batch updates.
 
-- **Status:** not-started
+- **Status:** in-progress — Slice 1
 - **Branch:** `feat/github-access`
 - **Spec:** `design.md` · **ADR:** `docs/adr/002-github-access-and-workshop.md`
-- **Current task:** none
+- **Current task:** 2 — `src/lib/github.ts` and the `github` deep check
 
 ---
 
@@ -46,7 +46,7 @@ In dependency order. Each task must be independently testable and map to test ID
 
 | # | Task | Depends on | Tests | Slice | State | Attempts | Commit |
 |---|---|---|---|---|---|---|---|
-| 1 | `GITHUB_TOKEN` in the env schema, and in `.env.example` by name only | — | T-01, T-02, T-03 | 1 | `pending` | 0/3 | — |
+| 1 | `GITHUB_TOKEN` in the env schema, and in `.env.example` by name only | — | T-01, T-02, T-03 | 1 | `done` | 1/3 | (this commit) |
 | 2 | `src/lib/github.ts` — `createGithub`, `listDirectory`, `readFile`, `GithubNotFoundError` — plus the `github` deep check wired into `src/index.ts` | 1 | T-04, T-05, T-06 | 1 | `pending` | 0/3 | — |
 | 3 | Set the token on Fly, deploy, verify `checks.github` against the **real** repos | 2, P-2 | — (manual) | 1 | `pending` | 0/3 | — |
 | 4 | `skillListSchema` in `lib/github.ts`, and `getSkill`'s list mode | 2 | T-07, T-08, T-09, T-14 | 2 | `pending` | 0/3 | — |
@@ -124,6 +124,14 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-31 — Task 1
+
+- **Done:** `GITHUB_TOKEN` in `envSchema` with a `github_pat_` prefix check, and in
+  `.env.example` by name only. 4 tests added (30 total, was 26). Two test revisions, both
+  input-only, both landed as their own commits ahead of the code — see the table above.
+- **Next:** Task 2. Before writing `lib/github.ts`, verify the two live unknowns against
+  the real API and record the answers in `design.md` in the same commit.
 
 ### 2026-07-31
 
