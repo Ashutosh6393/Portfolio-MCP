@@ -123,11 +123,11 @@ that `writing` and `project` name templates, not skills.
   also holds `Portfolio` (a 2025 GSAP site) and `Portfolio2` — do not guess from the docs.
   Keep the domain word `portfolio` in the `Repo` type and in every message; only
   `repoNames` maps it to `"Portfolio-new"`.
-- **`workshop` exists but is EMPTY** — no commits at all, verified 2026-07-31. The token
-  reads it fine (metadata 200, `private: true`); there is simply nothing in it. P-1 is
-  unmet and Task 3 is blocked on it. Once filled, per ADR-003, it holds
-  `skills/{be-human,linkedin-post,twitter-post}.md` and
-  `templates/{writing,project}.mdx`.
+- **`workshop` holds exactly five files**, verified live 2026-07-31:
+  `skills/be-human.md`, `skills/linkedin-post.md`, `skills/twitter-post.md`,
+  `templates/writing.md`, `templates/project.md`. **The templates are `.md`, not `.mdx`** —
+  ADR-003 says `.mdx` and is wrong on that one detail. It does not matter, and must not be
+  made to matter: resolve names from the listing, never build a path with an extension.
 - **`Accept: application/vnd.github.raw` works** — verified live 2026-07-31, 200 with
   `content-type: application/vnd.github.raw` and the real bytes. No base64 decoder exists
   or is needed. Listings carry `name` and `type`, `type` being `"dir"` or `"file"`.

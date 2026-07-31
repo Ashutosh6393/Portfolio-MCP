@@ -5,10 +5,12 @@ reads this file first and picks up from it.
 
 Update it after every task. Never batch updates.
 
-- **Status:** in-progress — Slice 1, code complete, **Task 3 blocked on P-1**
+- **Status:** in-progress — Slice 1 verified against the live API, **deploy outstanding**
 - **Branch:** `feat/github-access`
-- **Spec:** `design.md` · **ADR:** `docs/adr/002-github-access-and-workshop.md`
-- **Current task:** 3 — blocked. `workshop` has no commits; see Blocked below.
+- **Spec:** `design.md` · **ADRs:** `docs/adr/002-github-access-and-workshop.md`,
+  `docs/adr/003-skills-and-templates-are-separate.md`
+- **Current task:** 3 — both health paths observed locally against the real repos. Only
+  `fly deploy` and the check against the deployed URL remain, and that is a human step.
 
 ---
 
@@ -34,7 +36,7 @@ slice they gate can be signed off.
 
 | # | Prerequisite | Gates | State |
 |---|---|---|---|
-| P-1 | `workshop` exists, private, and **has commits**, holding `skills/be-human.md`, `skills/linkedin-post.md`, `skills/twitter-post.md`, `templates/writing.mdx`, `templates/project.mdx` (ADR-003) | Slice 2, **Task 3** | **NOT met** — reopened 2026-07-31 in Task 2. The repo exists and the token reads it (metadata 200, `private: true`), but it has **no commits**: `size: 0`, and `contents/` answers 404 "This repository is empty." Blocks Slice 2 and Task 3. |
+| P-1 | `workshop` exists, private, and **has commits**, holding `skills/be-human.md`, `skills/linkedin-post.md`, `skills/twitter-post.md`, `templates/writing.md`, `templates/project.md` (ADR-003) | Slice 2, **Task 3** | **done** — 2026-07-31. Pushed and verified live: `skills/` lists all three, `templates/` lists both, and a raw read of `be-human.md` returns 200. Templates are `.md`, not the `.mdx` ADR-003 assumed; irrelevant, names resolve from the listing. |
 | P-2 | Fine-grained PAT, scoped to `Portfolio-new` and `workshop`, Contents: read-only, set with `fly secrets set` | Slice 1, Task 3 | **done** — 2026-07-31, scope confirmed |
 
 ---
@@ -48,7 +50,7 @@ In dependency order. Each task must be independently testable and map to test ID
 |---|---|---|---|---|---|---|---|
 | 1 | `GITHUB_TOKEN` in the env schema, and in `.env.example` by name only | — | T-01, T-02, T-03 | 1 | `done` | 1/3 | (this commit) |
 | 2 | `src/lib/github.ts` — `createGithub`, `listDirectory`, `readFile`, `GithubNotFoundError` — plus the `github` deep check wired into `src/index.ts` | 1 | T-04, T-05, T-06 | 1 | `done` | 1/3 | (this commit) |
-| 3 | Set the token on Fly, deploy, verify `checks.github` against the **real** repos | 2, P-2, **P-1** | — (manual) | 1 | `blocked` | 0/3 | — |
+| 3 | Set the token on Fly, deploy, verify `checks.github` against the **real** repos | 2, P-2, P-1 | — (manual) | 1 | `green` | 0/3 | — |
 | 4 | `entryListSchema` in `lib/github.ts`, and `getSkill`'s list mode over `skills/` and `templates/` | 2 | T-07, T-08, T-09, T-14 | 2 | `pending` | 0/3 | — |
 | 5 | `getSkill`'s named mode — resolve from the listing, bundle the voice — and its error paths | 4 | T-10, T-10b, T-10c, T-10d, T-11, T-12, T-13 | 2 | `pending` | 0/3 | — |
 | 6 | `src/tools/get-skill.ts` and its registration in `src/tools/index.ts` | 5 | T-15, T-16, T-17 | 2 | `pending` | 0/3 | — |
@@ -117,19 +119,9 @@ Max 5–7 files (excluding tests) and 500 lines per slice.
 
 ## Blocked
 
-**Task 3 — deploy and verify `checks.github` against the real repos.** Blocked on P-1, not
-on an attempt budget. No code attempt was made or needed.
-
-- **What is true:** the token is valid and correctly scoped. `Portfolio-new` metadata and
-  `contents/` both answer 200; `workshop` metadata answers 200 with `private: true`, so the
-  token can see the private repo.
-- **What is not:** `workshop` has no commits. `size: 0`, and
-  `GET /repos/Ashutosh6393/workshop/contents/` answers 404 "This repository is empty."
-- **Consequence:** `checks.github` is `unreachable` on a healthy setup, so Slice 1
-  acceptance criterion 2 cannot be observed and Slice 2 has nothing to read.
-- **Unblocks when:** the five files ADR-003 specifies are pushed to `workshop` — which P-1
-  already required. Then re-run Task 3.
-- **Not a code change.** Nothing in `lib/github.ts` or the health check needs to differ.
+Nothing is blocked. Task 3's block cleared on 2026-07-31 when P-1 was satisfied — the five
+files were pushed and `workshop` stopped answering 404. It was never a code problem, and no
+code changed.
 
 ---
 
@@ -149,6 +141,22 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-31 — Task 3, local half
+
+- **P-1 satisfied.** The five files are in `workshop`. Templates landed as `.md`, not the
+  `.mdx` ADR-003 assumed — no consequence, because names resolve from the listing. Recorded
+  in `design.md` and the feature `CLAUDE.md` so nobody hunts a bug over it.
+- **Both health paths observed, not assumed,** through the real handler against the live
+  site and the live repos:
+  - 200 · `{"site":"ok","github":"ok"}` · ~1.0s cold, ~0.8s warm
+  - Repo constant pointed at a name that does not exist → 503 ·
+    `{"site":"ok","github":"unreachable"}` · and `site` stayed `ok`, so the two checks are
+    genuinely independent. The edit was reverted and `src/` verified clean.
+- **Cold-start note (Risk 6):** the deep check runs three outbound calls in parallel and
+  costs ~1s end to end. No tool path touches this route.
+- **Outstanding:** `fly deploy`, then the same check against the deployed URL. `fly secrets
+  list` confirms `GITHUB_TOKEN` and `MCP_SECRET_PATH` are both already set.
 
 ### 2026-07-31 — ADR-003, spec amended
 

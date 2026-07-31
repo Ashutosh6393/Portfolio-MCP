@@ -3,6 +3,12 @@
 - **Date:** 2026-07-31
 - **Status:** accepted
 - **Deciders:** Ashutosh Verma
+
+> **Factual correction, 2026-07-31 — the decision is unchanged.** The templates were
+> pushed as `writing.md` and `project.md`, not `.mdx` as written below. Nothing depends on
+> it: this ADR's own decision resolves names from the directory listing, so the extension
+> is never written into the code and both work. The `.mdx` reasoning below is left as
+> decided rather than edited, per the append-only rule.
 - **Supersedes:** [ADR-002](002-github-access-and-workshop.md) → *Skill storage* and *The
   tool*. Everything else in ADR-002 — the credential, the client, the health check, the
   slice scope — stands unchanged.

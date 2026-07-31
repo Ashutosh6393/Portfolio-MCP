@@ -82,7 +82,7 @@ Neither can be proved by a test inside this repo, and the loop cannot finish wit
 
 | # | Prerequisite | Owner | State |
 |---|---|---|---|
-| P-1 | Private `workshop` repo exists **and has commits**, holding `skills/be-human.md`, `skills/linkedin-post.md`, `skills/twitter-post.md`, `templates/writing.mdx`, `templates/project.mdx` (ADR-003) | Ashutosh | **not met** — the repo exists and the token reads it, but it has no commits at all. See Risk 7 |
+| P-1 | Private `workshop` repo exists **and has commits**, holding `skills/be-human.md`, `skills/linkedin-post.md`, `skills/twitter-post.md`, `templates/writing.md`, `templates/project.md` (ADR-003) | Ashutosh | **done** — 2026-07-31, verified live. All five files present; both directory listings and a raw read of `be-human.md` return 200 |
 | P-2 | Fine-grained PAT issued, scoped to `Portfolio-new` and `workshop`, **Contents: read-only**, set on Fly with `fly secrets set` | Ashutosh | **done** — 2026-07-31, scope confirmed |
 
 **P-2 never passes through an agent or a file.** Set by hand, straight into Fly's secret
@@ -233,13 +233,18 @@ workshop/
     linkedin-post.md
     twitter-post.md
   templates/
-    writing.mdx
-    project.mdx
+    writing.md
+    project.md
 ```
 
 `writing` and `project` are the [CONTEXT.md](../../CONTEXT.md) words for what the templates
-produce. `.mdx` because that is what the site renders, so the file edited on a phone is the
-file that ships.
+produce.
+
+**Verified live 2026-07-31, and the extension is `.md`, not `.mdx`.** ADR-003 wrote `.mdx`
+on the assumption the template should be the shape the site renders; the files were pushed
+as `.md`. Nothing depends on it: names resolve from the directory listing, so both work and
+neither is written into the code. Recorded because a future reader will otherwise see
+`.mdx` in ADR-003 and go looking for a bug.
 
 ### `get_skill` — what it does
 
@@ -484,7 +489,8 @@ Three rules carried from [testing.md](../../.claude/rules/testing.md), all uncha
 | ~~**2. The site repo's real name is unverified.**~~ **Closed 2026-07-31.** It is `Portfolio-new`, not `portfolio` — confirmed by its `ashutoshverma.dev` homepage and its `app/api/{writing,projects,schema.json}` tree. Three other `Portfolio*` repos exist on the account, so this was a real coin-flip and the docs would have lost it. | — | — |
 | ~~**2b. The token may be scoped to the wrong `Portfolio`.**~~ **Closed 2026-07-31.** The PAT names `Portfolio-new` and `workshop`, confirmed by the token's owner. Had it been scoped to `Portfolio`, the failure would have surfaced as a 404 and read as Risk 1 — which is why it was worth checking before Task 1 rather than discovering it in Task 3. | — | — |
 | ~~**3. `Accept: application/vnd.github.raw` is assumed, not verified.**~~ **Closed 2026-07-31, Task 2.** It holds. `GET /repos/Ashutosh6393/Portfolio-new/contents/package.json` with that header returned 200, `content-type: application/vnd.github.raw`, and the file's actual bytes — no base64 wrapper, no `content`/`encoding` envelope. The no-decode design stands as written. Directory listings were checked in the same pass: an array whose entries carry `name` and `type`, and `type` is `"dir"` or `"file"` exactly as assumed. | — | — |
-| **7. `workshop` is empty, so the `github` health check fails today.** Found in Task 2 against the live API: the repo exists and the token can see it (`private: true`, metadata 200) but holds no commits — `size: 0`, and `contents/` answers 404 "This repository is empty." | `checks.github` reports `unreachable` on a correctly-scoped token, and Task 3 cannot pass | **Not a code problem and nothing is built for it.** P-1 is unmet, not wrong: pushing the five files in Approach → The `workshop` layout fixes it and is a prerequisite of Slice 2 regardless. Special-casing an empty repo would be complexity for a state that exists only until the first commit lands. Re-verify Task 3 after P-1 is genuinely satisfied. |
+| ~~**7. `workshop` is empty, so the `github` health check fails today.**~~ **Closed 2026-07-31.** The five files were pushed; both repo roots now answer 200. Left in place because the symptom is worth recognising again: an existing, readable, *commitless* repo answers 404 exactly like a missing one. Original entry below. |  |  |
+| **7 (original). `workshop` is empty, so the `github` health check fails today.** Found in Task 2 against the live API: the repo exists and the token can see it (`private: true`, metadata 200) but holds no commits — `size: 0`, and `contents/` answers 404 "This repository is empty." | `checks.github` reports `unreachable` on a correctly-scoped token, and Task 3 cannot pass | **Not a code problem and nothing is built for it.** P-1 is unmet, not wrong: pushing the five files in Approach → The `workshop` layout fixes it and is a prerequisite of Slice 2 regardless. Special-casing an empty repo would be complexity for a state that exists only until the first commit lands. Re-verify Task 3 after P-1 is genuinely satisfied. |
 | **8. `be-human.md` is a single point of failure.** Every named `get_skill` call reads it, and its absence is a hard error by design. | One missing or renamed file breaks every named call, not just one | Deliberate, and the alternative is worse: a silent fall-back returns structure with no voice, which is the exact failure the tool exists to prevent and the one nobody would notice. T-12 pins the loud behaviour. The error names the file, so the fix is obvious from the message. |
 | **4. The token expires silently, within a year.** Carried from ADR-002 → Tradeoffs. Nothing watches it. | The connector starts returning errors and nothing announced it | **Nothing is built for this, on purpose.** The `github` health check is the only thing that will ever say so. It was the App's real advantage and it was given up knowingly. Do not "fix" this inside the slice. |
 | **5. Rate limits.** 5,000 requests/hour for an authenticated token; this server makes ~15 tool calls a week at two calls each. | None | Stated so nobody builds a cache or a retry for it. Three orders of magnitude of headroom is not a design input. |
