@@ -54,7 +54,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 3 | Set the token on Fly, deploy, verify `checks.github` against the **real** repos | 2, P-2, P-1 | — (manual) | 1 | `green` | 0/3 | — |
 | 4 | `entryListSchema` in `lib/github.ts`, and `getSkill`'s list mode over `skills/` and `templates/` | 2 | T-07, T-08, T-09, T-13, T-14 | 2 | `done` | 1/3 | (this commit) |
 | 5 | `getSkill`'s named mode — resolve from the listing, bundle the voice — and its error paths | 4 | T-10, T-10b, T-10c, T-10d, T-11, T-12 | 2 | `done` | 1/3 | (this commit) |
-| 6 | `src/tools/get-skill.ts` and its registration in `src/tools/index.ts` | 5 | T-15, T-16, T-17 | 2 | `pending` | 0/3 | — |
+| 6 | `src/tools/get-skill.ts` and its registration in `src/tools/index.ts` | 5 | T-15, T-16, T-17 | 2 | `done` | 1/3 | (this commit) |
 | 7 | Verify `get_skill` on Claude Code, claude.ai, and the mobile app | 6 | — (manual) | 2 | `pending` | 0/3 | — |
 
 ### Notes on specific tasks
@@ -138,6 +138,7 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 
 | Date | Test | Change | Why |
 |---|---|---|---|
+| 2026-07-31 | `postJsonRpc`, `src/tools/index.test.ts` | Passed `github` alongside `site` into the single `createHandler` call the helper makes. No assertion changed, no test body touched. | Task 6 registers `get_skill`, so `createHandler`'s deps grew — the same required-injection design as `createApp`. One call site, one field. |
 | 2026-07-31 | The eight `createApp` calls, `src/index.test.ts` | Replaced the inline `{ site: fakeSite }` with a shared `testDeps` holding both fakes. No assertion changed, no test body touched. | Task 2 adds `github` to `createApp`'s deps, which by design makes a missing injection a compile error. Pure plumbing, and the same revision spec 001 made when `deps` became required — its note is three lines above this one in the file. |
 | 2026-07-31 | `testEnv`, `src/index.test.ts` | Added `GITHUB_TOKEN` to the shared environment const. No assertion changed, no test body touched. | Task 1 adds the variable to `Env`, so an environment without it stops type-checking — `bun test` was green while `bun run typecheck` failed in all eight `createApp` calls. One const, one field. No route under test reads its value. |
 | 2026-07-31 | Spec 001 T-03 (both cases), `src/lib/env.test.ts` | Added `GITHUB_TOKEN` to the environment object each one passes to `parseEnv`. No assertion changed. | Task 1 makes `GITHUB_TOKEN` required. Their input was a complete environment when written and stopped being one; without this they would fail on a missing variable instead of on PORT coercion and defaulting, which is what they exist to assert. Landed before Task 1's red test, while the suite was still green — the revision passes against the old schema and the new one. |
@@ -147,6 +148,17 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-31 — Task 6
+
+- **Done:** `src/tools/get-skill.ts` and its registration. 4 tests added (48 total, was
+  44). The description is the specified text, verbatim.
+- **`name` is optional** in the input schema — a required one would make the listing mode
+  unreachable, which is the mode a model needs first.
+- **Rendering:** voice first under its own heading, then the rules or the template.
+  Asking for `be-human` prints one section, not two.
+- **Next:** Task 7 — verify on Claude Code, claude.ai and mobile. Needs the deploy, which
+  is still failing on Fly's builder queue rather than on anything in this repo.
 
 ### 2026-07-31 — Task 5
 
