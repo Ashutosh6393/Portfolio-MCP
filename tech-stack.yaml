@@ -198,10 +198,24 @@ mcp:
 
   github:
     tool: octokit
-    role: GitHub App installation tokens, contents and pulls API
+    installed: false
+    role: Contents and pulls API, if and when the endpoint count justifies a client.
+    auth: >-
+      A fine-grained personal access token, scoped to the two repos. One env var, one
+      Authorization header, no token lifecycle. NOT a GitHub App — decided in
+      docs/adr/002-github-access-and-workshop.md, which also records the accepted cost
+      (the token expires within a year, silently).
     rules:
       - Never clone a repo. Every read and write goes through the API.
       - Set the commit author to the user's own name and email on every write.
+      - >-
+        Reads go through Bun's global `fetch`, not octokit. ADR-002: App auth was the
+        half of octokit this project needed, pagination and retry answer a volume that
+        does not exist here, and third-party responses get parsed with Zod regardless.
+      - >-
+        Re-decide at `publish`, which needs refs, commits and pulls — four or five
+        endpoints instead of two. That is where a client library starts to earn its
+        place. Installing it then is not a reversal of ADR-002.
 
   hosting:
     provider: Fly.io

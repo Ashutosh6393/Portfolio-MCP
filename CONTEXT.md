@@ -74,8 +74,8 @@ correctly. Add to this table whenever a misunderstanding surfaces.
 - The MCP server, and only that. **This repo is the server.**
 - Six tools: `list_content`, `get_content`, `get_skill`, `save_draft`, `publish`,
   `discard_draft`.
-- Secret-path auth, a `/health` route that really checks its three dependencies, and
-  GitHub App token minting.
+- Secret-path auth, and a `/health` route that really checks its dependencies — one
+  check per external system, each arriving with the slice that needs it.
 - The `publish` path: schema validation, MDX parse, branch, PR, idempotency.
 
 ### We are explicitly not building
@@ -100,7 +100,7 @@ like initiative.
 | Users / scale | One human. ~15 tool calls a week. Scale is not a design input |
 | Reachability | Connectors are called from Anthropic's cloud, not the device. No localhost, no tunnels |
 | Deployment | Fly.io, one small machine, auto-stop when idle. Near-free is the ceiling, not free |
-| Secrets | GitHub App private key and the path secret are env vars. Never in git |
+| Secrets | The GitHub token and the path secret are env vars. Never in git |
 | Team | One person, who is also the reviewer |
 
 The phone is the dangerous client: no diff to read, and a distracted user. Every refusal
