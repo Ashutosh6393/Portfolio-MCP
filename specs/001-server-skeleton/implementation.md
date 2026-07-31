@@ -6,9 +6,12 @@ reads this file first and picks up from it.
 Update it after every task. Never batch updates.
 
 - **Status:** in-progress
-- **Branch:** `feat/server-skeleton`
+- **Branch:** `feat/list-content` (Slice 2). Slice 1 shipped on `feat/server-skeleton`,
+  merged as PR #2 (`f4d32fd`).
 - **Spec:** `design.md` · **ADR:** `docs/adr/001-server-runtime-and-shape.md`
-- **Current task:** 5 — `src/lib/site.ts` (Slice 2, starts after the Slice 1 PR merges)
+- **Current task:** 10 — deploy and connect from three clients. **Human work, not an
+  agent's:** it creates a billable machine and needs `MCP_SECRET_PATH`. Tasks 5–9 are done
+  and green.
 
 ---
 
@@ -38,11 +41,11 @@ In dependency order. Each task must be independently testable and map to test ID
 | 2 | `src/lib/env.ts` — Zod env schema, parsed at boot | 1 | T-01, T-02, T-03 | 1 | `done` | 1/3 | (this commit) |
 | 3 | `src/index.ts` — Elysia, `GET /health`, secret prefix, `GET /{secret}/health` with empty checks, one 404 shape | 2 | T-04, T-05, T-06, T-07 | 1 | `done` | 1/3 | (this commit) |
 | 4 | `Dockerfile`, `.dockerignore`, `fly.toml`, `.env.example`; deploy; measure cold start | 3 | — | 1 | `done` | 0/3 | `cf732e3`, `d0ebbfc`, `0277d01` |
-| 5 | `src/lib/site.ts` — fetch the two `content.json` routes, parse with Zod at the boundary | 4 | T-14 | 2 | `pending` | 0/3 | — |
-| 6 | `src/services/list-content.ts` — `listContent(deps, args)`, error paths as return values | 5 | T-11, T-12, T-13, T-14 | 2 | `pending` | 0/3 | — |
-| 7 | `src/tools/list-content.ts` + `src/tools/index.ts` — build the `McpServer`, register the tool, `createMcpHandler` | 6 | T-10, T-15 | 2 | `pending` | 0/3 | — |
-| 8 | Mount the handler at `/{secret}/mcp` in `src/index.ts` | 7 | T-08, T-09 | 2 | `pending` | 0/3 | — |
-| 9 | Deep health runs the real site check; 503 on failure | 5, 8 | T-16, T-17 | 2 | `pending` | 0/3 | — |
+| 5 | `src/lib/site.ts` — fetch the two `content.json` routes, parse with Zod at the boundary | 4 | T-14 | 2 | `done` | 1/3 | (this commit) |
+| 6 | `src/services/list-content.ts` — `listContent(deps, args)`, error paths as return values | 5 | T-11, T-12, T-13, T-14 | 2 | `done` | 1/3 | (this commit) |
+| 7 | `src/tools/list-content.ts` + `src/tools/index.ts` — build the `McpServer`, register the tool, `createMcpHandler` | 6 | T-10, T-15 | 2 | `done` | 1/3 | (this commit) |
+| 8 | Mount the handler at `/{secret}/mcp` in `src/index.ts` | 7 | T-08, T-09 | 2 | `done` | 1/3 | (this commit) |
+| 9 | Deep health runs the real site check; 503 on failure | 5, 8 | T-16, T-17 | 2 | `done` | 1/3 | (this commit) |
 | 10 | Deploy; connect from Claude Code, claude.ai, and mobile; read a writing on each | 9 | — | 2 | `pending` | 0/3 | — |
 
 ### Notes on specific tasks
@@ -114,12 +117,111 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 | Date | Test | Change | Why |
 |---|---|---|---|
 | 2026-07-30 | `src/index.test.ts` (T-04, T-05) | T-04: swapped the `as typeof fetch` double-cast on the fetch stand-in for `Object.assign(spy, { preconnect: originalFetch.preconnect })`, carrying the real property across instead of asserting an unchecked shape. T-05: added `typeof`/`null`/`in` guards to narrow the `unknown` body from `response.json()` before reading `.checks`, instead of trusting an unverified shape. | Made the file typecheck under tsgo + `@types/bun` (`lib: ["ESNext"]`, no `dom`), which types `Response.json()` as `Promise<unknown>` and the Bun `fetch` type as a call signature plus a `preconnect` static method. No assertion changed — same expectations, same failure conditions, just reached through a real guard instead of a cast. |
+| 2026-07-31 | `src/index.test.ts` (T-04, T-05, T-06, T-07) | Each now calls `createApp(testEnv, { site: fakeSite })` instead of `createApp(testEnv)`, reusing a `fakeSite` moved to the top of the file. No assertion changed. | Task 8's `createApp` grew a `deps` parameter defaulted to the real site singleton (`= { site }`), solely to keep these four tests compiling with one argument. `code-style.md` bans exactly this — a default that falls back to a module singleton smuggles the dependency-injection seam back out through the signature. From Task 9 onward `/{secret}/health` calls the real site; a test that forgot to inject would silently hit `ashutoshverma.dev`. Ruling: keep `deps` **required**. These four tests are the only reason the default existed, so making them pass a fake explicitly removes the need for it. Source follow-up (not made by the test agent): remove the `= { site }` default in `src/index.ts` so `createApp`'s second argument is required. |
+| 2026-07-31 | `src/index.test.ts` (T-05) | Changed the final assertion from `expect(Object.keys(body.checks)).toEqual([])` to `expect(Object.keys(body.checks)).toContain("site")`. | T-05's original assertion was correct for Slice 1, where `design.md` Slice 1 acceptance criterion 2 states an empty `checks` object is the right answer. Task 9 (Slice 2) adds a real site check to the same route, so an empty object stops being correct. T-05 keeps testing "the route is reachable and returns a checks object"; the pass/fail value of the check is now T-16 and T-17's job, not T-05's — so the new assertion checks presence only, not status. |
 
 ---
 
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-31 — Tasks 8 and 9 done, in one commit
+
+**They share a commit, deliberately.** Task 9's RED (T-16, T-17, and the T-05 revision)
+was appended to `src/index.test.ts` — the same file as Task 8's T-08/T-09 — so splitting
+them meant committing a red suite. One green commit beat two commits where the first is
+broken. Both task IDs and all six test IDs are in the message.
+
+- **`createApp`'s `deps` is required, with no default.** The coder first defaulted it to
+  the real `site` singleton so the four Slice 1 tests kept compiling, and flagged it. The
+  test agent ruled against it on `code-style.md` grounds: a default that falls back to a
+  module singleton smuggles the dependency back through the seam, and **from Task 9 on the
+  health route calls the site for real** — a test that forgot to inject would quietly hit
+  `ashutoshverma.dev` and pass or fail on the weather. Now it is a compile error.
+  **This is the second test revision in the table and the reason for it.**
+- **`.mount("/mcp", handler.fetch)` worked exactly as `tech-stack.yaml` recorded.** No
+  cast, no manual `.all()` route with hand-rolled body forwarding. That entry was written
+  from a type declaration in Task 1 and is now confirmed against a running server.
+- **The deep health check does a real network call, but Fly's 30s probe never reaches it.**
+  `fly.toml` points the probe at the public `GET /health`, which does no I/O. The site
+  fetch fires only when someone calls `/{secret}/health` by hand. **ADR-001's auto-stop
+  cost model is unaffected.** Recorded because it is the obvious thing to worry about here,
+  and the answer is "no" — nothing was built for it.
+- **Known gap, unchanged from Task 7:** no test drives a *failing* or *non-empty* site
+  through the MCP handler. Both are covered at the service layer (T-11…T-14). design.md's
+  test list does not ask for more.
+
+### 2026-07-31 — Task 7 done
+
+**Three SDK behaviours discovered empirically. None of them was documented anywhere in
+this repo, and all three are load bearing for Tasks 8–10.**
+
+- **The handler answers a stateless POST as SSE, not JSON.** With
+  `Accept: application/json, text/event-stream`, a bare `tools/list` comes back
+  `text/event-stream` — one `event: message` frame whose `data:` line holds the JSON-RPC
+  response. **Any future test that reads `response.json()` off this handler will fail.**
+  Parse the `data:` line.
+- **No `initialize` handshake is needed for a bare `tools/list` / `tools/call` POST.**
+  `CreateMcpHandlerOptions.legacy` defaults to `'stateless'`, which answers each legacy
+  request from a fresh factory instance. No options are passed to `createMcpHandler` and
+  none should be added without a test that fails without them.
+- **The SDK validates tool arguments itself and folds a Zod failure into a normal tool
+  result** — `isError: true`, allowed enum values in the text, HTTP 200. **T-15 needs no
+  hand-rolled `kind` check and none was written.**
+
+Also:
+
+- **The union overload on `listContent` is load bearing after all** — its probation from
+  Task 6 is over. The tool callback receives `kind` widened to `"writing" | "project"`, so
+  it resolves to exactly that third signature. **Do not delete it.**
+- **The tool description was diffed character for character against `design.md`** →
+  Approach → The tool description. Byte-identical, em dash included.
+- **Known coverage gap at the tool layer.** `index.test.ts`'s fake site returns `[]`, so
+  only the empty-catalogue branch runs through `createHandler`. The error branch and the
+  non-empty listing branch are covered at the *service* layer (T-11…T-14) but never through
+  the MCP handler. design.md's test list does not ask for more; recorded, not built.
+
+### 2026-07-31 — Task 6 done
+
+- **Result shape is `{ ok: true; items } | { ok: false; error }`**, chosen by the test agent
+  and written at the top of `list-content.test.ts`. That comment is the source of truth for
+  Task 7 — read it before writing the tool.
+- **`listContent` is declared with three overloads, not a generic.** A generic
+  `<K extends Kind>` cannot return `parsed.data` without a cast, and casts are banned. The
+  overloads keep the file cast-free while letting T-12 do `items.map((i) => i.stack)` on a
+  literal `kind: "project"` call.
+  **The third (union) overload is on probation.** The test agent's read: T-13 and T-14 do
+  not need it — it exists so a caller holding a widened `"writing" | "project"` gets a
+  usable return type, since `ReturnType` resolves to the *last* overload. **If Task 7's tool
+  passes a literal kind and never needs it, delete it.**
+- **Zod's own issue text is deliberately not used in the error string.** It says
+  "received undefined" for a missing field, which would put the literal `"undefined"` into a
+  tool result and fail T-14. The message names the failing field paths instead. A non-array
+  root (`{}`, `null`) degrades to `(fields: )` — ugly, no test covers it, left alone.
+- **One formatting fix to `list-content.test.ts`** via `bun run format` — Biome line-wrap on
+  a long `throw`. Whitespace only, verified against the diff. **Not a test revision**, so it
+  is not in the table below.
+
+### 2026-07-31 — Task 5 done, Slice 2 opened on a new branch
+
+- **Branch is `feat/list-content`.** Slice 1 merged as PR #2 (`f4d32fd`); this branch is cut
+  from that merge, per the note below.
+- **Decided: `lib/site.ts` fetches, the service parses.** `design.md` reads two ways here —
+  Task 5's row says "parse with Zod at the boundary", but T-14 hands `listContent` a **fake
+  site** returning `[{nope:1}]`. If `site.ts` parsed internally and returned typed data,
+  that fake would need a banned cast to typecheck, and it would bypass the real parse
+  anyway — T-14 would assert nothing. So `Site.fetchContent(kind)` returns `unknown`, the
+  schemas live in `site.ts` (it is still the boundary module), and `listContent` runs
+  `safeParse`. **This is the shape Task 6 and Task 7 build on.**
+- **`status` is `z.string()`, not `z.enum`.** The site's allowed values were never verified.
+  A guessed enum turns a valid entry into a production parse failure the day the site adds
+  a status. Same reasoning for `stack` as `z.array(z.string())`.
+- **`site.test.ts` does not test `fetchContent` or `fetch` at all** — `testing.md` says a
+  thin wrapper over someone else's API tested against a mock of that API tests the mock.
+  Only the Zod parse, which is ours, is tested.
+- **Next:** Task 6 — the RED test `src/services/list-content.test.ts` is already written
+  (T-11…T-14 plus the empty-list edge case) and confirmed failing on the missing module.
 
 ### 2026-07-31 — Slice 1 closed, PR opened
 

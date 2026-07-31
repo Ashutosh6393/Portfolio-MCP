@@ -1,0 +1,14 @@
+import type { McpHttpHandler } from "@modelcontextprotocol/server";
+import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
+import type { Site } from "../lib/site";
+import { registerListContent } from "./list-content";
+
+// The factory runs once per HTTP request (see task brief's SDK facts), so the
+// server — and every tool on it — is built fresh inside it.
+export function createHandler(deps: { site: Site }): McpHttpHandler {
+	return createMcpHandler(() => {
+		const server = new McpServer({ name: "portfolio-mcp", version: "0.1.0" });
+		registerListContent(server, deps);
+		return server;
+	});
+}
