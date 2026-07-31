@@ -5,13 +5,12 @@ reads this file first and picks up from it.
 
 Update it after every task. Never batch updates.
 
-- **Status:** Slice 1 complete, deployed and verified. **At the human gate.**
-- **Branch:** `feat/github-access` → PR 1. Slice 2 continues on
-  `feat/github-access-skill`, branched from this tip.
+- **Status:** both slices complete, deployed and verified. **At the human gate.**
+- **Branch:** `feat/github-access-skill` → PR 2, stacked on `feat/github-access` (PR 1).
 - **Spec:** `design.md` · **ADRs:** `docs/adr/002-github-access-and-workshop.md`,
   `docs/adr/003-skills-and-templates-are-separate.md`
-- **Current task:** 5 — `getSkill`'s named mode. Task 3's deploy is still outstanding and
-  does not block Slice 2.
+- **Current task:** none. Outstanding: the client half of Task 7 — driving `get_skill` from
+  Claude Code, claude.ai and the mobile app, which only a human can do.
 
 ---
 
@@ -51,11 +50,11 @@ In dependency order. Each task must be independently testable and map to test ID
 |---|---|---|---|---|---|---|---|
 | 1 | `GITHUB_TOKEN` in the env schema, and in `.env.example` by name only | — | T-01, T-02, T-03 | 1 | `done` | 1/3 | (this commit) |
 | 2 | `src/lib/github.ts` — `createGithub`, `listDirectory`, `readFile`, `GithubNotFoundError` — plus the `github` deep check wired into `src/index.ts` | 1 | T-04, T-05, T-06 | 1 | `done` | 1/3 | (this commit) |
-| 3 | Set the token on Fly, deploy, verify `checks.github` against the **real** repos | 2, P-2, P-1 | — (manual) | 1 | `green` | 0/3 | — |
+| 3 | Set the token on Fly, deploy, verify `checks.github` against the **real** repos | 2, P-2, P-1 | — (manual) | 1 | `done` | 0/3 | deployed, no code |
 | 4 | `entryListSchema` in `lib/github.ts`, and `getSkill`'s list mode over `skills/` and `templates/` | 2 | T-07, T-08, T-09, T-13, T-14 | 2 | `done` | 1/3 | (this commit) |
 | 5 | `getSkill`'s named mode — resolve from the listing, bundle the voice — and its error paths | 4 | T-10, T-10b, T-10c, T-10d, T-11, T-12 | 2 | `done` | 1/3 | (this commit) |
 | 6 | `src/tools/get-skill.ts` and its registration in `src/tools/index.ts` | 5 | T-15, T-16, T-17 | 2 | `done` | 1/3 | (this commit) |
-| 7 | Verify `get_skill` on Claude Code, claude.ai, and the mobile app | 6 | — (manual) | 2 | `pending` | 0/3 | — |
+| 7 | Verify `get_skill` on Claude Code, claude.ai, and the mobile app | 6 | — (manual) | 2 | `green` | 0/3 | deployed, no code |
 
 ### Notes on specific tasks
 
@@ -113,13 +112,16 @@ Max 5–7 files (excluding tests) and 500 lines per slice.
 
 | Slice | Contains | Files | State | PR |
 |---|---|---|---|---|
-| 1 | Tasks 1–3 — the credential works | 4 | complete, **at the gate** | this branch |
-| 2 | Tasks 4–7 — `get_skill` | 4 | complete, stacked on this one | `feat/github-access-skill` |
+| 1 | Tasks 1–3 — the credential works | 4 | complete, at the gate | `feat/github-access` |
+| 2 | Tasks 4–7 — `get_skill` | 5 | complete, at the gate | `feat/github-access-skill` |
 
-**Slice 2 is stacked, not merged into this PR.** Both slices were built in one session and
-together came to 8 source files and 410 lines, over the 5–7 file ceiling. They were split
-back apart at this commit. Slice 2 uses `lib/github.ts` and nothing else from here, so the
-halves review and revert independently — review this one first.
+**These are stacked PRs. Review and merge 1 first.** Both slices were built in one session
+and together came to 8 source files and 410 lines, over the 5–7 file ceiling, so they were
+split back apart at `feat/github-access`'s tip. Slice 2 uses `lib/github.ts` and nothing
+else from Slice 1, so the halves review and revert independently.
+
+Slice 2's file count is 5, not the 4 planned: `fly.toml` rode along with it. The VM drop to
+256mb belongs to neither slice and had to go somewhere.
 
 ---
 
@@ -148,6 +150,25 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-31 — split into two PRs, deployed and verified
+
+- **Deployed.** Two attempts failed identically on Fly's depot builder
+  (`context deadline exceeded`) — infrastructure, not code. `--depot=false` released first
+  try. The same failure signature twice was the signal to change method, not retry again.
+- **Verified in production:** deep health 200 with `site` and `github` both `ok`;
+  `tools/list` returns `list_content` **and** `get_skill`; `get_skill` lists three skills
+  and two templates; an unknown name answers HTTP 200 with `isError: true` naming what
+  exists.
+- **Not verified in production: the 503 path.** Observed locally against the real API by
+  pointing a repo constant at a name that does not exist. Reproducing it on the deployed
+  server would mean deliberately breaking production.
+- **Branch split.** Slice 1 stayed on `feat/github-access`; Slice 2's four commits were
+  rebased onto its tip as `feat/github-access-skill`. The doc conflicts were resolved to
+  the incoming side and the combined state fixed here, in one commit, rather than by hand
+  in each replayed commit.
+- **Outstanding:** the client half of Task 7. Only a human can drive Claude Code, claude.ai
+  and the mobile app.
 
 ### 2026-07-31 — Task 6
 

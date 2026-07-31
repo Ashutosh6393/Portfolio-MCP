@@ -5,22 +5,24 @@ before any automated review has run. It must stand on its own.
 
 Read this, then the diff, then approve the PR.
 
-- **Slice:** 1 of 2 · **Branch:** `feat/github-access`
+- **Slice:** 2 of 2 · **Branch:** `feat/github-access-skill`
+- **Stacked on:** `feat/github-access` (Slice 1) — **merge that one first**
 - **Spec:** `design.md` · **ADRs:** `docs/adr/002-github-access-and-workshop.md`,
   `docs/adr/003-skills-and-templates-are-separate.md`
-- **Tasks:** 1–3 · **Tests:** 7 added (26 → 33), all passing
-- **Size:** 4 files, 130 lines (limit: 5–7 files excl. tests, 500 lines)
+- **Tasks:** 4–7 · **Tests:** 15 added (33 → 48), all passing
+- **Size:** 5 files, 280 lines (limit: 5–7 files excl. tests, 500 lines)
 
 ---
 
 ## TL;DR
 
-The server can reach GitHub. A read-only token is validated at boot, and the deep health
-check now reads both repos and says whether that worked.
+The server has a second tool. `get_skill` hands a model the drafting rules or the template
+it asked for, and **always attaches the author's voice** — because voice is the thing a
+model silently does without.
 
-No tool uses it yet — that is Slice 2. This slice exists so the credential is proved
-before anything is built on top of it, which is exactly what happened: it caught an empty
-`workshop` that would otherwise have surfaced as a mysterious "skill not found" later.
+Ask it "what skills do I have" and it answers `be-human`, `linkedin-post`, `twitter-post`,
+plus the `writing` and `project` templates. Ask for one and you get it, in one response,
+out of a private repo.
 
 ---
 
@@ -28,79 +30,82 @@ before anything is built on top of it, which is exactly what happened: it caught
 
 | File | Change | Why |
 |---|---|---|
-| `.env.example` | modified | `GITHUB_TOKEN` by name, and how to create one. No value |
-| `src/lib/env.ts` | modified | The token is validated at boot, prefix included |
-| `src/lib/github.ts` | **new** | The GitHub reader: two methods, one error class |
-| `src/index.ts` | modified | The `github` deep check, and the reader built at boot |
+| `src/lib/github.ts` | modified | `entryListSchema` — the directory-listing shape, +14 lines |
+| `src/services/get-skill.ts` | **new** | Resolve a name, bundle the voice, return never throw |
+| `src/tools/get-skill.ts` | **new** | The tool and its specified description |
+| `src/tools/index.ts` | modified | Registers the second tool |
+| `fly.toml` | modified | VM 512mb → 256mb, and the comment that argued for 512 |
+
+`fly.toml` belongs to neither slice — it rode with this one rather than inventing a third
+PR for one line.
 
 ### How it works now
 
-**Boot.** `parseEnv` rejects a missing or wrong-shaped `GITHUB_TOKEN` before the server
-starts listening. `createGithub(token)` is called once and passed into `createApp`
-alongside `site`, so the token never reaches module scope and a test builds a fake without
-one.
+**With no name.** Both directories are listed in parallel and the names come back with
+extensions stripped. Directories and non-markdown files are filtered by *type and
+extension*, never by name — a blocklist breaks the day a second stray file appears.
 
-**Health.** `GET /{secret}/health` runs three outbound calls in parallel — the site, plus
-both repo roots — and reports `site` and `github`. `github` is `ok` only when **both**
-repos answer. 200 on all-pass, 503 on any fail, unchanged from how `site` already behaved.
+**With a name.** Both listings come back first, the name is resolved against them, then
+the voice and the target are read together. Two round trips, four calls.
 
-**Reading.** `listDirectory` returns `unknown`, so the parse belongs to the service that
-will arrive in Slice 2. `readFile` asks for `Accept: application/vnd.github.raw` and gets
-the file's bytes as text — no base64, no 1 MB cliff, no decoder in this repo.
+**Nothing ever builds a path by appending an extension.** That is why the templates landing
+as `.md` rather than the `.mdx` ADR-003 assumed changed no code at all. T-10c is the test
+that keeps it that way.
 
 ---
 
 ## QA
 
 **What does this let a user do that they couldn't before?**
-Nothing directly — no tool reads GitHub yet. What it gives *you* is one URL that answers
-"can this server reach my repos", which is the question every later slice depends on.
+Draft on a phone in the author's voice. There is no skill system on mobile, so without this
+the model writes generic prose — the failure `mcp-design.md` predicted.
 
 **What happens when it fails?**
-A wrong-shaped token fails at boot with a message naming the variable. A repo that cannot
-be read makes `checks.github` `unreachable` and the route returns 503. `lib/github.ts`
-throws `GithubNotFoundError` on a 404 and a plain `Error` carrying the status otherwise —
-the service in Slice 2 branches on the class, never on message text.
-
-Nothing logs the token, the `Authorization` header, or a request URL.
+Every failure is a *tool result*, never a thrown error, and the HTTP status stays 200. A
+thrown error dead-ends the conversation; a returned sentence lands in context and the model
+acts on it in the same turn. An unknown name comes back naming what does exist, so the
+retry happens without another round trip. A missing `be-human.md` is a hard error — never
+structure without voice.
 
 **Does this touch existing behaviour?**
-`list_content` is untouched. `checks.site` behaves exactly as before — verified by pointing
-GitHub at a repo that does not exist and watching `site` stay `ok` while `github` failed.
-The deep-health route gained about a second of wall time; no tool path did.
+`list_content` is untouched: not its enum, not its description, not its response. Its tests
+pass unchanged, and 002-T-15 asserts registering a second tool did not drop the first. The
+health check is untouched.
 
 **Any data migration?**
-None. No database in this repo.
+None. No database, and nothing is written to GitHub — the token is read-only.
 
 **Any performance implications?**
-The deep check went from one outbound call to three, run in parallel — 1.27s cold on the
-deployed server, ~0.8s warm. Only `/{secret}/health` touches it.
+Four API calls across two round trips per named call, against a 5,000/hour limit and
+roughly 15 calls a week. `be-human.md` is re-read every time. No cache, no retry, no rate
+limiter — three orders of magnitude of headroom is not a design input.
 
 **Any security or auth implications?**
-One new secret, set by hand straight into Fly's store — never through an agent or a file.
-**Read-only**: no branches, no commits, no PRs, no writes of any kind. Auth is unchanged:
-one path secret, one user.
+No new credential and no new route. `workshop` is private and its contents now flow through
+the tool, so anyone holding the path secret can read the skills — already true of
+everything else behind that path. Still read-only.
 
 **What did we deliberately not do?**
-No `octokit` — ADR-002 argued it out, and it stays uninstalled until `publish`. No base64
-decoder, because the raw `Accept` header removed the need. No cache, retry, or rate
-limiter. Nothing that watches the token's expiry.
+No `octokit`. No writes. No changes to `list_content` — including **not** the "call
+`get_skill` first" nudge, which is Slice 5 and has its own design.
 
 ---
 
 ## Verify it yourself
 
 ```bash
-git checkout feat/github-access
+git checkout feat/github-access-skill
 bun install
 bun test
 ```
 
-1. `bun test` → 33 pass, 0 fail
+1. `bun test` → 48 pass, 0 fail
 2. `bun run typecheck && bun run lint && bun run docs:check` → all clean
-3. `GET /{secret}/health` → 200 with `{"checks":{"site":"ok","github":"ok"}}`
-4. Failure case: point `repoNames.workshop` at a name that does not exist, hit the same
-   route → **503**, `github` is `unreachable`, and `site` is still `ok`. Put it back
+3. "what skills do I have" → `be-human`, `linkedin-post`, `twitter-post`, and the `writing`
+   and `project` templates
+4. "load the linkedin-post skill" → the real rules **and** the voice, in one response
+5. Failure case: "load the lnkedin-post skill" (typo) → a sentence naming the real skills,
+   and a correct retry in the same turn. Not a crash, and not an HTTP error
 
 ---
 
@@ -108,33 +113,33 @@ bun test
 
 | Test | Verifies | File |
 |---|---|---|
-| 002-T-01 | Boot fails naming `GITHUB_TOKEN` when it is missing | `src/lib/env.test.ts` |
-| 002-T-02 | A classic `ghp_` token and an empty string are both refused | `src/lib/env.test.ts` |
-| 002-T-03 | A well-formed token lands on the parsed object | `src/lib/env.test.ts` |
-| 002-T-04 | Both repos reachable → 200, `github` and `site` both `ok` | `src/index.test.ts` |
-| 002-T-05 | GitHub down → 503, `github` fails, `site` untouched | `src/index.test.ts` |
-| 002-T-06 | One repo reachable is not enough → still 503 | `src/index.test.ts` |
+| T-07 | Both lists come back, extensions stripped | `src/services/get-skill.test.ts` |
+| T-08 | Directories and non-markdown files are skipped | `src/services/get-skill.test.ts` |
+| T-09 | An empty workshop is a valid answer, not an error | `src/services/get-skill.test.ts` |
+| T-10 | A named skill returns its rules and the voice, not swapped | `src/services/get-skill.test.ts` |
+| T-10b | A named template returns the template and the voice | `src/services/get-skill.test.ts` |
+| T-10c | `.md` and `.mdx` both resolve — the extension is never guessed | `src/services/get-skill.test.ts` |
+| T-10d | Asking for the voice returns it once and reads it once | `src/services/get-skill.test.ts` |
+| T-11 | An unknown name names what does exist | `src/services/get-skill.test.ts` |
+| T-12 | A missing voice is an error, never structure alone | `src/services/get-skill.test.ts` |
+| T-13, T-14 | GitHub down, and a listing in a bad shape — both error results | `src/services/get-skill.test.ts` |
+| 002-T-15 | `get_skill` is advertised with an optional `name`; `list_content` still listed | `src/tools/index.test.ts` |
+| 002-T-16 | Both modes answer through the real MCP handler | `src/tools/index.test.ts` |
+| 002-T-17 | A tool failure is a tool result at HTTP 200 | `src/tools/index.test.ts` |
 
-**Covered:** the boot guard, both health outcomes, and the independence of the two checks.
+**Covered:** both modes, every error path, the empty case, the junk-file case, the
+extension case, and the one edge case with a genuinely bad silent outcome — a missing
+voice.
 
-**Not covered:** `lib/github.ts`'s `fetch` is not unit-tested against a mock of GitHub —
-[testing.md](../../.claude/rules/testing.md) forbids it, because testing a thin wrapper
-against a mock of the API tests the mock. It was exercised against the **live** API
-instead: the raw `Accept` header, the listing shape, both repos, and both health paths.
+**Not covered:** the three-clients check (Task 7) is a human step. The protocol side was
+driven against the **live** `workshop` repo through the real handler: listing, a skill, a
+template, the voice alone, and an unknown name.
 
 ### Test revisions in this slice
 
-**Two. Both input-only; not one assertion changed.** Both landed as their own commits ahead
-of the code, and both are justified in `implementation.md` → Test revisions.
-
-| What | Why |
-|---|---|
-| Spec 001's two T-03 cases | Their environment lacked `GITHUB_TOKEN` once it became required |
-| `testEnv` and the eight `createApp` calls in `index.test.ts` | `Env` and `deps` each grew a required field |
-
-Both are the same event: a required dependency was added and the fakes had to carry it.
-That is the design working — forgetting to inject is now a compile error rather than a live
-call to api.github.com from a test run.
+**One. Input-only; no assertion changed.** `postJsonRpc` in `src/tools/index.test.ts` now
+passes `github` alongside `site`, because Task 6 grew `createHandler`'s deps. One call
+site, one field. Justified in `implementation.md` → Test revisions.
 
 ---
 
@@ -142,11 +147,11 @@ call to api.github.com from a test run.
 
 | Risk | Likelihood | What to watch |
 |---|---|---|
-| The token expires silently, within a year | certain, eventually | `checks.github` flips to `unreachable`. **Nothing announces it** — ADR-002 gave that up knowingly |
-| A bad or mis-scoped token is indistinguishable from a missing file | low now, high after any token change | GitHub answers 404, not 403, for a repo it cannot see. The boot-time prefix check catches the common versions early |
-| A repo with no commits answers 404 like a missing one | already hit once | Cost about an hour this build. A commitless `workshop` reported `unreachable` on a perfectly good token |
+| `be-human.md` renamed or deleted | low | **Every** named `get_skill` call fails, not just one. The error names the file, so the message points at the fix |
+| A stray `.md` in `skills/` is offered as a skill | low | It would show up in the listing under its filename |
+| A model ignores the tool and drafts in generic voice | medium | The description is the only nudge in this slice. The second one is Slice 5 |
 
-**Rollback:** revert the commits. No migration, no state, nothing to undo outside this repo.
+**Rollback:** revert these commits. Slice 1 keeps working — nothing in it depends on this.
 
 ---
 
@@ -154,21 +159,18 @@ call to api.github.com from a test run.
 
 | Item | Why deferred | Worth doing? |
 |---|---|---|
-| Health check distinguishing "empty repo" from "unreachable" | A state that ends with the first commit; special-casing it is complexity for a transient | no |
-| Something that warns before the token expires | ADR-002 rejected the App that would have solved it | maybe — needs its own ADR |
+| The "call `get_skill` first" nudge on `list_content` | Slice 5, with its own design. Explicitly out of scope here | yes — already planned |
+| A name in both `skills/` and `templates/` | Not defended against; `skills/` wins. Recorded in `design.md` → Edge cases | no |
+| Caching `be-human.md` across calls | Re-read on every named call. ~15 calls a week against 5,000/hour | no |
+| Filtering a stray `README.md` out of `skills/` | A name blocklist is the fragile kind of guard. Private repo, five files, one author | no |
 
 ---
 
 ## Documentation updated
 
-- [x] `docs/adr/003-skills-and-templates-are-separate.md` — new; supersedes ADR-002's skill
-      storage and tool contract, after the real `workshop` content turned out not to pair up
-- [x] `docs/adr/002-github-access-and-workshop.md` — status marked superseded in part; body
-      left intact, per the append-only rule
-- [x] `docs/adr/README.md` — index
-- [x] `CONTEXT.md` — `skill` no longer claims to include a template; `template` and `voice`
-      added
-- [x] `specs/002-github-access/design.md` — Risk 3 closed, Risk 7 added, P-1 corrected, and
-      the layout replaced by ADR-003
-- [x] `specs/002-github-access/CLAUDE.md` — live facts, and the patterns Slice 2 needs
-- [x] `specs/002-github-access/implementation.md` — task states, revisions, session notes
+- [x] `specs/002-github-access/design.md` — two corrections found while building Task 5:
+      the voice resolves from the listing rather than a hardcoded path, and asking for
+      `be-human` returns it under `voice` alone rather than duplicated under a second key
+- [x] `specs/002-github-access/implementation.md` — task states, the test revision, session
+      notes, and the PR split
+- [x] `fly.toml` — the comment that argued for the old VM size
