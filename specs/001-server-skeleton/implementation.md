@@ -8,7 +8,7 @@ Update it after every task. Never batch updates.
 - **Status:** in-progress
 - **Branch:** `feat/server-skeleton`
 - **Spec:** `design.md` · **ADR:** `docs/adr/001-server-runtime-and-shape.md`
-- **Current task:** 4 — Dockerfile, .dockerignore, fly.toml, .env.example
+- **Current task:** 5 — `src/lib/site.ts` (Slice 2, starts after the Slice 1 PR merges)
 
 ---
 
@@ -37,7 +37,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 1 | Scaffold: Bun, TS strict, Biome, scripts, deps | — | — | 1 | `done` | 1/3 | (this commit) |
 | 2 | `src/lib/env.ts` — Zod env schema, parsed at boot | 1 | T-01, T-02, T-03 | 1 | `done` | 1/3 | (this commit) |
 | 3 | `src/index.ts` — Elysia, `GET /health`, secret prefix, `GET /{secret}/health` with empty checks, one 404 shape | 2 | T-04, T-05, T-06, T-07 | 1 | `done` | 1/3 | (this commit) |
-| 4 | `Dockerfile`, `.dockerignore`, `fly.toml`, `.env.example`; deploy; measure cold start | 3 | — | 1 | `green` (config written; deploy pending — human) | 0/3 | — |
+| 4 | `Dockerfile`, `.dockerignore`, `fly.toml`, `.env.example`; deploy; measure cold start | 3 | — | 1 | `done` | 0/3 | `cf732e3`, `d0ebbfc`, `0277d01` |
 | 5 | `src/lib/site.ts` — fetch the two `content.json` routes, parse with Zod at the boundary | 4 | T-14 | 2 | `pending` | 0/3 | — |
 | 6 | `src/services/list-content.ts` — `listContent(deps, args)`, error paths as return values | 5 | T-11, T-12, T-13, T-14 | 2 | `pending` | 0/3 | — |
 | 7 | `src/tools/list-content.ts` + `src/tools/index.ts` — build the `McpServer`, register the tool, `createMcpHandler` | 6 | T-10, T-15 | 2 | `pending` | 0/3 | — |
@@ -90,7 +90,7 @@ Each slice ships independently: summary → human review → PR → CI review.
 
 | Slice | Contains | Files | State | PR |
 |---|---|---|---|---|
-| 1 | Tasks 1–4 — deployed server, health routes, secret path | 10 | `pending` | — |
+| 1 | Tasks 1–4 — deployed server, health routes, secret path | 10 | `in review` | — |
 | 2 | Tasks 5–10 — MCP handler, `list_content`, deep health check | 5 | `pending` | — |
 
 **Slice 1 exceeds the 5–7 file limit at 10 files.** Eight are config with no logic and the
@@ -120,6 +120,15 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-31 — Slice 1 closed, PR opened
+
+Task 4's row said `green` / "deploy pending" while the note below it recorded a finished
+deploy and all five acceptance criteria met. The row was the stale one; corrected to `done`
+with its three commits. No code changed — 8 tests pass, `docs:check` clean.
+
+Slice 2 starts from Task 5 **after** the Slice 1 PR merges, on a fresh branch. Do not build
+it onto `feat/server-skeleton` — that PR is already over the file limit on its own.
 
 ### 2026-07-30 — Task 4 deployed
 
