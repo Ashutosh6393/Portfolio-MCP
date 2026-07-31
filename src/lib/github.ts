@@ -7,6 +7,20 @@
 //                     token is read-only), no caching, no retry, no rate
 //                     limiting — ~15 calls a week against 5,000 an hour.
 
+import { z } from "zod";
+
+// A directory listing. Verified live 2026-07-31: an array whose entries carry
+// `name` and `type`. Only those two are declared because only those two are
+// used — zod strips the rest.
+//
+// `type` stays `z.string()` rather than an enum. The values seen are "file" and
+// "dir", but GitHub also returns "symlink" and "submodule", and an enum would
+// fail the whole listing over one odd entry. Same reasoning as `status` in
+// site.ts. Callers filter on `type === "file"`, which is safe either way.
+export const entryListSchema = z.array(
+	z.object({ name: z.string(), type: z.string() }),
+);
+
 // The domain word and the GitHub name are not the same thing. `portfolio` is
 // CONTEXT.md vocabulary and is what every doc, error message, and health check
 // says; `repoNames` is the single place it becomes a real path. Verified
