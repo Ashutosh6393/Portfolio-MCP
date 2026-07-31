@@ -40,7 +40,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 3 | `src/index.ts` — Elysia, `GET /health`, secret prefix, `GET /{secret}/health` with empty checks, one 404 shape | 2 | T-04, T-05, T-06, T-07 | 1 | `done` | 1/3 | (this commit) |
 | 4 | `Dockerfile`, `.dockerignore`, `fly.toml`, `.env.example`; deploy; measure cold start | 3 | — | 1 | `done` | 0/3 | `cf732e3`, `d0ebbfc`, `0277d01` |
 | 5 | `src/lib/site.ts` — fetch the two `content.json` routes, parse with Zod at the boundary | 4 | T-14 | 2 | `done` | 1/3 | (this commit) |
-| 6 | `src/services/list-content.ts` — `listContent(deps, args)`, error paths as return values | 5 | T-11, T-12, T-13, T-14 | 2 | `pending` | 0/3 | — |
+| 6 | `src/services/list-content.ts` — `listContent(deps, args)`, error paths as return values | 5 | T-11, T-12, T-13, T-14 | 2 | `done` | 1/3 | (this commit) |
 | 7 | `src/tools/list-content.ts` + `src/tools/index.ts` — build the `McpServer`, register the tool, `createMcpHandler` | 6 | T-10, T-15 | 2 | `pending` | 0/3 | — |
 | 8 | Mount the handler at `/{secret}/mcp` in `src/index.ts` | 7 | T-08, T-09 | 2 | `pending` | 0/3 | — |
 | 9 | Deep health runs the real site check; 503 on failure | 5, 8 | T-16, T-17 | 2 | `pending` | 0/3 | — |
@@ -121,6 +121,27 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-31 — Task 6 done
+
+- **Result shape is `{ ok: true; items } | { ok: false; error }`**, chosen by the test agent
+  and written at the top of `list-content.test.ts`. That comment is the source of truth for
+  Task 7 — read it before writing the tool.
+- **`listContent` is declared with three overloads, not a generic.** A generic
+  `<K extends Kind>` cannot return `parsed.data` without a cast, and casts are banned. The
+  overloads keep the file cast-free while letting T-12 do `items.map((i) => i.stack)` on a
+  literal `kind: "project"` call.
+  **The third (union) overload is on probation.** The test agent's read: T-13 and T-14 do
+  not need it — it exists so a caller holding a widened `"writing" | "project"` gets a
+  usable return type, since `ReturnType` resolves to the *last* overload. **If Task 7's tool
+  passes a literal kind and never needs it, delete it.**
+- **Zod's own issue text is deliberately not used in the error string.** It says
+  "received undefined" for a missing field, which would put the literal `"undefined"` into a
+  tool result and fail T-14. The message names the failing field paths instead. A non-array
+  root (`{}`, `null`) degrades to `(fields: )` — ugly, no test covers it, left alone.
+- **One formatting fix to `list-content.test.ts`** via `bun run format` — Biome line-wrap on
+  a long `throw`. Whitespace only, verified against the diff. **Not a test revision**, so it
+  is not in the table below.
 
 ### 2026-07-31 — Task 5 done, Slice 2 opened on a new branch
 

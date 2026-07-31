@@ -37,6 +37,11 @@ export type Site = {
 	fetchContent(kind: "writing" | "project"): Promise<unknown>;
 };
 
+// Types derived from the schemas above, for the service layer (Task 6) —
+// never hand-write a type beside a schema (design.md → Validation).
+export type Writing = z.infer<typeof writingListSchema>[number];
+export type Project = z.infer<typeof projectListSchema>[number];
+
 // The parse lives in the service (Task 6), not here — fetchContent stays
 // `unknown` on purpose so a fake site can hand back garbage in tests.
 export const site: Site = {
