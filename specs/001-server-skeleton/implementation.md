@@ -41,7 +41,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 4 | `Dockerfile`, `.dockerignore`, `fly.toml`, `.env.example`; deploy; measure cold start | 3 | — | 1 | `done` | 0/3 | `cf732e3`, `d0ebbfc`, `0277d01` |
 | 5 | `src/lib/site.ts` — fetch the two `content.json` routes, parse with Zod at the boundary | 4 | T-14 | 2 | `done` | 1/3 | (this commit) |
 | 6 | `src/services/list-content.ts` — `listContent(deps, args)`, error paths as return values | 5 | T-11, T-12, T-13, T-14 | 2 | `done` | 1/3 | (this commit) |
-| 7 | `src/tools/list-content.ts` + `src/tools/index.ts` — build the `McpServer`, register the tool, `createMcpHandler` | 6 | T-10, T-15 | 2 | `pending` | 0/3 | — |
+| 7 | `src/tools/list-content.ts` + `src/tools/index.ts` — build the `McpServer`, register the tool, `createMcpHandler` | 6 | T-10, T-15 | 2 | `done` | 1/3 | (this commit) |
 | 8 | Mount the handler at `/{secret}/mcp` in `src/index.ts` | 7 | T-08, T-09 | 2 | `pending` | 0/3 | — |
 | 9 | Deep health runs the real site check; 503 on failure | 5, 8 | T-16, T-17 | 2 | `pending` | 0/3 | — |
 | 10 | Deploy; connect from Claude Code, claude.ai, and mobile; read a writing on each | 9 | — | 2 | `pending` | 0/3 | — |
@@ -121,6 +121,36 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-31 — Task 7 done
+
+**Three SDK behaviours discovered empirically. None of them was documented anywhere in
+this repo, and all three are load bearing for Tasks 8–10.**
+
+- **The handler answers a stateless POST as SSE, not JSON.** With
+  `Accept: application/json, text/event-stream`, a bare `tools/list` comes back
+  `text/event-stream` — one `event: message` frame whose `data:` line holds the JSON-RPC
+  response. **Any future test that reads `response.json()` off this handler will fail.**
+  Parse the `data:` line.
+- **No `initialize` handshake is needed for a bare `tools/list` / `tools/call` POST.**
+  `CreateMcpHandlerOptions.legacy` defaults to `'stateless'`, which answers each legacy
+  request from a fresh factory instance. No options are passed to `createMcpHandler` and
+  none should be added without a test that fails without them.
+- **The SDK validates tool arguments itself and folds a Zod failure into a normal tool
+  result** — `isError: true`, allowed enum values in the text, HTTP 200. **T-15 needs no
+  hand-rolled `kind` check and none was written.**
+
+Also:
+
+- **The union overload on `listContent` is load bearing after all** — its probation from
+  Task 6 is over. The tool callback receives `kind` widened to `"writing" | "project"`, so
+  it resolves to exactly that third signature. **Do not delete it.**
+- **The tool description was diffed character for character against `design.md`** →
+  Approach → The tool description. Byte-identical, em dash included.
+- **Known coverage gap at the tool layer.** `index.test.ts`'s fake site returns `[]`, so
+  only the empty-catalogue branch runs through `createHandler`. The error branch and the
+  non-empty listing branch are covered at the *service* layer (T-11…T-14) but never through
+  the MCP handler. design.md's test list does not ask for more; recorded, not built.
 
 ### 2026-07-31 — Task 6 done
 
