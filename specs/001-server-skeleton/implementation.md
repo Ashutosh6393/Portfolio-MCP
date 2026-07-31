@@ -6,9 +6,10 @@ reads this file first and picks up from it.
 Update it after every task. Never batch updates.
 
 - **Status:** in-progress
-- **Branch:** `feat/server-skeleton`
+- **Branch:** `feat/list-content` (Slice 2). Slice 1 shipped on `feat/server-skeleton`,
+  merged as PR #2 (`f4d32fd`).
 - **Spec:** `design.md` · **ADR:** `docs/adr/001-server-runtime-and-shape.md`
-- **Current task:** 5 — `src/lib/site.ts` (Slice 2, starts after the Slice 1 PR merges)
+- **Current task:** 5 — `src/lib/site.ts`
 
 ---
 
@@ -38,7 +39,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 2 | `src/lib/env.ts` — Zod env schema, parsed at boot | 1 | T-01, T-02, T-03 | 1 | `done` | 1/3 | (this commit) |
 | 3 | `src/index.ts` — Elysia, `GET /health`, secret prefix, `GET /{secret}/health` with empty checks, one 404 shape | 2 | T-04, T-05, T-06, T-07 | 1 | `done` | 1/3 | (this commit) |
 | 4 | `Dockerfile`, `.dockerignore`, `fly.toml`, `.env.example`; deploy; measure cold start | 3 | — | 1 | `done` | 0/3 | `cf732e3`, `d0ebbfc`, `0277d01` |
-| 5 | `src/lib/site.ts` — fetch the two `content.json` routes, parse with Zod at the boundary | 4 | T-14 | 2 | `pending` | 0/3 | — |
+| 5 | `src/lib/site.ts` — fetch the two `content.json` routes, parse with Zod at the boundary | 4 | T-14 | 2 | `done` | 1/3 | (this commit) |
 | 6 | `src/services/list-content.ts` — `listContent(deps, args)`, error paths as return values | 5 | T-11, T-12, T-13, T-14 | 2 | `pending` | 0/3 | — |
 | 7 | `src/tools/list-content.ts` + `src/tools/index.ts` — build the `McpServer`, register the tool, `createMcpHandler` | 6 | T-10, T-15 | 2 | `pending` | 0/3 | — |
 | 8 | Mount the handler at `/{secret}/mcp` in `src/index.ts` | 7 | T-08, T-09 | 2 | `pending` | 0/3 | — |
@@ -120,6 +121,26 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-31 — Task 5 done, Slice 2 opened on a new branch
+
+- **Branch is `feat/list-content`.** Slice 1 merged as PR #2 (`f4d32fd`); this branch is cut
+  from that merge, per the note below.
+- **Decided: `lib/site.ts` fetches, the service parses.** `design.md` reads two ways here —
+  Task 5's row says "parse with Zod at the boundary", but T-14 hands `listContent` a **fake
+  site** returning `[{nope:1}]`. If `site.ts` parsed internally and returned typed data,
+  that fake would need a banned cast to typecheck, and it would bypass the real parse
+  anyway — T-14 would assert nothing. So `Site.fetchContent(kind)` returns `unknown`, the
+  schemas live in `site.ts` (it is still the boundary module), and `listContent` runs
+  `safeParse`. **This is the shape Task 6 and Task 7 build on.**
+- **`status` is `z.string()`, not `z.enum`.** The site's allowed values were never verified.
+  A guessed enum turns a valid entry into a production parse failure the day the site adds
+  a status. Same reasoning for `stack` as `z.array(z.string())`.
+- **`site.test.ts` does not test `fetchContent` or `fetch` at all** — `testing.md` says a
+  thin wrapper over someone else's API tested against a mock of that API tests the mock.
+  Only the Zod parse, which is ours, is tested.
+- **Next:** Task 6 — the RED test `src/services/list-content.test.ts` is already written
+  (T-11…T-14 plus the empty-list edge case) and confirmed failing on the missing module.
 
 ### 2026-07-31 — Slice 1 closed, PR opened
 
