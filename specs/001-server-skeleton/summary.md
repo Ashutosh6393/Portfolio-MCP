@@ -10,8 +10,34 @@ Read this, then the diff, then approve the PR.
 
 - **Slice:** 2 of 2 · **Branch:** `feat/list-content` (cut from `f4d32fd`, Slice 1's merge)
 - **Spec:** `design.md` · **ADR:** `docs/adr/001-server-runtime-and-shape.md`
-- **Tasks:** 5–9 done. **Task 10 is not done — see TL;DR and QA.**
+- **Tasks:** 5–9 done at the time of review. **Task 10 has since been done — read the
+  postscript below before the rest of this file.**
 - **Tests:** 8 → 26, all passing. `typecheck`, `lint`, `docs:check` all clean.
+
+---
+
+## Postscript — what happened after this was reviewed
+
+**Everything below this block was true when it was written, at the PR gate. Three things
+changed after the PR merged as #3 (`bc66cef`), and they contradict the body.** The body is
+left as the record of what the reviewer actually saw; this block is the correction.
+
+1. **Task 10 is done, and the answer is yes.** The connector was added in Claude Code,
+   claude.ai **and the Claude mobile app**, and "list my published writing" returns the
+   real posts on all three. The body repeatedly says this had not been tried — it has, and
+   it works. That was the whole premise of the project (`design.md` Risk 4).
+2. **The custom hostname is live.** `mcp.ashutoshverma.dev` now resolves to Fly via a
+   CNAME in Vercel's DNS, with a verified Let's Encrypt certificate. The Risks and
+   Deferred work tables below both list this as outstanding; it is not.
+3. **Cold start is not a problem and nothing was built for it.** No client timed out on
+   the ~5.7s wake. Both candidate fixes — dropping `fly.toml`'s health-check block, or
+   `min_machines_running = 1` at ~$3/month — are **rejected, not deferred**, exactly as
+   `design.md` Risk 3 said to do if the number never bit.
+
+Full detail, including what this does *not* prove, is in `implementation.md`'s
+2026-07-31 Task 10 session note. **The Deferred work table at the end of this file is
+stale in four rows because of the above** — the still-live items are the tool-layer test
+gap, the `.claude/agents/coder.md` fix, and documenting `fly deploy --ha=false`.
 - **Size:** 5 files / 221 lines excluding tests and specs (10 files / 811 lines total).
   `design.md` predicted exactly 5 files for this slice, and that's what shipped — unlike
   Slice 1, this one is inside the 5–7 file / 500-line PR limit.

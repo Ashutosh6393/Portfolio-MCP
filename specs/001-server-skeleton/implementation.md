@@ -5,13 +5,14 @@ reads this file first and picks up from it.
 
 Update it after every task. Never batch updates.
 
-- **Status:** in-progress
-- **Branch:** `feat/list-content` (Slice 2). Slice 1 shipped on `feat/server-skeleton`,
-  merged as PR #2 (`f4d32fd`).
+- **Status:** complete. All 10 tasks done, both slices merged, every acceptance criterion
+  in `design.md` met.
+- **Branch:** both slices merged. Slice 1 on `feat/server-skeleton` → PR #2 (`f4d32fd`);
+  Slice 2 on `feat/list-content` → PR #3 (`bc66cef`).
 - **Spec:** `design.md` · **ADR:** `docs/adr/001-server-runtime-and-shape.md`
-- **Current task:** 10 — deploy and connect from three clients. **Human work, not an
-  agent's:** it creates a billable machine and needs `MCP_SECRET_PATH`. Tasks 5–9 are done
-  and green.
+- **The question this spec existed to answer:** does a custom connector work in the Claude
+  mobile app? **Yes.** Verified on Claude Code, claude.ai and mobile — see the 2026-07-31
+  Task 10 session note.
 
 ---
 
@@ -46,7 +47,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 7 | `src/tools/list-content.ts` + `src/tools/index.ts` — build the `McpServer`, register the tool, `createMcpHandler` | 6 | T-10, T-15 | 2 | `done` | 1/3 | (this commit) |
 | 8 | Mount the handler at `/{secret}/mcp` in `src/index.ts` | 7 | T-08, T-09 | 2 | `done` | 1/3 | (this commit) |
 | 9 | Deep health runs the real site check; 503 on failure | 5, 8 | T-16, T-17 | 2 | `done` | 1/3 | (this commit) |
-| 10 | Deploy; connect from Claude Code, claude.ai, and mobile; read a writing on each | 9 | — | 2 | `pending` | 0/3 | — |
+| 10 | Deploy; connect from Claude Code, claude.ai, and mobile; read a writing on each | 9 | — | 2 | `done` | 0/3 | deployed, no code |
 
 ### Notes on specific tasks
 
@@ -93,8 +94,12 @@ Each slice ships independently: summary → human review → PR → CI review.
 
 | Slice | Contains | Files | State | PR |
 |---|---|---|---|---|
-| 1 | Tasks 1–4 — deployed server, health routes, secret path | 10 | `in review` | — |
-| 2 | Tasks 5–10 — MCP handler, `list_content`, deep health check | 5 | `pending` | — |
+| 1 | Tasks 1–4 — deployed server, health routes, secret path | 10 | `merged` | #2 (`f4d32fd`) |
+| 2 | Tasks 5–10 — MCP handler, `list_content`, deep health check | 5 | `merged` | #3 (`bc66cef`) |
+
+**Slice 2 merged with Task 10 unfinished, deliberately.** The code shipped; the
+three-client experiment it exists to run is human work and happens against the deployed
+server, not in the PR.
 
 **Slice 1 exceeds the 5–7 file limit at 10 files.** Eight are config with no logic and the
 whole slice is under 200 lines. Justified in `design.md` → Files touched. **The reviewer
@@ -125,6 +130,71 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-31 — Task 10 done. The mobile connector works. Spec complete
+
+**The custom connector works in the Claude mobile app.** That is the riskiest unknown in
+`mcp-design.md`, the stated premise of this project (`design.md` Risk 4), and the reason
+ADR-001 reordered the whole build plan to get here in two slices instead of six tools.
+It was worth answering first, and the answer is yes.
+
+Verified by the user against `https://mcp.ashutoshverma.dev/{secret}/mcp`:
+
+| # | Slice 2 acceptance criterion | Result |
+|---|---|---|
+| 1 | Connector added in Claude Code, claude.ai **and** mobile | met — all three |
+| 2 | "list my published writing" returns the real posts on each | met — all three |
+| 3 | Site unreachable → actionable sentence, still HTTP 200 | met by T-13; not re-run by hand against the live site |
+| 4 | `/{secret}/health` → 503 naming `site` when the site is down | met by T-17; not re-run by hand |
+| 5 | The mobile answer is written down either way | met — this note |
+
+- **Cold start is not a problem in practice.** No client timed out or gave up on the ~5.7s
+  wake. **This is the user's qualitative report, not a measured number** — nobody timed a
+  real tool call paying a site fetch on top, and the Task 4 note's request for that
+  measurement is therefore still technically unanswered. It is no longer worth chasing:
+  the reason to want the number was to decide whether to spend money on it, and that
+  decision is now made.
+- **Nothing was built for the cold start, and nothing should be.** Both candidate changes
+  — deleting `fly.toml`'s `[[http_service.checks]]` block, or `min_machines_running = 1`
+  at ~$3/month — are **rejected, not deferred.** design.md Risk 3 said to record the
+  number and build nothing unless it actually bit. It did not bite. The `ponytail:` note
+  in `fly.toml` about `grace_period` stays as a pointer for anyone who revisits this, but
+  there is no longer a reason to.
+- **What this does not prove.** Three clients on one network on one day, by one user, on
+  the happy path. The failure paths (criteria 3 and 4) are covered by tests, not by a
+  hand-run against a genuinely down site.
+
+### 2026-07-31 — Custom hostname live; Slice 2 deployed
+
+Slice 2 merged as PR #3 (`bc66cef`) and was deployed with `fly deploy --ha=false`. One
+machine, 52 MB image, exit 0.
+
+- **`mcp.ashutoshverma.dev` now resolves to Fly.** This closes the item the 2026-07-30
+  Task 4 note left open — that entry's acceptance table says the custom hostname was not
+  set up, and it is now, so **Slice 1 acceptance criterion 1 is met on the intended
+  domain.** `ashutoshverma-mcp.fly.dev` still works; both reach the same machine.
+- **The DNS is at Vercel, not the registrar** — `ashutoshverma.dev` uses
+  `ns1/ns2.vercel-dns.com`. The record is a **CNAME `mcp` → `ashutoshverma-mcp.fly.dev`**,
+  added in the Vercel dashboard. `fly certs add` then issued a Let's Encrypt certificate
+  and verified it on the first check.
+  **Fly's own output recommends `A`/`AAAA` records instead. They were not added and are
+  not needed** — the CNAME verified, and Fly's shared IPv4 routes by SNI. Recorded because
+  the next person to read that output will be tempted to follow it.
+- **Verified live on the new hostname:** `GET /health` → 200, and `/some-typo-path` → 404
+  `text/plain;charset=utf-8`, so Slice 1's single-404 shape survives the domain change.
+- **Cold start re-measured after mounting the MCP handler: 5.75s cold, 0.74s warm.**
+  Unchanged from Slice 1's ~5.4–5.7s, so the handler costs nothing at startup.
+  **This is still `GET /health`, which does no I/O** — the "real tool call with a site
+  fetch on top" measurement the Task 4 note asked for has *not* been taken. It needs a
+  real MCP call, so it happens when Task 10 runs.
+- **Nothing was built for the cold start,** per design.md Risk 3. The two options were put
+  to the user: delete `fly.toml`'s `[[http_service.checks]]` block (free, tests the
+  untested `grace_period` hypothesis already recorded in that file) or set
+  `min_machines_running = 1` (~$3/month, removes the cold start entirely). **The prior
+  question is whether any of the three clients actually times out at 5.7s — Task 10
+  answers that, and if none do, neither change is worth making.**
+- **Connector URL is `https://mcp.ashutoshverma.dev/{secret}/mcp`.** Task 10 ran against
+  it — see the note above.
 
 ### 2026-07-31 — Tasks 8 and 9 done, in one commit
 
