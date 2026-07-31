@@ -1,8 +1,18 @@
 # ADR-002: GitHub access and the workshop repo
 
 - **Date:** 2026-07-31
-- **Status:** accepted
+- **Status:** accepted — **two sections superseded by
+  [ADR-003](003-skills-and-templates-are-separate.md)**
 - **Deciders:** Ashutosh Verma
+
+> **Superseded in part, 2026-07-31.** *Skill storage* and *The workshop repo* → `skills/`,
+> and *The tool*, are replaced by ADR-003: skills and templates are separate directories of
+> flat files, no skill carries both halves, and `be-human` is bundled into every named
+> answer. The text below is left exactly as decided — it is the record of why
+> directory-per-skill looked right before the content existed.
+>
+> **Everything else here stands:** the credential, the client, the health check, the slice
+> scope, and the `drafts/` · `posts/published/` · `archive/` paths.
 
 ## Context
 

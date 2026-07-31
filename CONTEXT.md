@@ -57,7 +57,9 @@ inventing a synonym, use the term here instead — or propose adding one.
 | **publish gate** | The merge button. Deliberately unreachable by the model | A confirmation prompt |
 | **revise** | The explicit flag needed to touch an already-published slug | An edit to a draft |
 | **slug** | The kebab-case URL segment. Immutable once published | A title |
-| **skill** | Voice and structure instructions plus its template, served as one unit | An MCP prompt |
+| **skill** | Rules for drafting one kind of content. A file in `workshop/skills/` | An MCP prompt, or a template |
+| **template** | The structure one kind of content goes into. A file in `workshop/templates/` | A skill — it carries no rules |
+| **voice** | `be-human` — the author's tone and style. Served with every skill and template | One skill among several |
 | **lazy reconciliation** | Checking on read whether a draft's PR merged, then archiving it | A webhook or cron |
 | **portfolio** | The public site repo. The server opens PRs, never commits to main | This repo |
 | **workshop** | The private repo holding drafts, skills, templates, post archive | This repo |
@@ -131,7 +133,9 @@ Things we depend on that we do not control.
   **A custom connector works in the Claude mobile app**, verified on all three clients.
   That was the riskiest unknown in the whole plan and it is answered
 - **Next:** GitHub arrives — a fine-grained token, the private `workshop` repo, and
-  `get_skill`. See [ADR-002](docs/adr/002-github-access-and-workshop.md)
+  `get_skill`. See [ADR-002](docs/adr/002-github-access-and-workshop.md) and
+  [ADR-003](docs/adr/003-skills-and-templates-are-separate.md), which replaced the
+  `workshop` layout once the real content existed
 
 ---
 

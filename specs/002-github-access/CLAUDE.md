@@ -3,7 +3,9 @@
 Feature-specific instructions. Read this **first**, before `design.md`.
 
 - **Spec:** `specs/002-github-access/`
-- **Source ADR:** `docs/adr/002-github-access-and-workshop.md`
+- **Source ADR:** `docs/adr/002-github-access-and-workshop.md`, amended by
+  `docs/adr/003-skills-and-templates-are-separate.md` — **read 003 too.** It replaced the
+  `workshop` layout and `get_skill`'s contract after Slice 1 shipped.
 - **Branch:** `feat/github-access`
 - **Workflow:** [`SPEC-WORKFLOW.md`](../../SPEC-WORKFLOW.md) — the loop, retry limits, and
   file ownership rules apply here in full.
@@ -14,9 +16,9 @@ Feature-specific instructions. Read this **first**, before `design.md`.
 
 The server's first contact with GitHub. A fine-grained personal access token reaches two
 repos through Bun's `fetch`; the deep health check reports whether that works; and one new
-tool, `get_skill`, pulls a skill's instructions and template out of the private `workshop`
-repo. Its job is to make drafting on a phone produce something that sounds like the author
-rather than generic LinkedIn voice.
+tool, `get_skill`, pulls drafting rules and templates out of the private `workshop` repo.
+Its job is to make drafting on a phone produce something that sounds like the author rather
+than generic LinkedIn voice.
 
 ---
 
@@ -92,9 +94,18 @@ repo the token cannot see. Never write an error message that states "this skill 
 exist" as a certainty when a bad token produces the identical response. Say what is true:
 the path could not be read.
 
-**Both halves of a skill, or neither.** If `template.mdx` is missing, that is an error.
-Never return instructions alone. A model given voice rules and no template invents one, and
-the invented one ships to the site.
+**The voice, or nothing.** `skills/be-human.md` comes back with every named answer. If it
+is missing, that is an error — never return a template or a rules file without it. A model
+given structure and no voice writes something correctly shaped that sounds like nobody, and
+unlike a missing file, nobody notices.
+
+**Resolve names from the listing. Never guess a path.** `get_skill("writing")` lists
+`skills/` and `templates/` and matches on the basename, so `.md` and `.mdx` both work and
+an unknown name already holds the lists it needs for the error message. Building
+`templates/${name}.mdx` by hand is how this starts 404-ing on a file that exists.
+
+**`skills/` is checked before `templates/`.** Only matters if one name is in both, which is
+not defended against. See `design.md` → Edge cases.
 
 **Errors are returned, not thrown.** A tool that fails returns an error result with a
 sentence the model can act on, and the HTTP response is still 200.
@@ -102,7 +113,8 @@ sentence the model can act on, and the HTTP response is still 200.
 **The tool description is specified, not yours to invent.** `design.md` → Approach → The
 tool description holds the exact text. Two rules behind it: never name a tool that is not
 registered, and never blur `writing` and `post` — they are different things in
-`CONTEXT.md`.
+`CONTEXT.md`. Note that `linkedin-post` and `twitter-post` are both kinds of `post`, and
+that `writing` and `project` name templates, not skills.
 
 **Facts already established — do not re-derive them:**
 
@@ -111,8 +123,14 @@ registered, and never blur `writing` and `post` — they are different things in
   also holds `Portfolio` (a 2025 GSAP site) and `Portfolio2` — do not guess from the docs.
   Keep the domain word `portfolio` in the `Repo` type and in every message; only
   `repoNames` maps it to `"Portfolio-new"`.
-- `workshop` exists and holds `skills/linkedin-post/` and `skills/writing/`, each with
-  `instructions.md` and `template.mdx`.
+- **`workshop` exists but is EMPTY** — no commits at all, verified 2026-07-31. The token
+  reads it fine (metadata 200, `private: true`); there is simply nothing in it. P-1 is
+  unmet and Task 3 is blocked on it. Once filled, per ADR-003, it holds
+  `skills/{be-human,linkedin-post,twitter-post}.md` and
+  `templates/{writing,project}.mdx`.
+- **`Accept: application/vnd.github.raw` works** — verified live 2026-07-31, 200 with
+  `content-type: application/vnd.github.raw` and the real bytes. No base64 decoder exists
+  or is needed. Listings carry `name` and `type`, `type` being `"dir"` or `"file"`.
 - The GitHub contents endpoint is `GET /repos/{owner}/{repo}/contents/{path}`. A directory
   returns an array of entries carrying `name` and `type` (`"file" | "dir"`).
 - `zod` is v4 in this repo. `@modelcontextprotocol/server@2.0.0` wants `inputSchema` as a
@@ -144,5 +162,7 @@ registered, and never blur `writing` and `post` — they are different things in
 - **Don't add a cache, a retry, or a rate limiter.** 15 calls a week against 5,000 an hour.
 - **Don't build anything that watches the token's expiry.** ADR-002 gave that up knowingly
   and wrote down why. The health check is the whole answer.
-- **Don't write a base64 decoder** unless Task 2 proves the raw `Accept` header does not
-  work — and if it does not, record that in `design.md` in the same commit.
+- **Don't write a base64 decoder.** Task 2 proved the raw `Accept` header works.
+- **Don't build a `skills/{name}/` directory read.** ADR-003 removed it. Flat files.
+- **Don't make `be-human` optional, and don't fall back when it is missing.** A silent
+  fall-back is the one failure here that ships bad output without anyone noticing.

@@ -34,7 +34,7 @@ slice they gate can be signed off.
 
 | # | Prerequisite | Gates | State |
 |---|---|---|---|
-| P-1 | `workshop` exists, private, with `skills/linkedin-post/` and `skills/writing/`, each holding `instructions.md` and `template.mdx` | Slice 2 | **NOT met** — reopened 2026-07-31 in Task 2. The repo exists and the token reads it (metadata 200, `private: true`), but it has **no commits**: `size: 0`, and `contents/` answers 404 "This repository is empty." There is no `skills/` yet. Blocks Slice 2 and Task 3. |
+| P-1 | `workshop` exists, private, and **has commits**, holding `skills/be-human.md`, `skills/linkedin-post.md`, `skills/twitter-post.md`, `templates/writing.mdx`, `templates/project.mdx` (ADR-003) | Slice 2, **Task 3** | **NOT met** — reopened 2026-07-31 in Task 2. The repo exists and the token reads it (metadata 200, `private: true`), but it has **no commits**: `size: 0`, and `contents/` answers 404 "This repository is empty." Blocks Slice 2 and Task 3. |
 | P-2 | Fine-grained PAT, scoped to `Portfolio-new` and `workshop`, Contents: read-only, set with `fly secrets set` | Slice 1, Task 3 | **done** — 2026-07-31, scope confirmed |
 
 ---
@@ -49,8 +49,8 @@ In dependency order. Each task must be independently testable and map to test ID
 | 1 | `GITHUB_TOKEN` in the env schema, and in `.env.example` by name only | — | T-01, T-02, T-03 | 1 | `done` | 1/3 | (this commit) |
 | 2 | `src/lib/github.ts` — `createGithub`, `listDirectory`, `readFile`, `GithubNotFoundError` — plus the `github` deep check wired into `src/index.ts` | 1 | T-04, T-05, T-06 | 1 | `done` | 1/3 | (this commit) |
 | 3 | Set the token on Fly, deploy, verify `checks.github` against the **real** repos | 2, P-2, **P-1** | — (manual) | 1 | `blocked` | 0/3 | — |
-| 4 | `skillListSchema` in `lib/github.ts`, and `getSkill`'s list mode | 2 | T-07, T-08, T-09, T-14 | 2 | `pending` | 0/3 | — |
-| 5 | `getSkill`'s named mode and its error paths | 4 | T-10, T-11, T-12, T-13 | 2 | `pending` | 0/3 | — |
+| 4 | `entryListSchema` in `lib/github.ts`, and `getSkill`'s list mode over `skills/` and `templates/` | 2 | T-07, T-08, T-09, T-14 | 2 | `pending` | 0/3 | — |
+| 5 | `getSkill`'s named mode — resolve from the listing, bundle the voice — and its error paths | 4 | T-10, T-10b, T-10c, T-10d, T-11, T-12, T-13 | 2 | `pending` | 0/3 | — |
 | 6 | `src/tools/get-skill.ts` and its registration in `src/tools/index.ts` | 5 | T-15, T-16, T-17 | 2 | `pending` | 0/3 | — |
 | 7 | Verify `get_skill` on Claude Code, claude.ai, and the mobile app | 6 | — (manual) | 2 | `pending` | 0/3 | — |
 
@@ -81,6 +81,11 @@ the check fail, put it back.
 **Tasks 4 and 5 split one service** so neither exceeds a sane attempt budget. Task 4 ships
 `getSkill` answering only the no-name case; Task 5 adds the named branch. The file is
 touched twice on purpose.
+
+**Tasks 4–6 were re-scoped by ADR-003 before any of them started**, so this is a plan
+change, not rework. The shape they build now: two flat directories, names resolved from the
+listing rather than by building a path, and `skills/be-human.md` bundled into every named
+answer. Read ADR-003 and `design.md` → Approach → `get_skill` before starting Task 4.
 
 ### Attempt budget
 
@@ -122,9 +127,8 @@ on an attempt budget. No code attempt was made or needed.
   `GET /repos/Ashutosh6393/workshop/contents/` answers 404 "This repository is empty."
 - **Consequence:** `checks.github` is `unreachable` on a healthy setup, so Slice 1
   acceptance criterion 2 cannot be observed and Slice 2 has nothing to read.
-- **Unblocks when:** `skills/linkedin-post/` and `skills/writing/`, each with
-  `instructions.md` and `template.mdx`, are pushed to `workshop` — which P-1 already
-  required. Then re-run Task 3.
+- **Unblocks when:** the five files ADR-003 specifies are pushed to `workshop` — which P-1
+  already required. Then re-run Task 3.
 - **Not a code change.** Nothing in `lib/github.ts` or the health check needs to differ.
 
 ---
@@ -145,6 +149,20 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-31 — ADR-003, spec amended
+
+- **What changed:** the real `workshop` content is five files that do not pair up —
+  `be-human`, `linkedin-post` and `twitter-post` are rules with no template; `writing` and
+  `project` are templates with no rules of their own. ADR-002's "one directory per skill,
+  both halves or neither" cannot hold, so ADR-003 supersedes those two sections.
+- **New shape:** `skills/` and `templates/` as flat files; `get_skill` serves both; names
+  resolve from the listing so the extension is never guessed; `be-human` rides along with
+  every named answer, and its absence is a hard error.
+- **Cost:** none in code. Slice 2 had not started, so this is a plan change. Slice 1 is
+  untouched — `lib/github.ts` never knew the layout. `design.md` test cases T-07…T-17 were
+  rewritten and three added (T-10b, T-10c, T-10d).
+- **Still blocked on P-1,** now against the new file list.
 
 ### 2026-07-31 — Task 2
 

@@ -7,9 +7,13 @@ described here.
 > [`docs/adr/002-github-access-and-workshop.md`](../../docs/adr/002-github-access-and-workshop.md).
 > This document assumes that decision is made and describes how it lands in the codebase.
 
-- **Source ADR:** `docs/adr/002-github-access-and-workshop.md`
+- **Source ADR:** `docs/adr/002-github-access-and-workshop.md`, amended by
+  [`docs/adr/003-skills-and-templates-are-separate.md`](../../docs/adr/003-skills-and-templates-are-separate.md)
 - **Status:** approved
 - **Approved by:** Ashutosh Verma on 2026-07-31
+- **Amended:** 2026-07-31, after Slice 1 — ADR-003 replaced the `workshop` layout and
+  `get_skill`'s contract. Slice 2 had not started, so nothing was rebuilt. Slice 1 is
+  untouched.
 
 > Implementation does not start until Status is `approved`.
 
@@ -20,12 +24,12 @@ described here.
 The server gains a second external system. A fine-grained personal access token, read
 through Bun's `fetch`, lets it reach two GitHub repos. `GET /{secret}/health` reports
 `github` alongside `site` and returns 503 when GitHub cannot be reached. One new tool,
-`get_skill`, reads the voice-and-structure instructions and the template for a named skill
-out of `workshop`, and lists the available skills when called with no name.
+`get_skill`, reads the drafting rules and the templates out of `workshop`, and lists what
+is available when called with no name.
 
 After this ships, a model on a phone can ask "what skills do I have" and then "load the
-linkedin-post skill" and get back real text from a private repo. Nothing is written to
-GitHub — the token is read-only.
+linkedin-post skill" and get back real text from a private repo — always including the
+author's voice. Nothing is written to GitHub — the token is read-only.
 
 ## Why now
 
@@ -45,7 +49,7 @@ down to the credential plus `get_skill`.
 - `src/lib/github.ts` — the GitHub reader: two methods, `fetch`, no new dependency
 - The `github` deep-health check, covering **both** repos
 - `get_skill({ name? })` — service, tool, registration, and its specified description
-- The `skills/{name}/` read path: `instructions.md` and `template.mdx`
+- The `skills/` and `templates/` read paths (ADR-003)
 
 ### Out of scope
 
@@ -78,7 +82,7 @@ Neither can be proved by a test inside this repo, and the loop cannot finish wit
 
 | # | Prerequisite | Owner | State |
 |---|---|---|---|
-| P-1 | Private `workshop` repo exists, holding `skills/linkedin-post/` and `skills/writing/`, each with `instructions.md` and `template.mdx` | Ashutosh | **done** — 2026-07-31 |
+| P-1 | Private `workshop` repo exists **and has commits**, holding `skills/be-human.md`, `skills/linkedin-post.md`, `skills/twitter-post.md`, `templates/writing.mdx`, `templates/project.mdx` (ADR-003) | Ashutosh | **not met** — the repo exists and the token reads it, but it has no commits at all. See Risk 7 |
 | P-2 | Fine-grained PAT issued, scoped to `Portfolio-new` and `workshop`, **Contents: read-only**, set on Fly with `fly secrets set` | Ashutosh | **done** — 2026-07-31, scope confirmed |
 
 **P-2 never passes through an agent or a file.** Set by hand, straight into Fly's secret
@@ -216,48 +220,78 @@ The cost is stated plainly: **if GitHub ever changes the fine-grained token pref
 server refuses to boot.** That is a loud, immediate, one-line fix, which is the failure
 mode worth having.
 
+### The `workshop` layout
+
+Per [ADR-003](../../docs/adr/003-skills-and-templates-are-separate.md). One file per thing,
+two directories, because skills and templates vary independently — no skill has a template
+and no template has rules of its own:
+
+```
+workshop/
+  skills/
+    be-human.md         voice and style — the base layer, bundled into every named answer
+    linkedin-post.md
+    twitter-post.md
+  templates/
+    writing.mdx
+    project.mdx
+```
+
+`writing` and `project` are the [CONTEXT.md](../../CONTEXT.md) words for what the templates
+produce. `.mdx` because that is what the site renders, so the file edited on a phone is the
+file that ships.
+
 ### `get_skill` — what it does
 
 Two modes, distinguished by whether `name` was given.
 
-**No name** → one call, `listDirectory("workshop", "skills")`. Returns the directory names.
-Entries of type `file` are skipped, so a `README.md` dropped into `skills/` is not offered
-as a skill.
+**No name** → two calls in parallel, `listDirectory("workshop", "skills")` and
+`listDirectory("workshop", "templates")`. Returns both lists, each name stripped of its
+extension. Entries of type `dir` are skipped, and so is anything that is not `.md` or
+`.mdx` — a `.DS_Store` is not a skill.
 
-**A name** → two calls, in parallel:
+**A name** → two round trips.
 
 ```
-skills/{name}/instructions.md
-skills/{name}/template.mdx
+round 1 (3 in parallel)   list skills/ · list templates/ · read skills/be-human.md
+round 2 (1)               read whichever path the name resolved to
 ```
 
-**Both must succeed.** A skill returned without its template is not a partial success, it
-is a trap: a model handed voice rules and no template will invent a template, and the
-invented one ships. ADR-002 is explicit — "a template with no instructions is a mystery,
-and a skill without its template is incomplete."
+Resolving against the listing rather than guessing a path is what makes the extension a
+non-issue and what makes the error message free — an unknown name already has both real
+lists in hand and never needs a third call to build its answer. When the name **is**
+`be-human`, round 2 is skipped and it is returned once, not twice.
 
-On a 404 for a named skill, the service makes **one extra call** to list the available
-skills, so the error names what does exist. This is the most likely wrong call a model
-makes, and it is the difference between recovering in the same turn and guessing again.
-That call happens only on the error path.
+**The voice always comes back.** `be-human.md` is attached to every named answer, and this
+is the part worth protecting. A model handed the writing template and no voice produces a
+correctly-structured document that sounds like nobody — which is the failure
+`mcp-design.md` predicts and the whole reason this tool exists. ADR-002 guarded against
+half a skill; ADR-003 replaces that with a guarantee about the half that mattered.
 
-> **The call count beats what the ADR predicted.** ADR-002 accepted "three API calls per
-> `get_skill`". Reading the two paths directly needs no separate existence check, so the
-> real cost is **two on the happy path**, one for a list, three only on a miss.
+If `be-human.md` is missing, that is an **error**, not a degraded answer. Returning
+structure without voice silently is exactly the outcome the guarantee exists to prevent.
+
+> **The call count.** ADR-002 budgeted three per `get_skill`. The real cost is **two for a
+> list, four for a named skill across two round trips**, and the error path adds nothing.
 
 ### The result shape
 
 ```ts
 type Result =
-  | { ok: true; skills: string[] }
-  | { ok: true; instructions: string; template: string }
+  | { ok: true; skills: string[]; templates: string[] }
+  | { ok: true; voice: string; instructions: string }
+  | { ok: true; voice: string; template: string }
   | { ok: false; error: string };
 ```
 
-No discriminator tag. The two success shapes have no field in common, so `"skills" in
-result` narrows them and TypeScript is satisfied without inventing a vocabulary word. A tag
-named `kind` would be actively harmful here — `kind` already means
-`project | writing | post` in [CONTEXT.md](../../CONTEXT.md) and must not be overloaded.
+No discriminator tag. The three success shapes are told apart by which key is present —
+`"skills" in result`, then `"template" in result` — and TypeScript is satisfied without
+inventing a vocabulary word. A tag named `kind` would be actively harmful here: `kind`
+already means `project | writing | post` in [CONTEXT.md](../../CONTEXT.md) and must not be
+overloaded.
+
+`voice` is `be-human.md`'s text. It is named for what it carries rather than for the file
+it came from, so renaming the file later does not rename a field in the tool's contract.
 
 ### The tool description
 
@@ -268,18 +302,19 @@ The rule from spec 001 holds: **a description may only mention tools that are re
 `list_content` is registered, so it may be named. Nothing else may.
 
 ```
-Get a skill: the voice and structure rules for drafting one kind of
-content, together with the template it goes into.
+Get a skill: the rules for drafting one kind of content, or the template
+one kind of content goes into. Both come with the author's voice.
 
-With no name, returns the list of available skills.
-With a name, returns that skill's instructions and its template together.
+With no name, returns the available skills and templates.
+With a name, returns that skill's rules or that template — always
+together with the voice they are meant to be written in.
 
-Call this before drafting anything. The instructions carry voice rules
-that are not otherwise in your context, and drafting without them
-produces generic output that reads nothing like the author.
+Call this before drafting anything. The voice is not otherwise in your
+context, and drafting without it produces generic output that reads
+nothing like the author.
 
-Skills are private. They are separate from the published content that
-list_content returns.
+Skills and templates are private. They are separate from the published
+content that list_content returns.
 ```
 
 The third paragraph is doing the real work. `mcp-design.md` names the exact failure to
@@ -327,7 +362,7 @@ it.
 |---|---|---|
 | Environment, at boot | `envSchema`, extended | `src/lib/env.ts` |
 | Tool arguments | `z.object({ name: z.string().optional() })` | `src/tools/get-skill.ts` |
-| GitHub directory listings | `skillListSchema` | `src/lib/github.ts` |
+| GitHub directory listings | `entryListSchema` | `src/lib/github.ts` |
 | GitHub file bodies | **none** | — |
 
 The last row is deliberate. `readFile` returns `response.text()`, which is already `string`.
@@ -403,26 +438,34 @@ Three rules carried from [testing.md](../../.claude/rules/testing.md), all uncha
 | T-04 | Deep health passes | http | Fake github reaching both repos, site up → `GET /{secret}/health` → 200, `checks.github` is `ok` **and** `checks.site` is still `ok` |
 | T-05 | Deep health fails loudly on GitHub | http | Fake github throwing, site up → `GET /{secret}/health` → 503, body names `github` as the failed check, `site` still `ok` |
 | T-06 | Both repos are checked, not one | http | Fake github succeeding on `workshop`, throwing on `portfolio` → `GET /{secret}/health` → 503, `checks.github` is `unreachable` |
-| T-07 | Listing skills | unit | Fake returning two `dir` entries → `getSkill({github}, {})` → both names present |
-| T-08 | Loose files in `skills/` are not skills | unit | Fake returning one `dir` and one `file` entry (`README.md`) → `getSkill({github}, {})` → only the directory name; `README.md` absent |
-| T-09 | No skills yet | unit | Fake returning `[]` → `getSkill({github}, {})` → an `ok` result with an empty list, **not** an error |
-| T-10 | Fetching a named skill | unit | Fake returning two distinct file bodies → `getSkill({github}, {name:"writing"})` → both `instructions` and `template` present, non-empty, and not swapped |
-| T-11 | Unknown skill name | unit | Fake 404-ing on `instructions.md`, listing two skills → error result naming the bad name **and** listing the two that exist |
-| T-12 | Half a skill is a failure | unit | Fake returning `instructions.md` but 404-ing on `template.mdx` → error result naming the missing template; **no partial success, no invented template** |
+| T-07 | Listing skills and templates | unit | Fake listing `be-human.md`, `linkedin-post.md` and `writing.mdx` → `getSkill({github}, {})` → `skills` holds both skill names, `templates` holds `writing`; **extensions stripped from every name** |
+| T-08 | Only markdown files are offered | unit | Fake listing one `.md` `file`, one `.DS_Store` `file`, and one `dir` → `getSkill({github}, {})` → only the `.md` name; the other two absent |
+| T-09 | Nothing there yet | unit | Fake returning `[]` for both → `getSkill({github}, {})` → an `ok` result with two empty lists, **not** an error |
+| T-10 | Fetching a named skill | unit | Fake listing `linkedin-post.md` and returning distinct bodies → `getSkill({github}, {name:"linkedin-post"})` → `instructions` and `voice` both present, non-empty, and **not swapped**; no `template` key |
+| T-10b | Fetching a named template | unit | Fake listing `writing.mdx` → `getSkill({github}, {name:"writing"})` → `template` and `voice` both present and not swapped; **no `instructions` key** |
+| T-10c | The extension is never guessed | unit | Fake listing the template as `writing.md`, not `.mdx` → `getSkill({github}, {name:"writing"})` → resolves and returns it |
+| T-10d | Asking for the voice itself | unit | `getSkill({github}, {name:"be-human"})` → returned once, as `instructions`; `be-human.md` read **exactly once** |
+| T-11 | Unknown name | unit | Fake listing two skills and one template, name matching neither → error result naming the bad name **and** listing what does exist, in one turn and with no extra call |
+| T-12 | The voice is missing | unit | Fake resolving the name but 404-ing on `skills/be-human.md` → error result naming the missing voice; **no partial success, no structure returned without it** |
 | T-13 | GitHub is down | unit | Fake throwing a non-404 error → error **result** naming GitHub, nothing thrown |
 | T-14 | Listing comes back in an unexpected shape | unit | Fake returning `[{nope:1}]` → error result, no crash, no `undefined` leaking into the response |
 | T-15 | The tool is advertised | mcp | — → `tools/list` → includes `get_skill` with a non-empty description and an **optional** `name` argument; `list_content` still listed |
-| T-16 | The tool answers through the handler | mcp | `tools/call get_skill {name:"writing"}` → 200, text content carrying both the instructions and the template |
+| T-16 | The tool answers through the handler | mcp | `tools/call get_skill {name:"linkedin-post"}` → 200, text content carrying both the rules and the voice |
 | T-17 | A tool failure is a tool result | mcp | `tools/call get_skill {name:"nope"}` → `isError: true` with an actionable sentence; **HTTP status still 200** |
 
 ### Edge cases and failure modes
 
-- **Empty `skills/`.** A valid answer, not an error — T-09. The tool says so in words, the
-  same way `list_content` answers an empty catalogue.
-- **A `README.md` inside `skills/`.** Skipped by type, not by name — T-08. Filtering on a
-  filename would break the day a second loose file appears.
-- **A skill directory with only one of the two files.** An error, never a partial result —
-  T-12. This is the one edge case with a genuinely bad outcome if it half-succeeds.
+- **Empty `skills/` and `templates/`.** A valid answer, not an error — T-09. The tool says
+  so in words, the same way `list_content` answers an empty catalogue.
+- **A `.DS_Store` or a stray directory inside `skills/`.** Skipped by type and extension,
+  never by name — T-08. A name-based blocklist breaks the day a second stray file appears,
+  and ADR-003 accepted that a genuine stray `.md` will be offered as a skill.
+- **A missing `be-human.md`.** An error, never a partial result — T-12. This is the one
+  edge case with a genuinely bad outcome if it half-succeeds: structure with no voice is
+  the failure the tool exists to prevent, and it fails silently unless it is made loud.
+- **A name that is both a skill and a template.** Not defended against. One author, five
+  files; if it ever happens the skill wins because `skills/` is checked first, and that is
+  recorded here rather than built into a guard.
 - **A mis-scoped token looks exactly like a missing file** (GitHub answers 404, not 403,
   for private repos). Mitigated at boot by the format check, not at read time. Risk 1.
 - **A file over 1 MB.** Not reachable with a skill, and the raw `Accept` header removes the
@@ -441,7 +484,8 @@ Three rules carried from [testing.md](../../.claude/rules/testing.md), all uncha
 | ~~**2. The site repo's real name is unverified.**~~ **Closed 2026-07-31.** It is `Portfolio-new`, not `portfolio` — confirmed by its `ashutoshverma.dev` homepage and its `app/api/{writing,projects,schema.json}` tree. Three other `Portfolio*` repos exist on the account, so this was a real coin-flip and the docs would have lost it. | — | — |
 | ~~**2b. The token may be scoped to the wrong `Portfolio`.**~~ **Closed 2026-07-31.** The PAT names `Portfolio-new` and `workshop`, confirmed by the token's owner. Had it been scoped to `Portfolio`, the failure would have surfaced as a 404 and read as Risk 1 — which is why it was worth checking before Task 1 rather than discovering it in Task 3. | — | — |
 | ~~**3. `Accept: application/vnd.github.raw` is assumed, not verified.**~~ **Closed 2026-07-31, Task 2.** It holds. `GET /repos/Ashutosh6393/Portfolio-new/contents/package.json` with that header returned 200, `content-type: application/vnd.github.raw`, and the file's actual bytes — no base64 wrapper, no `content`/`encoding` envelope. The no-decode design stands as written. Directory listings were checked in the same pass: an array whose entries carry `name` and `type`, and `type` is `"dir"` or `"file"` exactly as assumed. | — | — |
-| **7. `workshop` is empty, so the `github` health check fails today.** Found in Task 2 against the live API: the repo exists and the token can see it (`private: true`, metadata 200) but holds no commits — `size: 0`, and `contents/` answers 404 "This repository is empty." | `checks.github` reports `unreachable` on a correctly-scoped token, and Task 3 cannot pass | **Not a code problem and nothing is built for it.** P-1 is unmet, not wrong: pushing `skills/` to `workshop` fixes it and is a prerequisite of Slice 2 regardless. Special-casing an empty repo would be complexity for a state that exists only until the first commit lands. Re-verify Task 3 after P-1 is genuinely satisfied. |
+| **7. `workshop` is empty, so the `github` health check fails today.** Found in Task 2 against the live API: the repo exists and the token can see it (`private: true`, metadata 200) but holds no commits — `size: 0`, and `contents/` answers 404 "This repository is empty." | `checks.github` reports `unreachable` on a correctly-scoped token, and Task 3 cannot pass | **Not a code problem and nothing is built for it.** P-1 is unmet, not wrong: pushing the five files in Approach → The `workshop` layout fixes it and is a prerequisite of Slice 2 regardless. Special-casing an empty repo would be complexity for a state that exists only until the first commit lands. Re-verify Task 3 after P-1 is genuinely satisfied. |
+| **8. `be-human.md` is a single point of failure.** Every named `get_skill` call reads it, and its absence is a hard error by design. | One missing or renamed file breaks every named call, not just one | Deliberate, and the alternative is worse: a silent fall-back returns structure with no voice, which is the exact failure the tool exists to prevent and the one nobody would notice. T-12 pins the loud behaviour. The error names the file, so the fix is obvious from the message. |
 | **4. The token expires silently, within a year.** Carried from ADR-002 → Tradeoffs. Nothing watches it. | The connector starts returning errors and nothing announced it | **Nothing is built for this, on purpose.** The `github` health check is the only thing that will ever say so. It was the App's real advantage and it was given up knowingly. Do not "fix" this inside the slice. |
 | **5. Rate limits.** 5,000 requests/hour for an authenticated token; this server makes ~15 tool calls a week at two calls each. | None | Stated so nobody builds a cache or a retry for it. Three orders of magnitude of headroom is not a design input. |
 | **6. Cold start now does more work.** The deep check goes from one outbound call to three. | Only affects `/{secret}/health`, which no tool call touches | The three run in parallel. No tool path got slower. Note the timing in Task 3 alongside the Slice 1 verification. |
@@ -465,11 +509,14 @@ Resolved during planning, recorded so they are not re-opened:
       `repoNames` in `lib/github.ts` knows the real name. See Approach → Owner and repo
       names.
 
-- [x] **2. What are the two files inside `skills/{name}/` called?** ADR-002 said
-      "instructions and template as two files" and never named them. Decided 2026-07-31:
-      **`instructions.md` and `template.mdx`**. `.mdx` on the template so the file edited
-      on a phone is the shape the site actually renders. `workshop` was created against
-      this layout.
+- [x] ~~**2. What are the two files inside `skills/{name}/` called?**~~ **Overtaken by
+      ADR-003, 2026-07-31.** The question assumed every skill has two files. None does:
+      `linkedin-post`, `twitter-post` and `be-human` are rules with no template, and
+      `writing` and `project` are templates with no rules. So there is no `skills/{name}/`
+      directory at all — `skills/` and `templates/` hold flat files, and the extension is
+      resolved from the listing rather than fixed by this spec. `.mdx` on the templates
+      survives, for the reason it was chosen: the file edited on a phone is the shape the
+      site renders. See Approach → The `workshop` layout.
 - [x] **3. What is the environment variable called?** `GITHUB_TOKEN`. No prefix, no
       namespace — there is one token and it will never be ambiguous.
 - [x] **4. Does the `github` check cover one repo or both?** Both. ADR-001's surviving deep
@@ -509,15 +556,19 @@ deploy changes, no edits to `list_content` or its description.**
 **Acceptance criteria**
 
 1. In Claude Code, claude.ai, **and** the mobile app: "what skills do I have" returns
-   `linkedin-post` and `writing`.
-2. "Load the linkedin-post skill" returns the real instructions and the real template from
-   `workshop`, both complete, in one response.
-3. Asking for a skill that does not exist returns a sentence naming the skills that do —
-   and the model retries correctly in the same turn without being told to.
-4. A skill directory missing its `template.mdx` produces an error, not a half-answer.
-5. Every failure above still returns HTTP 200.
+   `be-human`, `linkedin-post` and `twitter-post` as skills, and `writing` and `project` as
+   templates.
+2. "Load the linkedin-post skill" returns the real rules from `workshop` **and** the voice,
+   both complete, in one response.
+3. "Give me the writing template" returns the real template and the voice — and a draft
+   written from it sounds like the author, not like generic Markdown.
+4. Asking for a name that does not exist returns a sentence naming what does — and the
+   model retries correctly in the same turn without being told to.
+5. A `workshop` missing `skills/be-human.md` produces an error, not a half-answer.
+6. Every failure above still returns HTTP 200.
 
-**Test IDs:** T-07, T-08, T-09, T-10, T-11, T-12, T-13, T-14, T-15, T-16, T-17
+**Test IDs:** T-07, T-08, T-09, T-10, T-10b, T-10c, T-10d, T-11, T-12, T-13, T-14, T-15,
+T-16, T-17
 
 ---
 
