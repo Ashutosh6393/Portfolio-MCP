@@ -123,13 +123,15 @@ Things we depend on that we do not control.
 
 ## Current state
 
-- **Stage:** prototype — no server code yet
-- **Live:** not yet
-- **Users:** none yet
-- **Done:** Slice 0, the site prep, in the `portfolio` repo
-- **Next:** Slice 1 — skeleton, secret path, both `/health` routes, and one read tool
-  against the site's live JSON routes. Deployed to Fly and reachable from all three
-  clients. No GitHub yet — that's Slice 2
+- **Stage:** one tool live, five to go
+- **Live:** yes — `mcp.ashutoshverma.dev`, on Fly
+- **Users:** one, as designed
+- **Done:** Slice 0, the site prep, in the `portfolio` repo. Slice 1, the server skeleton
+  — secret path, both `/health` routes, and `list_content` reading the site's live JSON.
+  **A custom connector works in the Claude mobile app**, verified on all three clients.
+  That was the riskiest unknown in the whole plan and it is answered
+- **Next:** GitHub arrives — a fine-grained token, the private `workshop` repo, and
+  `get_skill`. See [ADR-002](docs/adr/002-github-access-and-workshop.md)
 
 ---
 
