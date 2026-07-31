@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createApp } from "./index";
+import type { Github, Repo } from "./lib/github";
 import type { Site } from "./lib/site";
 
 // T-04, T-05, T-06, T-07 — see specs/001-server-skeleton/design.md → Test cases.
@@ -8,7 +9,15 @@ import type { Site } from "./lib/site";
 
 const secret = "a".repeat(32);
 const wrongSecret = "b".repeat(32);
-const testEnv = { MCP_SECRET_PATH: secret, PORT: 3000 };
+// Test revision, 2026-07-31 — see Test revisions table in
+// specs/002-github-access/implementation.md. Spec 002 Task 1 adds GITHUB_TOKEN
+// to Env, so an environment without it no longer type-checks. Never a real
+// token (.claude/rules/security.md); no route below reads its value.
+const testEnv = {
+	MCP_SECRET_PATH: secret,
+	GITHUB_TOKEN: `github_pat_${"x".repeat(22)}`,
+	PORT: 3000,
+};
 
 // Test revision, 2026-07-31 — see Test revisions table in implementation.md.
 // `createApp`'s `deps` parameter is now required. T-04..T-07 were written when
@@ -20,9 +29,25 @@ const fakeSite: Site = {
 	},
 };
 
+// Test revision, 2026-07-31 — see Test revisions table in
+// specs/002-github-access/implementation.md. Spec 002 Task 2 adds `github` to
+// createApp's deps, so every call below passes `testDeps` instead of a bare
+// `{ site }`. Same reason spec 001 made `deps` required: forgetting to inject
+// is a compile error, never a live call to api.github.com from a test run.
+const fakeGithub: Github = {
+	async listDirectory() {
+		return [];
+	},
+	async readFile() {
+		return "";
+	},
+};
+
+const testDeps = { site: fakeSite, github: fakeGithub };
+
 describe("GET /health", () => {
 	test("T-04: is cheap and public — 200, and makes no outbound fetch", async () => {
-		const app = createApp(testEnv, { site: fakeSite });
+		const app = createApp(testEnv, testDeps);
 		const originalFetch = globalThis.fetch;
 		let fetchWasCalled = false;
 		// `typeof fetch` is a call signature plus a `preconnect` static method (Bun-specific).
@@ -50,7 +75,7 @@ describe("GET /health", () => {
 
 describe("GET /{secret}/health", () => {
 	test("T-05: deep health is reachable behind the secret and returns a checks object", async () => {
-		const app = createApp(testEnv, { site: fakeSite });
+		const app = createApp(testEnv, testDeps);
 
 		const response = await app.handle(
 			new Request(`http://localhost/${secret}/health`),
@@ -80,7 +105,7 @@ describe("GET /{secret}/health", () => {
 	});
 
 	test("T-16: site reachable — 200, checks.site is ok", async () => {
-		const app = createApp(testEnv, { site: fakeSite });
+		const app = createApp(testEnv, testDeps);
 
 		const response = await app.handle(
 			new Request(`http://localhost/${secret}/health`),
@@ -104,7 +129,7 @@ describe("GET /{secret}/health", () => {
 				throw new Error("simulated site outage");
 			},
 		};
-		const app = createApp(testEnv, { site: unreachableSite });
+		const app = createApp(testEnv, { ...testDeps, site: unreachableSite });
 
 		const response = await app.handle(
 			new Request(`http://localhost/${secret}/health`),
@@ -123,9 +148,97 @@ describe("GET /{secret}/health", () => {
 	});
 });
 
+// 002-T-04, 002-T-05, 002-T-06 — see specs/002-github-access/design.md → Test
+// cases. Prefixed because spec 001 already owns T-04…T-07 in this file.
+//
+// design.md → API surface: the github check is one entry, not two. It is "ok"
+// only when *both* repos are reachable — checking portfolio matters even though
+// no tool reads it this slice, because a token scoped to only one repo is the
+// most likely P-2 mistake and this is what catches it.
+
+// Reads the `checks` object off a deep-health response. The narrowing guards are
+// the assertion that the body has the right shape; response.json() is `unknown`
+// under this toolchain, exactly as spec 001's tests above already handle.
+async function readChecks(response: Response) {
+	const body = await response.json();
+	if (typeof body !== "object" || body === null || !("checks" in body)) {
+		throw new Error("expected response body to have a checks property");
+	}
+	const { checks } = body;
+	if (typeof checks !== "object" || checks === null) {
+		throw new Error("expected checks to be an object");
+	}
+	return checks as Record<string, unknown>;
+}
+
+describe("GET /{secret}/health — the github check", () => {
+	test("002-T-04: both repos reachable — 200, checks.github is ok and checks.site still is too", async () => {
+		const app = createApp(testEnv, testDeps);
+
+		const response = await app.handle(
+			new Request(`http://localhost/${secret}/health`),
+		);
+		expect(response.status).toBe(200);
+
+		const checks = await readChecks(response);
+		expect(checks.github).toBe("ok");
+		expect(checks.site).toBe("ok");
+	});
+
+	test("002-T-05: github unreachable — 503, checks.github fails and site is untouched", async () => {
+		const unreachableGithub: Github = {
+			async listDirectory() {
+				throw new Error("simulated GitHub outage");
+			},
+			async readFile() {
+				throw new Error("simulated GitHub outage");
+			},
+		};
+		const app = createApp(testEnv, {
+			...testDeps,
+			github: unreachableGithub,
+		});
+
+		const response = await app.handle(
+			new Request(`http://localhost/${secret}/health`),
+		);
+		expect(response.status).toBe(503);
+
+		const checks = await readChecks(response);
+		expect(checks.github).toBe("unreachable");
+		expect(checks.site).toBe("ok");
+	});
+
+	test("002-T-06: one repo reachable is not enough — portfolio failing alone gives 503", async () => {
+		const readsWorkshopOnly: Github = {
+			async listDirectory(repo: Repo) {
+				if (repo === "portfolio") {
+					throw new Error("token is not scoped to the site repo");
+				}
+				return [];
+			},
+			async readFile() {
+				return "";
+			},
+		};
+		const app = createApp(testEnv, {
+			...testDeps,
+			github: readsWorkshopOnly,
+		});
+
+		const response = await app.handle(
+			new Request(`http://localhost/${secret}/health`),
+		);
+		expect(response.status).toBe(503);
+
+		const checks = await readChecks(response);
+		expect(checks.github).toBe("unreachable");
+	});
+});
+
 describe("the secret path is not an oracle", () => {
 	test("T-06: a wrong secret is byte-identical to an unknown route", async () => {
-		const app = createApp(testEnv, { site: fakeSite });
+		const app = createApp(testEnv, testDeps);
 
 		const wrongSecretResponse = await app.handle(
 			new Request(`http://localhost/${wrongSecret}/health`),
@@ -147,7 +260,7 @@ describe("the secret path is not an oracle", () => {
 	});
 
 	test("T-07: root reveals nothing — identical to an unknown route", async () => {
-		const app = createApp(testEnv, { site: fakeSite });
+		const app = createApp(testEnv, testDeps);
 
 		const rootResponse = await app.handle(new Request("http://localhost/"));
 		const unknownRouteResponse = await app.handle(
@@ -197,7 +310,7 @@ async function postInitialize(app: ReturnType<typeof createApp>, path: string) {
 
 describe("POST /{secret}/mcp", () => {
 	test("T-08: a correct secret handshakes and gets back a negotiated protocol version", async () => {
-		const app = createApp(testEnv, { site: fakeSite });
+		const app = createApp(testEnv, testDeps);
 
 		const response = await postInitialize(app, `/${secret}/mcp`);
 		expect(response.status).toBe(200);
@@ -218,7 +331,7 @@ describe("POST /{secret}/mcp", () => {
 	});
 
 	test("T-09: a wrong secret on /mcp is byte-identical to an unknown route", async () => {
-		const app = createApp(testEnv, { site: fakeSite });
+		const app = createApp(testEnv, testDeps);
 
 		const wrongSecretResponse = await postInitialize(
 			app,

@@ -36,9 +36,13 @@ API. A checkout on disk means stale state and surprise merge conflicts.
   Railway" before that.)
 - Streamable HTTP MCP.
 - Auth: unguessable secret in the URL path — `https://mcp.ashutoshverma.dev/k7f2.../mcp`
-- GitHub credential: a **GitHub App** installed on `portfolio` and `workshop`.
-  Permissions: contents write, pull requests write. Mint installation tokens on
-  demand, cache for the hour.
+- GitHub credential: a **fine-grained personal access token**, scoped to `portfolio` and
+  `workshop`. One env var, one header, no token lifecycle. (This line said "a GitHub App,
+  mint installation tokens on demand, cache for the hour" until
+  [ADR-002](002-github-access-and-workshop.md) weighed the cost. The App's advantage is
+  containing a leak, and it guards a machine that already holds the path secret — which
+  unlocks every tool. The accepted cost is that the token expires within a year, and
+  silently.)
 
 Two things to get right:
 
@@ -248,10 +252,15 @@ be the first write tool of a session.
   bare "tool failed" and the conversation dead-ends. A returned error string
   lands in context, so the model can fix it and retry in the same turn.
 - **Two `/health` routes.** `GET /health` returns 200 and does no I/O — that is Fly's
-  liveness probe. `GET /{secret}/health` really checks: can it mint a GitHub App token,
-  can it fetch `schema.json`, can it reach both repos. One URL on your phone tells you
-  which layer is dead. The deep one sits behind the secret because a public endpoint
-  making three outbound calls per request is unauthenticated and expensive at once.
+  liveness probe. `GET /{secret}/health` really checks: can it reach the site, can it
+  reach both repos, can it fetch `schema.json`. One URL on your phone tells you which
+  layer is dead. The deep one sits behind the secret because a public endpoint making
+  several outbound calls per request is unauthenticated and expensive at once.
+  (A fourth check, "can it mint a GitHub App token", was listed here until
+  [ADR-002](002-github-access-and-workshop.md) dropped the App. There is no token to
+  mint, and a successful repo read is already proof the token works — one check replaced
+  two. Each check arrives with the slice that needs it: `site` shipped in spec 001,
+  `github` next, `schema.json` with `publish`.)
 - Platform logs are enough.
 
 ---
@@ -266,14 +275,20 @@ Plumbing before anything interesting.
   with the site check only, and one read tool against the site's **live** JSON routes.
   Deploy to Fly. Connect from Claude Code, claude.ai, and your phone. Read a published
   post back on each. No GitHub, so nothing external blocks it.
-- **Slice 2 — GitHub arrives.** Create the private `workshop` repo, install the GitHub
-  App on it and on the site repo, then `get_skill`, draft reads, and `/health`'s
-  remaining two checks. This is the first slice with an external prerequisite.
+- **Slice 2 — GitHub arrives.** Create the private `workshop` repo, issue a fine-grained
+  token scoped to it and the site repo, then `get_skill` and `/health`'s `github` check.
+  This is the first slice with an external prerequisite.
+
+  > Scoped down in [ADR-002](002-github-access-and-workshop.md). This slice also carried
+  > **draft reads** — `list_content`'s `state` argument, `kind: "post"`, and
+  > `get_content`. They moved to Slice 3, because there are no drafts to read until
+  > `save_draft` writes one.
 
   > Slice 1 originally carried `get_skill`, which reads from `workshop` — a repo that
   > did not exist yet. That tied the cheapest and riskiest experiment to setup it does
   > not need. Reordered in [ADR-001](001-server-runtime-and-shape.md).
-- **Slice 3 — cheap writes.** `save_draft`, `discard_draft`.
+- **Slice 3 — cheap writes.** `save_draft`, `discard_draft`, and the draft reads moved
+  down from Slice 2.
 - **Slice 4 — publish.** Validation, branch, PR, idempotency.
 - **Slice 5 — polish.** Lazy reconciliation, response nudges, Claude Project.
 

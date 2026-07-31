@@ -74,7 +74,7 @@ tools → services → lib
 - `services/` owns all business logic. Every tool goes through one, including the thin
   ones — "is this enough logic to need a service?" is a question that gets answered
   differently twice.
-- `lib/` holds the GitHub App client, the site fetcher, env parsing, the MDX parse.
+- `lib/` holds the GitHub reader, the site fetcher, env parsing, the MDX parse.
 - Never skip downward: a tool must not touch `lib`. Never call upward.
 
 **Services take their dependencies as an argument**, never by importing a module
