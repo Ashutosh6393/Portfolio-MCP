@@ -4,7 +4,22 @@
 - **Status:** accepted
 - **Deciders:** Ashutosh Verma
 
-> **Scope clarification, 2026-08-01:** Social posts (`kind: "post"`) are removed from scope. Drafts are for persistent storage of writings and projects only. Social posts are generated on-the-fly by the MCP using skills, not stored as drafts. ADR-004's decisions on metadata serialization, validation timing, and write access remain unchanged.
+> **Accepted 2026-08-01 after a review that narrowed the scope.** This ADR was `proposed`
+> when the review ran; the body below is the reviewed text, not the pre-review draft. Four
+> things changed or were pinned down, all recorded in place:
+>
+> 1. **Social posts are out.** A post is never stored as a draft. The MCP drafts one in the
+>    conversation using the `twitter-post` / `linkedin-post` skills and hands it back — there
+>    is nothing to persist. Drafts are **writings and projects only**.
+> 2. **Editing a draft is a read-modify-write on the same file**, spelled out under
+>    *Editing an existing draft*.
+> 3. **The token scope change is not a blocking prerequisite.** It is set by hand before the
+>    slice ships, and no task waits on it.
+> 4. **Publish-time metadata prompting** was decided but belongs to `publish` — recorded
+>    under *Out of scope* so it is not lost.
+>
+> The core decision — real MDX, JSON-shaped metadata block, validation at publish — is
+> unchanged.
 
 ## Context
 
@@ -14,8 +29,7 @@ hand on Claude Code, claude.ai and the mobile app. Two of six tools are live.
 
 [`mcp-design.md`](mcp-design.md)'s build order puts **cheap writes** next: `save_draft`,
 `discard_draft`, and the draft reads that [ADR-002](002-github-access-and-workshop.md)
-pushed down from the last slice — `list_content`'s `state` argument, `kind: "post"`, and
-`get_content`.
+pushed down from the last slice — `list_content`'s `state` argument and `get_content`.
 
 This is the first slice that **writes** to GitHub, and the first that has to answer a
 question every slice so far has dodged: **what is a draft, on disk?**
@@ -114,27 +128,58 @@ same module wrote it.
 
 Quoted keys are valid JavaScript and the site renders the file identically. They are
 cosmetically unlike the hand-written posts already in `portfolio`; that is a `publish`
-concern and is deferred to Slice 4, which re-renders the block from the parsed object
-anyway.
+concern, and `publish` re-renders the block from the parsed object anyway. Deferred there,
+not solved here.
 
 **A draft whose block does not parse is an error, not a fallback.** The message says what
-is true — the block was edited into a shape the server cannot read — and says to fix it in
-GitHub or re-save the draft. It never guesses, and it never returns a body with empty
-metadata.
+is true — the block is in a shape the server cannot read — and says to **fix it in GitHub
+and re-save the draft**. It never guesses, and it never returns a body with empty metadata.
+It does not surface the underlying parse error; there is nothing a phone user can do with a
+character offset.
+
+This path should never fire. The author does not hand-edit drafts — every draft in
+`workshop` was written by the serializer, which is why a `JSON.parse` is sufficient in the
+first place. The refusal exists so that if it ever does fire, it fails loudly instead of
+returning plausible-looking wrong metadata.
 
 The three serializer rules from `mcp-design.md` stand unchanged and are the serializer's,
 not the model's: **no tool may set `show` or `order`**, omitted optionals are **absent
 keys** rather than empty strings, and **`readingTime` is computed, never supplied**.
 
-### Social posts
+### Social posts are not drafts
 
-`kind: "post"` ships in this slice. **The server generates the id at save** — the date
-plus a kebab label, `2026-07-31-crdt-lesson` — as `mcp-design.md`'s Identity section says.
-Date-prefixed ids sort naturally and never collide, and a social post has no title and no
-URL, so there is nothing for a slug to be derived from.
+**`kind: "post"` does not ship, here or later.** A social post is never written to
+`workshop` at all, so it needs no id scheme, no `platform` field on disk, and no place in
+the `kind` enum.
 
-A post carries `platform` and no site metadata. It is never validated against
-`api/schema.json`, because it is never rendered by the site.
+The workflow that replaced it needs no storage: the model calls `get_skill` for
+`twitter-post` or `linkedin-post` — which arrives with the `be-human` voice attached, per
+[ADR-003](003-skills-and-templates-are-separate.md) — drafts the post in the conversation,
+and hands it to the user, who posts it. The artifact lives on the platform, not in a repo.
+
+The same `get_skill` path is what a writing draft uses before `save_draft` is ever called:
+fetch the `writing` template and the voice, draft the body, then persist. **The skills are
+what the model drafts *with*; drafts are what it persists.** Only the second needs a file.
+
+`kind` is therefore `"writing" | "project"` everywhere in this slice.
+
+### Editing an existing draft
+
+There is no separate update tool. Editing is a read-modify-write through the two tools
+that already exist:
+
+1. `get_content` returns `{ metadata, body, sha }`.
+2. The model edits the metadata, the body, or both.
+3. `save_draft` is called with the edited content **and that `sha`**.
+
+GitHub's contents API updates the existing file when the `sha` matches. **One file per
+draft, always** — an edit never creates a second one, and a save with no `sha` is a create,
+which fails if the path is already taken.
+
+**A `sha` mismatch is a refusal, not a retry.** The message says the draft changed since it
+was read, and to fetch it again with `get_content` before re-applying the edit. With one
+user and one client this should never fire; it is the wall that makes "the `sha` rules are
+the entire defence" true rather than aspirational.
 
 ### Drafts are not validated
 
@@ -150,6 +195,21 @@ fast".
 
 **Validation belongs to `publish`, which is the layer that already has to fetch the
 schema.** A draft is allowed to be incomplete. That is what makes it a draft.
+
+Concretely: **`save_draft` accepts any JSON object as metadata.** A draft with a title and
+nothing else is saved without complaint. A draft with only a summary and no title is also
+saved — odd, but the author's business. The server adds no required-field check of its own,
+because any such check is a second definition of valid and would drift from the site's.
+
+**One check does run at save, and it is not validation: the slug must not already be
+published.** That reads the site's published list — not `api/schema.json` — and answers a
+different question. "Is this shape valid?" waits for `publish`. "Am I about to shadow
+something that already exists?" cannot wait, because by `publish` the draft has a history
+and the collision is expensive to unpick.
+
+**If the site is unreachable, `save_draft` refuses.** It cannot prove the slug is free, and
+guessing risks a draft that quietly shadows a published writing. The tradeoff below states
+the cost: a drafting tool now depends on the site being up.
 
 ### Write access
 
@@ -211,17 +271,19 @@ fine-grained PAT *is* the user, so the API already attributes commits correctly 
 - **`lib/github.ts` gains write methods and a read that returns `{ content, sha }`.**
   Its header comment currently says "no writing (the token is read-only)". That line ships
   false the moment this lands and is fixed in the same commit.
-- **`list_content` changes for the first time.** It gains a `state` argument and `post`
-  joins its `kind` enum. Its description is rewritten, not patched — the model is the real
-  caller. Note the hole in the matrix: `{ kind: "post", state: "published" }` reads
-  `workshop/posts/published/`, not the site, because the site never renders a post.
+- **`list_content` changes for the first time.** It gains a `state` argument. Its `kind`
+  enum is unchanged — `"writing" | "project"` — because posts are not stored. `state:
+  "draft"` reads `workshop/drafts/{kind}/`; `state: "published"` keeps reading the site, as
+  it does today. Its description is rewritten, not patched — the model is the real caller.
 - **Four tool descriptions get written** — `save_draft`, `discard_draft`, and the rewrites
   of `list_content` and `get_content`. Specified in the spec, not invented by whoever
   writes the file. This closes most of `mcp-design.md`'s open item 3.
 - **`discard_draft` needs a `sha`**, so it reads before it deletes. There is no
   delete-by-path in the contents API.
-- The token's scope change is a **human prerequisite**, provable by no test in this repo —
-  the same shape as P-2 in spec 002.
+- **The token's scope change is a human step, not a gate.** It is set by hand with
+  `fly secrets set` before the slice deploys. Unlike P-2 in spec 002 it does not block any
+  task: the serializer and the reader are pure functions, and the write path is proven the
+  first time a draft is saved against the live server. No prerequisite is recorded for it.
 
 ### Testing seams
 
@@ -230,8 +292,11 @@ No new injected seam. Services take their dependencies as an argument, `createAp
 
 One new seam of a cheaper kind: **the serializer and the reader are pure functions** in
 `lib/`, tested directly with no injection. The test that matters is the **round trip** —
-`read(render(m)) === m` — plus the hand-edit cases that must fail loudly. This is the
-highest-value seam in the slice and the only genuinely new logic in it.
+`read(render(m)) === m` — plus malformed blocks, which assert only **that the read fails**.
+Enumerating which malformations produce which message is not worth a test: the author does
+not hand-edit drafts, so every one of those cases is hypothetical. The behaviour under test
+is refusal, not diagnosis. This is the highest-value seam in the slice and the only
+genuinely new logic in it.
 
 The GitHub writer is still not unit-tested against a mock of GitHub, for the reason
 [testing.md](../../.claude/rules/testing.md) gives.
@@ -243,26 +308,30 @@ read until something writes it.
 
 1. **The serializer, and write access.** `lib/`'s render and read pair, plus the token
    scope change. No new tool. The round-trip tests live here.
-2. **`save_draft`.** Service, tool, registration, and the `sha` refusals.
+2. **`save_draft`.** Service, tool, registration, the published-slug check, and the `sha`
+   refusals.
 3. **`discard_draft`.** Small on purpose — read for the `sha`, delete, refuse if absent.
-4. **The reads.** `get_content`, `list_content`'s `state` argument, and `kind: "post"` in
-   both.
+4. **The reads.** `get_content`, and `list_content`'s `state` argument.
 
-Four rather than two: slice 1 is the only part with a human prerequisite, and the git
-rules cap a PR at 5–7 files. `save_draft` alone is a service, a tool, a registration, and
-its refusals.
+Four rather than two because the git rules cap a PR at 5–7 files. `save_draft` alone is a
+service, a tool, a registration, and its refusals.
 
 ### Out of scope
 
 Deliberately, so nobody picks them up:
 
 - **`publish`** — validation, `api/schema.json`, MDX body parsing, branches, PRs,
-  idempotency, `revise`. Slice 4, unchanged.
+  idempotency, `revise`. Unchanged, and it owns the metadata that a draft is allowed to be
+  missing. Decided in review, recorded here so it is not re-litigated: **`publish` asks the
+  user for the slug, and for `show` and `order` when the kind is `project`; it sets `date`
+  to the publish date and fills everything else it can derive itself.** That is where the
+  `show` / `order` serializer rule bites — those two values come from the human at publish
+  time, never from the model at draft time.
 - **Write access to `portfolio`.** The token stays read-only there. It arrives with the
   tool that opens a PR.
 - **Lazy reconciliation** — checking whether a draft's PR merged and moving it to
   `archive/`. `mcp-design.md` hangs it off `list_content`, but there are no PRs until
-  `publish` exists. Slice 5.
-- **The `get_skill` response nudges** and the Claude Project. Slice 5.
+  `publish` exists. A later feature, after `publish`.
+- **The `get_skill` response nudges** and the Claude Project. A later feature.
 - **The `show` / `order` carry-over on a `revise` publish.** A `publish` hazard.
 - **Any undo, trash, or draft history.** Git is the history.
