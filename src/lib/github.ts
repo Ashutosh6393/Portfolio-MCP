@@ -136,10 +136,10 @@ export function createGithub(token: string): Github {
 		if (response.status === 404) {
 			throw new GithubNotFoundError(repo, path);
 		}
-		// 409 and 422 are ASSUMED, not verified — nothing in this repo has yet
-		// made a rejected write against the real API. M-1 is the check: it makes
-		// both rejections happen live and records the real codes in design.md. If
-		// they differ, correct them here, not by second-guessing in the service.
+		// 409 and 422 are verified, not assumed: M-1 made both rejections happen
+		// against the real repo on 2026-08-02 and the live API returned exactly
+		// these (specs/004-drafts/design.md). If a future GitHub change moves
+		// them, correct them here — never by second-guessing in the service.
 		if (response.status === 409) {
 			throw new GithubConflictError(repo, path);
 		}

@@ -252,9 +252,23 @@ matching message strings:
 | `GithubConflictError` | 409 | The `sha` did not match — the file changed underneath |
 | `GithubAlreadyExistsError` | 422 on a create (no `sha` sent) | A file is already at that path |
 
-**Those two status codes are assumed, not verified.** Closing that is Task 2's job (M-1),
-before anything depends on them. If the live API disagrees, record the real codes here in
-the same commit — do not paper over the difference inside the service.
+**Both status codes are verified.** M-1 drove them against the real `workshop` repo on
+2026-08-02 and the live API returned exactly what was assumed: **409** for a stale `sha` on
+`PUT`, **422** for a create with no `sha` over an existing path. Nothing in the mapping had
+to change.
+
+M-1's other four answers, recorded here so nobody re-derives them:
+
+- The widened token permits the write. A create succeeded rather than answering the 404 that
+  Risk 5 warns a still-read-only token would give.
+- `readFileWithSha` decodes correctly, including a file long enough to trigger GitHub's
+  base64 wrap at 60 characters — the case `atob` would have thrown on.
+- `deleteFile` removes the file; a following read raises `GithubNotFoundError`.
+
+**Still unconfirmed at the time of writing:** commit attribution, and that `portfolio` took
+no commits. Both are eyeball checks in GitHub's web UI that the script cannot make. The
+`author` field is not sent, so attribution *should* follow the PAT — but "should" is what
+M-1 exists to replace. Slice 1's PR does not merge until both are seen.
 
 ### `save_draft` — what it does
 
