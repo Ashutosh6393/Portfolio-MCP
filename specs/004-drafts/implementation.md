@@ -5,11 +5,11 @@ reads this file first and picks up from it.
 
 Update it after every task. Never batch updates.
 
-- **Status:** not-started
+- **Status:** in-progress
 - **Branch:** `feat/drafts`
 - **Spec:** `design.md` · **ADR:** `docs/adr/004-drafts-are-real-mdx-in-workshop.md`
-- **Current task:** none — `design.md` is awaiting human approval. **The loop does not start
-  until its Status is `approved` and the seven Open questions are answered.**
+- **Current task:** 1 — `src/lib/draft.ts`. `design.md` was approved 2026-08-01 with all
+  seven Open questions confirmed as written; no alternative was taken.
 
 ---
 

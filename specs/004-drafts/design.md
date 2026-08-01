@@ -9,8 +9,9 @@ described here.
 
 - **Source ADR:** `docs/adr/004-drafts-are-real-mdx-in-workshop.md` (accepted 2026-08-01
   after a review that narrowed the scope — the ADR body is the reviewed text)
-- **Status:** draft
-- **Approved by:** — (awaiting review)
+- **Status:** approved
+- **Approved by:** Ashutosh Verma, 2026-08-01 — all seven open questions confirmed as
+  written, no alternatives taken
 
 > Implementation does not start until Status is `approved`.
 
@@ -662,14 +663,14 @@ cause of a blocked task later.
 Two are gaps in the ADR that this spec closes; five are assumptions the spec makes where
 the ADR left room. **All seven need a yes or a different answer from the human.**
 
-- [ ] **G-1. Empty metadata breaks the ADR's delimiter.** `JSON.stringify({}, null, 2)`
+- [x] **G-1. Empty metadata breaks the ADR's delimiter.** `JSON.stringify({}, null, 2)`
       returns `{}` on one line, with no line that is exactly `}` — so the reader fails on
       the serializer's own output. `save_draft` accepts any JSON object, so `{}` is
       reachable through the tool's own contract. **This spec closes it** by writing `{\n}`
       in that one case (T-03). One line. The alternative — refusing empty metadata — is a
       required-field check, which the ADR forbids. **Confirm the guard.**
 
-- [ ] **G-2. The tool-description rule forces `get_content` into the `save_draft` slice.**
+- [x] **G-2. The tool-description rule forces `get_content` into the `save_draft` slice.**
       Spec 001's rule is that a description may only name a registered tool.
       `save_draft`'s description and both of its refusal messages tell the model to call
       `get_content` — which, in the ADR's four-slice sketch, does not exist for two more
@@ -679,7 +680,7 @@ the ADR left room. **All seven need a yes or a different answer from the human.*
       still come before reads: `save_draft` is built first, `get_content` second, and
       `list_content`'s draft mode is still last. **Confirm the reorder.**
 
-- [ ] **A-1. Where the reserved-key drop lives.** ADR-004 says the three `mcp-design.md`
+- [x] **A-1. Where the reserved-key drop lives.** ADR-004 says the three `mcp-design.md`
       serializer rules "are the serializer's, not the model's". This spec drops `show`,
       `order` and `readingTime` in the **`saveDraft` service**, not in `renderDraft`.
       Reason: the round trip `readDraft(renderDraft(m,b)) === {m,b}` is the
@@ -689,28 +690,28 @@ the ADR left room. **All seven need a yes or a different answer from the human.*
       property. The rule still holds end to end — no tool can set those three.
       **Alternative:** put the strip in `renderDraft` and weaken T-01.
 
-- [ ] **A-2. `saveDraft` calls the `listContent` service** for the published-slug check
+- [x] **A-2. `saveDraft` calls the `listContent` service** for the published-slug check
       rather than fetching and parsing the site itself. It is the existing answer to "what
       is published", it already carries the site's schemas and the site error wording, and
       duplicating it would put a second copy of that parse in the codebase. Service calling
       service is sideways, not the downward skip `code-style.md` bans. **Alternative:**
       inline `site.fetchContent` + the schema parse in `saveDraft`, ~12 duplicated lines.
 
-- [ ] **A-3. `state` is required on `list_content`, not optional-defaulting-to-published.**
+- [x] **A-3. `state` is required on `list_content`, not optional-defaulting-to-published.**
       A default means "list my writings" silently answers about published content when the
       user meant drafts, and on a phone an empty answer looks like a bug rather than a wrong
       question. The cost is that a model omitting `state` gets a validation error and must
       retry within the turn. **Alternative:** optional, defaulting to `"published"`, which
       keeps every existing `list_content` call valid.
 
-- [ ] **A-4. The slug format check is not in the ADR.** `isSlug` rejects anything that is
+- [x] **A-4. The slug format check is not in the ADR.** `isSlug` rejects anything that is
       not kebab-case before the slug becomes a path (T-32). Justification is
       [security.md](../../.claude/rules/security.md) — the slug is external input at a trust
       boundary, and the server can now write and delete in `workshop`. It is a check on the
       *argument*, not on the draft's content, so it does not conflict with "drafts are not
       validated". **Confirm it belongs in this slice.**
 
-- [ ] **A-5. Draft listings return slugs only**, with no titles. Reading a title out of
+- [x] **A-5. Draft listings return slugs only**, with no titles. Reading a title out of
       every draft costs one API call per draft, and the slug is a kebab-case title.
       `get_content` reads one. **Alternative:** N reads per list call.
 
