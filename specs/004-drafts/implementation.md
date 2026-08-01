@@ -8,8 +8,12 @@ Update it after every task. Never batch updates.
 - **Status:** in-progress
 - **Branch:** `feat/drafts`
 - **Spec:** `design.md` · **ADR:** `docs/adr/004-drafts-are-real-mdx-in-workshop.md`
-- **Current task:** 1 — `src/lib/draft.ts`. `design.md` was approved 2026-08-01 with all
-  seven Open questions confirmed as written; no alternative was taken.
+- **Current task:** none — **slice 1 is complete and at the human gate.** Tasks 1 and 2 are
+  `done`, M-1 passed against the real `workshop` repo, and all seven acceptance criteria are
+  verified. Next is Task 3 (`saveDraft`'s create path), which starts slice 2 — after slice
+  1's PR merges and a `/clear`.
+- `design.md` was approved 2026-08-01 with all seven Open questions confirmed as written; no
+  alternative was taken.
 
 ---
 
