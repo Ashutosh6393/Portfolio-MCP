@@ -49,7 +49,7 @@ In dependency order. Each task is independently testable and maps to test IDs in
 
 | # | Task | Depends on | Tests | Slice | State | Attempts | Commit |
 |---|---|---|---|---|---|---|---|
-| 1 | `src/lib/draft.ts` — `renderDraft`, `readDraft`, `draftPath`, `isSlug` | — | T-01, T-02, T-03, T-04, T-05, T-06, T-06b | 1 | `green` | 1/3 | — |
+| 1 | `src/lib/draft.ts` — `renderDraft`, `readDraft`, `draftPath`, `isSlug` | — | T-01, T-02, T-03, T-04, T-05, T-06, T-06b | 1 | `done` | 1/3 | `fc39df2` |
 | 2 | `src/lib/github.ts` — `readFileWithSha`, `writeFile`, `deleteFile`, `GithubConflictError`, `GithubAlreadyExistsError`, `fileContentSchema`, header-comment fix — **then verified against the real `workshop` repo** | — | M-1 | 1 | `pending` | 0/3 | — |
 | 3 | `saveDraft`'s create path — slug check, published-slug check, reserved-key drop, render, create-only write | 1, 2 | T-07, T-08, T-12, T-13, T-14, T-32 | 2 | `pending` | 0/3 | — |
 | 4 | `saveDraft`'s update path and the two conflict refusals | 3 | T-09, T-10, T-11, T-15 | 2 | `pending` | 0/3 | — |
@@ -176,6 +176,13 @@ Newest first. Keep entries short — this is a handoff, not a diary.
   test agent's sign-off — not marked `done`.
 - **Noticed, not touched:** `bun run lint` fails on `.claude/settings.local.json`
   (spaces where Biome wants tabs). Pre-existing and unrelated to this task.
+- **Signed off** by the test agent at `fc39df2`. Green was not taken on trust: each of the
+  seven was re-checked by mutating a scratchpad copy of `draft.ts` and confirming the test
+  fails. All seven mutants died — dropping the `2` indent kills T-01/T-02/T-04/T-05,
+  removing the `{}` guard kills T-03, trimming the closer compare kills T-06b, taking the
+  last `}` instead of the first kills T-04, a trailing newline kills four, and swallowing
+  the parse failure into empty metadata kills T-06. No test file was edited after the red
+  run.
 - **Next:** Task 2 — `src/lib/github.ts`.
 
 ### 2026-08-01
