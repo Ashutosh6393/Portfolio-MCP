@@ -1,11 +1,15 @@
-// The GitHub reader. `site.ts` with a token and two methods — if it starts
-// looking like anything else, stop (specs/002-github-access/CLAUDE.md).
+// The GitHub reader and writer. `site.ts` with a token and five methods — if it
+// starts looking like anything else, stop (specs/002-github-access/CLAUDE.md).
 //
 // Purpose:            read files and directory listings out of the two repos
-//                     this server touches.
-// Non-responsibilities: no parsing (the service owns that), no writing (the
-//                     token is read-only), no caching, no retry, no rate
-//                     limiting — ~15 calls a week against 5,000 an hour.
+//                     this server touches, and write to one of them.
+// Constraints:        the token is read **and write** on `workshop`, and stays
+//                     **read-only on `portfolio`** (ADR-004). Nothing here may
+//                     widen that: a write aimed at `portfolio` is a bug, not a
+//                     feature waiting for a scope change.
+// Non-responsibilities: no parsing (the service owns that), no caching, no
+//                     retry, no rate limiting — ~15 calls a week against 5,000
+//                     an hour.
 
 import { z } from "zod";
 
@@ -21,6 +25,15 @@ export const entryListSchema = z.array(
 	z.object({ name: z.string(), type: z.string() }),
 );
 
+// A single file's JSON representation. Only `content` (base64) and `sha` are
+// declared because only those two are used — zod strips the rest. The `sha` is
+// the reason this response is fetched at all: the raw Accept header returns the
+// bytes but not the sha, and without it there is no read-modify-write loop.
+export const fileContentSchema = z.object({
+	content: z.string(),
+	sha: z.string(),
+});
+
 // The domain word and the GitHub name are not the same thing. `portfolio` is
 // CONTEXT.md vocabulary and is what every doc, error message, and health check
 // says; `repoNames` is the single place it becomes a real path. Verified
@@ -31,12 +44,13 @@ export type Repo = "portfolio" | "workshop";
 const owner = "Ashutosh6393";
 const repoNames = { portfolio: "Portfolio-new", workshop: "workshop" } as const;
 
-// 404 is the only status worth telling apart, because it is the only one that
-// changes what the caller should do next. The service branches on `instanceof`,
+// Three statuses are worth telling apart, because they are the only ones that
+// change what the caller should do next. The service branches on `instanceof`,
 // never on the message text (errors-and-validation.md).
 //
 // The message never claims the path does not exist. GitHub answers 404 rather
-// than 403 for a private repo a token cannot see, so "missing file" and
+// than 403 for a private repo a token cannot see — and, on the write path, for
+// a write the token may not make (design.md → Risk 5). So "missing file" and
 // "mis-scoped token" are the same response, and stating either as fact would
 // send the reader the wrong way half the time.
 export class GithubNotFoundError extends Error {
@@ -44,37 +58,99 @@ export class GithubNotFoundError extends Error {
 		readonly repo: Repo,
 		readonly path: string,
 	) {
-		super(`Could not read ${path} from the ${repo} repo.`);
+		super(`Could not read or write ${path} in the ${repo} repo.`);
 		this.name = "GithubNotFoundError";
+	}
+}
+
+// The `sha` sent did not match the file's — it changed underneath us. Not
+// retried here: re-reading and re-applying is the caller's decision.
+export class GithubConflictError extends Error {
+	constructor(
+		readonly repo: Repo,
+		readonly path: string,
+	) {
+		super(`${path} in the ${repo} repo changed since it was read.`);
+		this.name = "GithubConflictError";
+	}
+}
+
+// A create — a write with no `sha` — aimed at a path that already holds a file.
+export class GithubAlreadyExistsError extends Error {
+	constructor(
+		readonly repo: Repo,
+		readonly path: string,
+	) {
+		super(`${path} already exists in the ${repo} repo.`);
+		this.name = "GithubAlreadyExistsError";
 	}
 }
 
 export type Github = {
 	listDirectory(repo: Repo, path: string): Promise<unknown>;
 	readFile(repo: Repo, path: string): Promise<string>;
+	readFileWithSha(
+		repo: Repo,
+		path: string,
+	): Promise<{ content: string; sha: string }>;
+	writeFile(
+		repo: Repo,
+		path: string,
+		content: string,
+		options: { message: string; sha?: string },
+	): Promise<void>;
+	deleteFile(
+		repo: Repo,
+		path: string,
+		options: { message: string; sha: string },
+	): Promise<void>;
 };
 
 // A factory, not a singleton like `site`: the token arrives from the parsed env
 // at boot, so it never reaches module scope and a test can build a fake without
 // one (design.md → The reader takes its token at construction).
 export function createGithub(token: string): Github {
-	async function read(repo: Repo, path: string, accept: string) {
+	// One endpoint serves all five methods — GET, PUT and DELETE on
+	// /contents/{path} — so the URL and the status mapping are built once here.
+	async function request(
+		repo: Repo,
+		path: string,
+		init: { method: string; accept: string; body?: Record<string, unknown> },
+	) {
 		const response = await fetch(
 			`https://api.github.com/repos/${owner}/${repoNames[repo]}/contents/${path}`,
 			{
+				method: init.method,
 				headers: {
 					Authorization: `Bearer ${token}`,
-					Accept: accept,
+					Accept: init.accept,
 					"X-GitHub-Api-Version": "2022-11-28",
+					// Set explicitly: fetch labels a string body `text/plain`, and
+					// the write path is not exercised by any automated test, so a
+					// body GitHub declines to parse would first surface in M-1.
+					...(init.body ? { "Content-Type": "application/json" } : {}),
 				},
+				body: init.body ? JSON.stringify(init.body) : undefined,
 			},
 		);
 		if (response.status === 404) {
 			throw new GithubNotFoundError(repo, path);
 		}
+		// 409 and 422 are ASSUMED, not verified — nothing in this repo has yet
+		// made a rejected write against the real API. M-1 is the check: it makes
+		// both rejections happen live and records the real codes in design.md. If
+		// they differ, correct them here, not by second-guessing in the service.
+		if (response.status === 409) {
+			throw new GithubConflictError(repo, path);
+		}
+		// 422 only means "already exists" on a create — a write that sent no
+		// `sha`. With a `sha` the same status means something else entirely.
+		if (response.status === 422 && init.body && !("sha" in init.body)) {
+			throw new GithubAlreadyExistsError(repo, path);
+		}
 		if (!response.ok) {
 			throw new Error(
-				`GitHub returned ${response.status} reading the ${repo} repo.`,
+				`GitHub returned ${response.status} on the ${repo} repo.`,
 			);
 		}
 		return response;
@@ -85,7 +161,10 @@ export function createGithub(token: string): Github {
 		// belongs to the service, so a test can hand it garbage without a cast
 		// and still exercise the real schema.
 		async listDirectory(repo, path) {
-			const response = await read(repo, path, "application/vnd.github+json");
+			const response = await request(repo, path, {
+				method: "GET",
+				accept: "application/vnd.github+json",
+			});
 			return response.json();
 		},
 
@@ -96,8 +175,54 @@ export function createGithub(token: string): Github {
 		// `content` field rather than erroring. No schema — `text()` is already
 		// `string`, so there is nothing to validate.
 		async readFile(repo, path) {
-			const response = await read(repo, path, "application/vnd.github.raw");
+			const response = await request(repo, path, {
+				method: "GET",
+				accept: "application/vnd.github.raw",
+			});
 			return response.text();
+		},
+
+		// The raw Accept header cannot be used here: it returns the bytes but not
+		// the `sha`, and the sha is what closes the read-modify-write loop. So
+		// this takes the JSON response and pays for it with a decode.
+		async readFileWithSha(repo, path) {
+			const response = await request(repo, path, {
+				method: "GET",
+				accept: "application/vnd.github+json",
+			});
+			const file = fileContentSchema.parse(await response.json());
+			// ADR-002 said no base64 decoder was needed; ADR-004 amends it, and
+			// this is the one line that came back. `Buffer`, never `atob`: GitHub
+			// wraps its base64 at 60 characters and `atob` throws on the embedded
+			// newlines.
+			return {
+				content: Buffer.from(file.content, "base64").toString("utf8"),
+				sha: file.sha,
+			};
+		},
+
+		// No `author` field is sent. A fine-grained PAT already is the user, so
+		// GitHub attributes the commit correctly (design.md → Commit authorship).
+		// Omitting `sha` means create; supplying it means update-if-unchanged.
+		async writeFile(repo, path, content, options) {
+			await request(repo, path, {
+				method: "PUT",
+				accept: "application/vnd.github+json",
+				body: {
+					message: options.message,
+					content: Buffer.from(content, "utf8").toString("base64"),
+					...(options.sha ? { sha: options.sha } : {}),
+				},
+			});
+		},
+
+		// `sha` is required: the contents API has no delete-by-path.
+		async deleteFile(repo, path, options) {
+			await request(repo, path, {
+				method: "DELETE",
+				accept: "application/vnd.github+json",
+				body: { message: options.message, sha: options.sha },
+			});
 		},
 	};
 }
