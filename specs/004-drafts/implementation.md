@@ -50,7 +50,7 @@ In dependency order. Each task is independently testable and maps to test IDs in
 | # | Task | Depends on | Tests | Slice | State | Attempts | Commit |
 |---|---|---|---|---|---|---|---|
 | 1 | `src/lib/draft.ts` — `renderDraft`, `readDraft`, `draftPath`, `isSlug` | — | T-01, T-02, T-03, T-04, T-05, T-06, T-06b | 1 | `done` | 1/3 | `fc39df2` |
-| 2 | `src/lib/github.ts` — `readFileWithSha`, `writeFile`, `deleteFile`, `GithubConflictError`, `GithubAlreadyExistsError`, `fileContentSchema`, header-comment fix — **then verified against the real `workshop` repo** | — | M-1 | 1 | `pending` | 0/3 | — |
+| 2 | `src/lib/github.ts` — `readFileWithSha`, `writeFile`, `deleteFile`, `GithubConflictError`, `GithubAlreadyExistsError`, `fileContentSchema`, header-comment fix — **then verified against the real `workshop` repo** | — | M-1 | 1 | `green` — code landed, **M-1 outstanding** | 1/3 | `397be30` |
 | 3 | `saveDraft`'s create path — slug check, published-slug check, reserved-key drop, render, create-only write | 1, 2 | T-07, T-08, T-12, T-13, T-14, T-32 | 2 | `pending` | 0/3 | — |
 | 4 | `saveDraft`'s update path and the two conflict refusals | 3 | T-09, T-10, T-11, T-15 | 2 | `pending` | 0/3 | — |
 | 5 | `src/services/get-content.ts` — read, parse, the two refusals | 1, 2 | T-19, T-20, T-21 | 2 | `pending` | 0/3 | — |
@@ -168,6 +168,25 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-08-02 — Task 2
+
+- **Done:** `src/lib/github.ts` at `397be30`. The five methods share one `request` helper
+  instead of four copies of the URL. No automated test by design — `design.md` is explicit
+  that the writer's status-code mapping is proven live in M-1, not against a fake.
+- **M-1 is outstanding and it is the whole of Task 2's verification.** A clean `tsc` proves
+  the fakes match the type, not that the live write path works. Task 2 stays `green`.
+- **Test revision, approved by the human:** widening `Github` broke `tsc` in seven fakes.
+  The test agent added throwing stubs — additions only, no assertion touched — as its own
+  commit `93fc8ce`, ahead of the code. Recorded in the table above.
+- **Added beyond the spec's letter, deliberately:** `Content-Type: application/json` on
+  requests carrying a body. `fetch` labels a string body `text/plain`, and no automated test
+  exercises the write path, so a body GitHub declined to parse would have surfaced as an
+  M-1 failure and cost a manual round-trip.
+- **Changed:** `GithubNotFoundError`'s message is now "Could not read or write {path} in the
+  {repo} repo." It is thrown on the write path too, and Risk 5 forbids claiming the path is
+  missing — a still-read-only token answers 404 as well. Nothing asserted the old string.
+- **Next:** M-1, by hand. Then slice 1's summary and PR.
 
 ### 2026-08-01 — Task 1
 
