@@ -53,6 +53,20 @@ const fakeGithub: Github = {
 		if (body === undefined) throw new GithubNotFoundError("workshop", path);
 		return body;
 	},
+	// Test revision, 2026-08-02 — see Test revisions table in
+	// specs/004-drafts/implementation.md. Spec 004 Task 2 widens `Github` with
+	// these three, so the fake must carry them to typecheck. No tool exercised
+	// here writes, so they throw rather than return a plausible value: an
+	// accidental call fails loudly instead of passing silently.
+	async readFileWithSha(): Promise<never> {
+		throw new Error("readFileWithSha is not part of this test");
+	},
+	async writeFile(): Promise<never> {
+		throw new Error("writeFile is not part of this test");
+	},
+	async deleteFile(): Promise<never> {
+		throw new Error("deleteFile is not part of this test");
+	},
 };
 
 async function postJsonRpc(body: unknown) {

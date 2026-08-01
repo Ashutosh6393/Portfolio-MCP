@@ -21,6 +21,23 @@ import { getSkill } from "./get-skill";
 
 type Listings = Record<string, unknown>;
 
+// Test revision, 2026-08-02 — see Test revisions table in
+// specs/004-drafts/implementation.md. Spec 004 Task 2 widens `Github` with
+// readFileWithSha, writeFile and deleteFile, so every fake must carry them to
+// typecheck. getSkill only reads, so these throw rather than return a plausible
+// value: an accidental call fails loudly instead of passing silently.
+const noWritePath = {
+	async readFileWithSha(): Promise<never> {
+		throw new Error("readFileWithSha is not part of this test");
+	},
+	async writeFile(): Promise<never> {
+		throw new Error("writeFile is not part of this test");
+	},
+	async deleteFile(): Promise<never> {
+		throw new Error("deleteFile is not part of this test");
+	},
+};
+
 // A fake whose listings are keyed by the path asked for. An unlisted path 404s,
 // exactly as the real reader does — GithubNotFoundError is thrown by lib, not
 // invented here.
@@ -35,6 +52,7 @@ function githubWith(listings: Listings): Github {
 		async readFile() {
 			throw new Error("readFile is not part of the no-name path");
 		},
+		...noWritePath,
 	};
 }
 
@@ -63,6 +81,7 @@ function githubServing(files: Record<string, string>) {
 			}
 			return body;
 		},
+		...noWritePath,
 	};
 
 	return { github, reads };
@@ -149,6 +168,7 @@ describe("getSkill — listing what is available", () => {
 			async readFile() {
 				throw new Error("GitHub returned 500 reading the workshop repo.");
 			},
+			...noWritePath,
 		};
 
 		let thrown: unknown;

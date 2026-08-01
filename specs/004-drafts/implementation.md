@@ -161,7 +161,7 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 
 | Date | Test | Change | Why |
 |---|---|---|---|
-| | | | |
+| 2026-08-02 | The seven `github` fakes in `src/index.test.ts` (3), `src/services/get-skill.test.ts` (3) and `src/tools/index.test.ts` (1) | Added `readFileWithSha`, `writeFile` and `deleteFile` stubs to each fake so they satisfy the widened `Github`. All three throw. Additions only — 55 lines added, 0 removed; no assertion, test name, `describe` or fixture value touched, count stays 55. | Task 2 widens `Github` with the three write methods `design.md` (lines 220–228) specifies, so every fake must carry them or `tsc` fails. Input-only plumbing of the kind spec 002 recorded twice, and the "Notes on specific tasks" section already pre-authorizes the identical move at Task 12 for `registerListContent`. It arrived at Task 2 rather than Task 12 because Task 2 widens the same type. The stubs throw rather than return a plausible value: no test in these files should reach the write path, so an accidental call must fail loudly instead of passing silently. |
 
 ---
 
