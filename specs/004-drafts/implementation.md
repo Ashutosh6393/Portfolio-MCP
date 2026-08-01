@@ -50,7 +50,7 @@ In dependency order. Each task is independently testable and maps to test IDs in
 | # | Task | Depends on | Tests | Slice | State | Attempts | Commit |
 |---|---|---|---|---|---|---|---|
 | 1 | `src/lib/draft.ts` — `renderDraft`, `readDraft`, `draftPath`, `isSlug` | — | T-01, T-02, T-03, T-04, T-05, T-06, T-06b | 1 | `done` | 1/3 | `fc39df2` |
-| 2 | `src/lib/github.ts` — `readFileWithSha`, `writeFile`, `deleteFile`, `GithubConflictError`, `GithubAlreadyExistsError`, `fileContentSchema`, header-comment fix — **then verified against the real `workshop` repo** | — | M-1 | 1 | `green` — code landed, **M-1 outstanding** | 1/3 | `397be30` |
+| 2 | `src/lib/github.ts` — `readFileWithSha`, `writeFile`, `deleteFile`, `GithubConflictError`, `GithubAlreadyExistsError`, `fileContentSchema`, header-comment fix — **then verified against the real `workshop` repo** | — | M-1 | 1 | `done` | 1/3 | `397be30` |
 | 3 | `saveDraft`'s create path — slug check, published-slug check, reserved-key drop, render, create-only write | 1, 2 | T-07, T-08, T-12, T-13, T-14, T-32 | 2 | `pending` | 0/3 | — |
 | 4 | `saveDraft`'s update path and the two conflict refusals | 3 | T-09, T-10, T-11, T-15 | 2 | `pending` | 0/3 | — |
 | 5 | `src/services/get-content.ts` — read, parse, the two refusals | 1, 2 | T-19, T-20, T-21 | 2 | `pending` | 0/3 | — |
@@ -133,7 +133,7 @@ Max 5–7 files (excluding tests) and 500 lines per slice.
 
 | Slice | Contains | Files | State | PR |
 |---|---|---|---|---|
-| 1 | Tasks 1–2 — the format, and the ability to write | 2 | `pending` | — |
+| 1 | Tasks 1–2 — the format, and the ability to write | 2 | `done` — all seven acceptance criteria verified, ready for PR | — |
 | 2 | Tasks 3–7 — `save_draft` and `get_content` | 5 | `pending` | — |
 | 3 | Tasks 8–10 — `discard_draft` | 3 | `pending` | — |
 | 4 | Tasks 11–13 — `list_content`'s `state` | 2 | `pending` | — |
@@ -187,6 +187,27 @@ Newest first. Keep entries short — this is a handoff, not a diary.
   {repo} repo." It is thrown on the write path too, and Risk 5 forbids claiming the path is
   missing — a still-read-only token answers 404 as well. Nothing asserted the old string.
 - **Next:** M-1, by hand. Then slice 1's summary and PR.
+
+### 2026-08-02 — Task 2 signed off, slice 1 closed
+
+- **Done:** M-1 run against the real `workshop` repo. Create, read-back-and-decode (including
+  a file long enough to hit GitHub's 60-char base64 wrap), stale sha, create-over-existing
+  and delete all behaved. **409 and 422 were confirmed, not corrected** — both assumptions in
+  `design.md` were right, so no mapping changed. Commits attributed to `Ashutosh6393`, not a
+  bot; `portfolio` took no commits.
+- **Signed off:** all seven of slice 1's acceptance criteria checked. Criterion 7 was
+  verified from the diff rather than taken on report: the only `portfolio` mentions added
+  anywhere in the slice are two comments, there is no caller of `writeFile`/`deleteFile` in
+  `src/` at all, and the sole `"portfolio"` argument in non-test source is the pre-existing
+  `listDirectory("portfolio", "")` health check, which reads.
+- **Inferred, not printed:** criterion 4 also lists a successful *update*. M-1's output has
+  no `OK updated` line, but the 409 proves it — a sha can only go stale if a write landed
+  after it was read. Worth an explicit line in the script if M-1 is ever re-run.
+- **Noted for slice 2, not a blocker:** `writeFile`/`deleteFile` take `repo: Repo`, so the
+  type permits a write to `portfolio`. Nothing calls them yet, and the header comment says a
+  write aimed there is a bug — but that is a comment, not a guard. The first service to call
+  a writer should pass `"workshop"` as a literal.
+- **Next:** slice 1 PR, then Task 3.
 
 ### 2026-08-01 — Task 1
 

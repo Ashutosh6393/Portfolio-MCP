@@ -265,10 +265,11 @@ M-1's other four answers, recorded here so nobody re-derives them:
   base64 wrap at 60 characters — the case `atob` would have thrown on.
 - `deleteFile` removes the file; a following read raises `GithubNotFoundError`.
 
-**Still unconfirmed at the time of writing:** commit attribution, and that `portfolio` took
-no commits. Both are eyeball checks in GitHub's web UI that the script cannot make. The
-`author` field is not sent, so attribution *should* follow the PAT — but "should" is what
-M-1 exists to replace. Slice 1's PR does not merge until both are seen.
+Both eyeball checks were made in GitHub's web UI on 2026-08-02 and both passed: the scratch
+commits are attributed to **Ashutosh6393**, not a bot or `web-flow`, and `portfolio` took no
+commits at all. Attribution needs no `author` field — a fine-grained PAT already is the
+user, which is what makes `mcp-design.md`'s "set the commit author" rule moot rather than
+skipped.
 
 ### `save_draft` — what it does
 
