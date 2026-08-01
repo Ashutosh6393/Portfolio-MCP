@@ -49,7 +49,7 @@ In dependency order. Each task is independently testable and maps to test IDs in
 
 | # | Task | Depends on | Tests | Slice | State | Attempts | Commit |
 |---|---|---|---|---|---|---|---|
-| 1 | `src/lib/draft.ts` — `renderDraft`, `readDraft`, `draftPath`, `isSlug` | — | T-01, T-02, T-03, T-04, T-05, T-06, T-06b | 1 | `pending` | 0/3 | — |
+| 1 | `src/lib/draft.ts` — `renderDraft`, `readDraft`, `draftPath`, `isSlug` | — | T-01, T-02, T-03, T-04, T-05, T-06, T-06b | 1 | `green` | 1/3 | — |
 | 2 | `src/lib/github.ts` — `readFileWithSha`, `writeFile`, `deleteFile`, `GithubConflictError`, `GithubAlreadyExistsError`, `fileContentSchema`, header-comment fix — **then verified against the real `workshop` repo** | — | M-1 | 1 | `pending` | 0/3 | — |
 | 3 | `saveDraft`'s create path — slug check, published-slug check, reserved-key drop, render, create-only write | 1, 2 | T-07, T-08, T-12, T-13, T-14, T-32 | 2 | `pending` | 0/3 | — |
 | 4 | `saveDraft`'s update path and the two conflict refusals | 3 | T-09, T-10, T-11, T-15 | 2 | `pending` | 0/3 | — |
@@ -168,6 +168,15 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-08-01 — Task 1
+
+- **Done:** `src/lib/draft.ts` written. All seven tests pass on the first attempt (1/3);
+  full suite 55/55, typecheck clean, `biome check src/lib/draft.ts` clean. Awaiting the
+  test agent's sign-off — not marked `done`.
+- **Noticed, not touched:** `bun run lint` fails on `.claude/settings.local.json`
+  (spaces where Biome wants tabs). Pre-existing and unrelated to this task.
+- **Next:** Task 2 — `src/lib/github.ts`.
 
 ### 2026-08-01
 
