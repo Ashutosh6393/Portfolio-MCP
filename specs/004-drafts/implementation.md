@@ -8,10 +8,9 @@ Update it after every task. Never batch updates.
 - **Status:** in-progress
 - **Branch:** `feat/drafts`
 - **Spec:** `design.md` · **ADR:** `docs/adr/004-drafts-are-real-mdx-in-workshop.md`
-- **Current task:** none — **slice 1 is complete and at the human gate.** Tasks 1 and 2 are
-  `done`, M-1 passed against the real `workshop` repo, and all seven acceptance criteria are
-  verified. Next is Task 3 (`saveDraft`'s create path), which starts slice 2 — after slice
-  1's PR merges and a `/clear`.
+- **Current task:** Task 3 (`saveDraft`'s create path) is `green`, awaiting the test agent's
+  sign-off. Slice 1 is complete and at the human gate — Tasks 1 and 2 are `done`, M-1 passed
+  against the real `workshop` repo, and all seven acceptance criteria are verified.
 - `design.md` was approved 2026-08-01 with all seven Open questions confirmed as written; no
   alternative was taken.
 
@@ -55,7 +54,7 @@ In dependency order. Each task is independently testable and maps to test IDs in
 |---|---|---|---|---|---|---|---|
 | 1 | `src/lib/draft.ts` — `renderDraft`, `readDraft`, `draftPath`, `isSlug` | — | T-01, T-02, T-03, T-04, T-05, T-06, T-06b | 1 | `done` | 1/3 | `fc39df2` |
 | 2 | `src/lib/github.ts` — `readFileWithSha`, `writeFile`, `deleteFile`, `GithubConflictError`, `GithubAlreadyExistsError`, `fileContentSchema`, header-comment fix — **then verified against the real `workshop` repo** | — | M-1 | 1 | `done` | 1/3 | `397be30` |
-| 3 | `saveDraft`'s create path — slug check, published-slug check, reserved-key drop, render, create-only write | 1, 2 | T-07, T-08, T-12, T-13, T-14, T-32 | 2 | `pending` | 0/3 | — |
+| 3 | `saveDraft`'s create path — slug check, published-slug check, reserved-key drop, render, create-only write | 1, 2 | T-07, T-08, T-12, T-13, T-14, T-32 | 2 | `green` | 1/3 | — |
 | 4 | `saveDraft`'s update path and the two conflict refusals | 3 | T-09, T-10, T-11, T-15 | 2 | `pending` | 0/3 | — |
 | 5 | `src/services/get-content.ts` — read, parse, the two refusals | 1, 2 | T-19, T-20, T-21 | 2 | `pending` | 0/3 | — |
 | 6 | `src/tools/save-draft.ts` and `src/tools/get-content.ts`, both registered in `src/tools/index.ts` | 4, 5 | T-25, T-26, T-27, T-28 | 2 | `pending` | 0/3 | — |
@@ -172,6 +171,22 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-08-02 — Task 3
+
+- **Done:** `src/services/save-draft.ts` written — create path only. All six tests pass on
+  the first attempt (1/3); full suite 61/61, typecheck clean, `biome check
+  src/services/save-draft.ts` clean.
+- **Order followed exactly as pinned by T-32:** `isSlug` before `listContent`, so a bad slug
+  never reaches — and never names — the site. The refusal text for an invalid slug does not
+  mention `ashutoshverma.dev`.
+- **`"workshop"` passed as a literal**, per the note left at the end of Task 2 — the type
+  still permits `"portfolio"` but nothing here can reach it.
+- **`args.sha` threaded through to `writeFile` but not otherwise handled.** No
+  `GithubConflictError`/`GithubAlreadyExistsError` branch — that is Task 4. `writeFile` is
+  called bare, no `try/catch` invented ahead of the branch that will own it.
+- Awaiting the test agent's sign-off — not marked `done`.
+- **Next:** Task 4 — `saveDraft`'s update path and the two conflict refusals.
 
 ### 2026-08-02 — Task 2
 
