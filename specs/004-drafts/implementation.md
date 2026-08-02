@@ -63,7 +63,7 @@ In dependency order. Each task is independently testable and maps to test IDs in
 | 8 | `src/services/discard-draft.ts` — read for the sha, delete, refuse if absent | 2 | T-16, T-17, T-18, **T-34** | 3 | `done` | 1/3 | `618e80a` |
 | 9 | `src/tools/discard-draft.ts` and its registration | 8 | T-29, T-30 | 3 | `done` | 1/3 | `e4aa9d8` |
 | 10 | Verify `discard_draft` on a real client | 9 | M-3 | 3 | `pending` | 0/3 | — |
-| 11 | `src/services/list-drafts.ts` — slugs from `drafts/{kind}/` | 2 | T-22, T-23, T-23b | 4 | `done` | 1/3 | `PENDING` |
+| 11 | `src/services/list-drafts.ts` — slugs from `drafts/{kind}/` | 2 | T-22, T-23, T-23b | 4 | `done` | 1/3 | `5db6f0e` |
 | 12 | `src/tools/list-content.ts` — the `state` argument, the branch, the rewritten description | 11 | T-24, T-31 | 4 | `pending` | 0/3 | — |
 | 13 | Verify both `list_content` states on a real client | 12 | M-4 | 4 | `pending` | 0/3 | — |
 
