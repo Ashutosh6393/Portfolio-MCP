@@ -601,8 +601,11 @@ T-33 was added after the slice 2 review found the guard missing — `design.md` 
 | T-17 | Discarding a draft that is not there | unit | Read throws `GithubNotFoundError` → `{ ok:false }` naming kind and slug; **`deleteFile` never called** |
 | T-18 | Discarding a draft with a broken block | unit | Fake returning a file whose metadata will not parse → `ok`, deleted. **The one you most want to be able to throw away must not need parsing** |
 | T-34 | A slug that is not a slug | unit | `slug:"../../../../Portfolio-new/contents/package.json?"` → `{ ok:false }`; **neither `readFileWithSha` nor `deleteFile` is called**. Same trust boundary as T-32 and T-33, and this one deletes |
+| T-35 | The delete itself failing | unit | `deleteFile` throws a plain `Error` → error **result** naming GitHub, nothing thrown. The read succeeded, so this is a failure of the delete, not of finding the draft |
 
 T-34 was added before slice 3's code, closing the guard gap reactively fixed for `getContent` by T-33 — `discardDraft` deletes, so writing the test ahead of the implementation this time instead of after a review found it missing.
+
+T-35 was added by the slice 3 reviewer: `readFileWithSha` is wrapped in `try`/`catch` but `deleteFile` is not, so `discardDraft` rejects instead of returning its union.
 
 ### `list_content` — `src/services/list-drafts.ts`
 

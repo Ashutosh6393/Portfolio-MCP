@@ -51,10 +51,22 @@ export async function discardDraft(
 		return { ok: false, error: `GitHub is unreachable: ${message}` };
 	}
 
-	await deps.github.deleteFile("workshop", path, {
-		message: `discard draft: ${args.kind}/${args.slug}`,
-		sha,
-	});
+	// The delete is guarded too, not only the read (T-35). It throws on a 409 if
+	// the sha went stale between the two calls, and on a 404 — which is what
+	// GitHub answers for a DELETE the token may not make (design.md → Risk 5).
+	// Unwrapped, this service rejected instead of returning its union, on the
+	// one tool that destroys data. design.md specifies no refusal for a failed
+	// delete, so this uses the same fallback as the read rather than inventing
+	// a sentence: a stale-sha message would be useless advice for a discard.
+	try {
+		await deps.github.deleteFile("workshop", path, {
+			message: `discard draft: ${args.kind}/${args.slug}`,
+			sha,
+		});
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "unknown error";
+		return { ok: false, error: `GitHub is unreachable: ${message}` };
+	}
 
 	return { ok: true, path };
 }

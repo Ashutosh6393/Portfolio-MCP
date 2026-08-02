@@ -148,6 +148,36 @@ describe("discardDraft — a draft with a broken metadata block", () => {
 	});
 });
 
+describe("discardDraft — the delete itself failing", () => {
+	// T-35 — specs/004-drafts/design.md → Test cases → discard_draft, added by
+	// the slice 3 review: readFileWithSha is guarded by try/catch but
+	// deleteFile is not, so a throwing deleteFile currently rejects the whole
+	// promise instead of returning the specified `{ ok: false }` union.
+	test("T-35: a deleteFile failure is an error result naming GitHub, not a rejection", async () => {
+		const github: Github = {
+			...noOtherPath,
+			async readFileWithSha() {
+				return {
+					content: renderDraft({ title: "A Post" }, "Body."),
+					sha: "abc",
+				};
+			},
+			async deleteFile(): Promise<never> {
+				throw new Error("boom");
+			},
+		};
+
+		const result = await discardDraft(
+			{ github },
+			{ kind: "writing", slug: "a-post" },
+		);
+
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("expected an error result");
+		expect(result.error).toContain("GitHub");
+	});
+});
+
 describe("discardDraft — the slug is a trust boundary", () => {
 	// Same trust boundary T-32 closed for save_draft and T-33 closed for
 	// get_content — but this one deletes. Added to design.md before slice 3's
