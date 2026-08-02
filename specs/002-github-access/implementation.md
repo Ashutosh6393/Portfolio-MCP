@@ -5,12 +5,12 @@ reads this file first and picks up from it.
 
 Update it after every task. Never batch updates.
 
-- **Status:** both slices complete, deployed and verified. **At the human gate.**
+- **Status:** both slices complete, deployed and verified on all three clients. **Done.**
 - **Branch:** `feat/github-access-skill` → PR 2, stacked on `feat/github-access` (PR 1).
 - **Spec:** `design.md` · **ADRs:** `docs/adr/002-github-access-and-workshop.md`,
   `docs/adr/003-skills-and-templates-are-separate.md`
-- **Current task:** none. Outstanding: the client half of Task 7 — driving `get_skill` from
-  Claude Code, claude.ai and the mobile app, which only a human can do.
+- **Current task:** none. Nothing outstanding — Task 7's client half was driven by hand on
+  2026-07-31 and `get_skill` answered on Claude Code, claude.ai and the mobile app.
 
 ---
 
@@ -54,7 +54,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 4 | `entryListSchema` in `lib/github.ts`, and `getSkill`'s list mode over `skills/` and `templates/` | 2 | T-07, T-08, T-09, T-13, T-14 | 2 | `done` | 1/3 | (this commit) |
 | 5 | `getSkill`'s named mode — resolve from the listing, bundle the voice — and its error paths | 4 | T-10, T-10b, T-10c, T-10d, T-11, T-12 | 2 | `done` | 1/3 | (this commit) |
 | 6 | `src/tools/get-skill.ts` and its registration in `src/tools/index.ts` | 5 | T-15, T-16, T-17 | 2 | `done` | 1/3 | (this commit) |
-| 7 | Verify `get_skill` on Claude Code, claude.ai, and the mobile app | 6 | — (manual) | 2 | `green` | 0/3 | deployed, no code |
+| 7 | Verify `get_skill` on Claude Code, claude.ai, and the mobile app | 6 | — (manual) | 2 | `done` | 0/3 | deployed, no code |
 
 ### Notes on specific tasks
 
@@ -150,6 +150,14 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-07-31 — Task 7 closed, spec complete
+
+- **`get_skill` driven by hand on all three clients** — Claude Code, claude.ai, and the
+  mobile app. All three list and return skills. That was the riskiest unknown in the whole
+  plan (`docs/adr/mcp-design.md` → Build order): a custom connector cannot be tested
+  locally on mobile. It works.
+- **Spec 002 is complete.** Nothing outstanding on either slice.
 
 ### 2026-07-31 — split into two PRs, deployed and verified
 

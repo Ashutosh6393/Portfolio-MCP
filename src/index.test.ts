@@ -34,6 +34,24 @@ const fakeSite: Site = {
 // createApp's deps, so every call below passes `testDeps` instead of a bare
 // `{ site }`. Same reason spec 001 made `deps` required: forgetting to inject
 // is a compile error, never a live call to api.github.com from a test run.
+// Test revision, 2026-08-02 — see Test revisions table in
+// specs/004-drafts/implementation.md. Spec 004 Task 2 widens `Github` with
+// readFileWithSha, writeFile and deleteFile, so every fake must carry them to
+// typecheck. Nothing in this file reaches the write path, so these throw rather
+// than return a plausible value: an accidental call fails loudly instead of
+// passing silently.
+const noWritePath = {
+	async readFileWithSha(): Promise<never> {
+		throw new Error("readFileWithSha is not part of this test");
+	},
+	async writeFile(): Promise<never> {
+		throw new Error("writeFile is not part of this test");
+	},
+	async deleteFile(): Promise<never> {
+		throw new Error("deleteFile is not part of this test");
+	},
+};
+
 const fakeGithub: Github = {
 	async listDirectory() {
 		return [];
@@ -41,6 +59,7 @@ const fakeGithub: Github = {
 	async readFile() {
 		return "";
 	},
+	...noWritePath,
 };
 
 const testDeps = { site: fakeSite, github: fakeGithub };
@@ -193,6 +212,7 @@ describe("GET /{secret}/health — the github check", () => {
 			async readFile() {
 				throw new Error("simulated GitHub outage");
 			},
+			...noWritePath,
 		};
 		const app = createApp(testEnv, {
 			...testDeps,
@@ -220,6 +240,7 @@ describe("GET /{secret}/health — the github check", () => {
 			async readFile() {
 				return "";
 			},
+			...noWritePath,
 		};
 		const app = createApp(testEnv, {
 			...testDeps,
