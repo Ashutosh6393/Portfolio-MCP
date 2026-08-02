@@ -5,13 +5,12 @@ reads this file first and picks up from it.
 
 Update it after every task. Never batch updates.
 
-- **Status:** in-progress
+- **Status:** complete
 - **Branch:** `feat/drafts`
 - **Spec:** `design.md` · **ADR:** `docs/adr/004-drafts-are-real-mdx-in-workshop.md`
-- **Current task:** none — **slice 1 is complete and at the human gate.** Tasks 1 and 2 are
-  `done`, M-1 passed against the real `workshop` repo, and all seven acceptance criteria are
-  verified. Next is Task 3 (`saveDraft`'s create path), which starts slice 2 — after slice
-  1's PR merges and a `/clear`.
+- **Current task:** none. **All 13 tasks are `done` and the spec is complete.** Suite 90/90.
+  Slice 1 shipped in PR #7; slices 2–4 ship together. M-2, M-3 and M-4 were all run by the
+  human against the real `workshop` repo, from Claude Code, claude.ai and the phone.
 - `design.md` was approved 2026-08-01 with all seven Open questions confirmed as written; no
   alternative was taken.
 
@@ -55,17 +54,17 @@ In dependency order. Each task is independently testable and maps to test IDs in
 |---|---|---|---|---|---|---|---|
 | 1 | `src/lib/draft.ts` — `renderDraft`, `readDraft`, `draftPath`, `isSlug` | — | T-01, T-02, T-03, T-04, T-05, T-06, T-06b | 1 | `done` | 1/3 | `fc39df2` |
 | 2 | `src/lib/github.ts` — `readFileWithSha`, `writeFile`, `deleteFile`, `GithubConflictError`, `GithubAlreadyExistsError`, `fileContentSchema`, header-comment fix — **then verified against the real `workshop` repo** | — | M-1 | 1 | `done` | 1/3 | `397be30` |
-| 3 | `saveDraft`'s create path — slug check, published-slug check, reserved-key drop, render, create-only write | 1, 2 | T-07, T-08, T-12, T-13, T-14, T-32 | 2 | `pending` | 0/3 | — |
-| 4 | `saveDraft`'s update path and the two conflict refusals | 3 | T-09, T-10, T-11, T-15 | 2 | `pending` | 0/3 | — |
-| 5 | `src/services/get-content.ts` — read, parse, the two refusals | 1, 2 | T-19, T-20, T-21 | 2 | `pending` | 0/3 | — |
-| 6 | `src/tools/save-draft.ts` and `src/tools/get-content.ts`, both registered in `src/tools/index.ts` | 4, 5 | T-25, T-26, T-27, T-28 | 2 | `pending` | 0/3 | — |
-| 7 | Verify the read-modify-write loop on a real client, including from the phone | 6 | M-2 | 2 | `pending` | 0/3 | — |
-| 8 | `src/services/discard-draft.ts` — read for the sha, delete, refuse if absent | 2 | T-16, T-17, T-18 | 3 | `pending` | 0/3 | — |
-| 9 | `src/tools/discard-draft.ts` and its registration | 8 | T-29, T-30 | 3 | `pending` | 0/3 | — |
-| 10 | Verify `discard_draft` on a real client | 9 | M-3 | 3 | `pending` | 0/3 | — |
-| 11 | `src/services/list-drafts.ts` — slugs from `drafts/{kind}/` | 2 | T-22, T-23, T-23b | 4 | `pending` | 0/3 | — |
-| 12 | `src/tools/list-content.ts` — the `state` argument, the branch, the rewritten description | 11 | T-24, T-31 | 4 | `pending` | 0/3 | — |
-| 13 | Verify both `list_content` states on a real client | 12 | M-4 | 4 | `pending` | 0/3 | — |
+| 3 | `saveDraft`'s create path — slug check, published-slug check, reserved-key drop, render, create-only write | 1, 2 | T-07, T-08, T-12, T-13, T-14, T-32 | 2 | `done` | 1/3 | `60275c8` |
+| 4 | `saveDraft`'s update path and the two conflict refusals | 3 | T-09, T-10, T-11, T-15 | 2 | `done` | 1/3 | `e872426` |
+| 5 | `src/services/get-content.ts` — read, parse, the two refusals | 1, 2 | T-19, T-20, T-21 | 2 | `done` | 1/3 | `a3da41a` |
+| 6 | `src/tools/save-draft.ts` and `src/tools/get-content.ts`, both registered in `src/tools/index.ts` | 4, 5 | T-25, T-26, T-27, T-28 | 2 | `done` | 1/3 | `366fc35` |
+| 7 | Verify the read-modify-write loop on a real client, including from the phone | 6 | M-2 | 2 | `done` | 1/3 | human-run |
+| 8 | `src/services/discard-draft.ts` — read for the sha, delete, refuse if absent | 2 | T-16, T-17, T-18, **T-34**, **T-35** | 3 | `done` | 1/3 | `618e80a`, fix `16103dc` |
+| 9 | `src/tools/discard-draft.ts` and its registration | 8 | T-29, T-30 | 3 | `done` | 1/3 | `e4aa9d8` |
+| 10 | Verify `discard_draft` on a real client | 9 | M-3 | 3 | `done` | 1/3 | human-run |
+| 11 | `src/services/list-drafts.ts` — slugs from `drafts/{kind}/` | 2 | T-22, T-23, T-23b | 4 | `done` | 1/3 | `5db6f0e` |
+| 12 | `src/tools/list-content.ts` — the `state` argument, the branch, the rewritten description | 11 | T-24, T-31, **T-36** | 4 | `done` | 1/3 | `a47fe10` |
+| 13 | Verify both `list_content` states on a real client | 12 | M-4 | 4 | `done` | 1/3 | human-run |
 
 ### Notes on specific tasks
 
@@ -138,9 +137,9 @@ Max 5–7 files (excluding tests) and 500 lines per slice.
 | Slice | Contains | Files | State | PR |
 |---|---|---|---|---|
 | 1 | Tasks 1–2 — the format, and the ability to write | 2 | `done` — all seven acceptance criteria verified, ready for PR | — |
-| 2 | Tasks 3–7 — `save_draft` and `get_content` | 5 | `pending` | — |
-| 3 | Tasks 8–10 — `discard_draft` | 3 | `pending` | — |
-| 4 | Tasks 11–13 — `list_content`'s `state` | 2 | `pending` | — |
+| 2 | Tasks 3–7 — `save_draft` and `get_content` | 5 | `done` — M-2 passed. Reviewed: one blocker (a traversal read through `get_content`) found and fixed in `d573a63`; five lesser findings recorded in `summary.md` | — |
+| 3 | Tasks 8–10 — `discard_draft` | 3 | `done` — M-3 passed. Reviewed: no blocker; one major — `deleteFile` was unwrapped so the service rejected — fixed in `16103dc` and pinned by T-35 | — |
+| 4 | Tasks 11–13 — `list_content`'s `state` | 2 | `done` — M-4 passed. Reviewed: no blocker, no major; merged as-is. Doc findings fixed | — |
 
 Slices 2, 3 and 4 each depend only on slice 1, never on each other. If 3 or 4 has to be
 reverted, the rest stands.
@@ -166,12 +165,225 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 | Date | Test | Change | Why |
 |---|---|---|---|
 | 2026-08-02 | The seven `github` fakes in `src/index.test.ts` (3), `src/services/get-skill.test.ts` (3) and `src/tools/index.test.ts` (1) | Added `readFileWithSha`, `writeFile` and `deleteFile` stubs to each fake so they satisfy the widened `Github`. All three throw. Additions only — 55 lines added, 0 removed; no assertion, test name, `describe` or fixture value touched, count stays 55. | Task 2 widens `Github` with the three write methods `design.md` (lines 220–228) specifies, so every fake must carry them or `tsc` fails. Input-only plumbing of the kind spec 002 recorded twice, and the "Notes on specific tasks" section already pre-authorizes the identical move at Task 12 for `registerListContent`. It arrived at Task 2 rather than Task 12 because Task 2 widens the same type. The stubs throw rather than return a plausible value: no test in these files should reach the write path, so an accidental call must fail loudly instead of passing silently. |
+| 2026-08-02 | `fakeDraftGithub.deleteFile` in `src/tools/index.test.ts` (Task 9, `e4aa9d8`) | Changed from a loud `throw new Error("deleteFile is not part of this test")` to a real `delete draftFiles[path]`. No assertion, test name or count touched. | T-29 calls `discard_draft` through the MCP handler and needs the shared fake's `deleteFile` to actually remove the entry so the tool has something true to report — the throwing stub, correct for T-25 through T-28 where nothing should reach `deleteFile`, would fail T-29 by construction. The cost: `fakeDraftGithub` backs T-25 through T-30 in one file, so an accidental `deleteFile` call from `save_draft` or `get_content` now passes silently where it used to throw and fail loudly. Necessary, but it should have landed as its own commit ahead of Task 9's feature commit — it rode inside `e4aa9d8` instead, which is the part being recorded as wrong here, not the change itself. |
 
 ---
 
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-08-02 — Tasks 7, 10 and 13 — the manual checks
+
+- **All three passed.** M-2, M-3 and M-4 were run against the real `workshop` repo through
+  Claude Code, claude.ai and the mobile app, after `flyctl deploy --ha=false` put the branch
+  live. `tools/list` over real HTTP returns all five tools; the deep health check returns
+  `{"site":"ok","github":"ok"}`.
+- **Recorded on the human's report.** No agent observed these runs and no transcript of them
+  exists — the same standard as M-1, and the only standard available, since a human is the
+  only thing that can drive three clients. Step-by-step observations were not captured; if a
+  regression ever appears in the read-modify-write loop, this record will not narrow it down.
+  The runbook in `manual-verification.md` is what to re-run.
+- **Deploying needed an unrelated fix.** `flyctl` was blocked by Windows Smart App Control
+  — the binary is a large unsigned Go executable — which surfaced as a bare
+  "Permission denied" in Git Bash and was only diagnosable from PowerShell's clearer
+  "An Application Control policy has blocked this file." Nothing to do with this repo, but it
+  cost a round of debugging and is worth knowing before the next deploy.
+- **A secret was exposed and needs rotating.** `MCP_SECRET_PATH` was pasted in plain text
+  into an agent conversation while checking the health endpoint. That path is the entire auth
+  model for this server. The human has chosen to rotate it later — **it is still outstanding**
+  and is recorded in `summary.md` → Deferred work.
+
+### 2026-08-02 — Task 12
+
+- **Done:** `src/tools/list-content.ts`. `state` added as a required enum, the draft branch
+  routed to `listDrafts`, description rewritten verbatim from `design.md` lines 422–439.
+  Suite 90/90, typecheck, lint and `docs:check` clean.
+- **`src/services/list-content.ts` is not in the diff.** That is what makes "published
+  behaves exactly as it does today" provable rather than argued.
+- **The predicted test revision never happened, and that is the right outcome.** This file's
+  Notes section pre-authorized one for `registerListContent`'s widened `deps`. The test agent
+  checked the actual call site instead of trusting the prediction: `createHandler` already
+  passes the whole `deps` object, and the test helpers already build `{ site, github }`, so
+  widening the parameter type touched nothing. `design.md` line 349 says exactly this. **No
+  revision was manufactured to fulfil a prediction.**
+- **Mutation-verified directly.** Making the draft branch unreachable kills T-31; routing
+  the published branch to `listDrafts` kills T-31 the other way.
+- **A third mutant survived and was closed before the commit.** Making `state` `.optional()`
+  left all 16 tests passing. `state` being required is a deliberate decision — `design.md` →
+  Open questions → A-3 — and with it optional a call omitting it silently returns the
+  published catalogue instead of making the model choose. **T-36** now pins the refusal, and
+  the mutant dies. Added to `design.md`'s MCP table.
+- **T-24 passes against the old code as well as the new**, by design. It is a regression pin,
+  not a red test: today's non-strict `z.object` silently strips an unknown `state` key, so
+  the published path ran unchanged. T-31 carried this task's red signal.
+- **Next:** Task 13 — M-4, and **only a human can run it.**
+
+### 2026-08-02 — Task 11
+
+- **Done:** `src/services/list-drafts.ts`. One listing, parsed with the existing
+  `entryListSchema`, filtered to `.mdx` files, extension stripped. First attempt (1/3);
+  suite 85/85, typecheck and lint clean. `src/services/list-content.ts` untouched.
+- **A missing `drafts/{kind}/` is `{ ok: true, slugs: [] }`,** not an error. The directory
+  does not exist until the first draft of that kind is saved, and GitHub 404s it.
+  `design.md` calls this the failure most likely to be mistaken for a bug.
+- **Mutation-verified directly** (the session's agent budget is tight). Turning the 404 into
+  an error kills T-23; dropping the `.mdx` filter kills T-22.
+- **A third mutant survived at first and was closed before the commit.** Deleting the
+  `entry.type === "file"` clause broke nothing: T-22's directory entry was named `dir`, so
+  the `.mdx` filter already excluded it and the type check never did any work. The fixture's
+  directory is now `nested.mdx` with `type: "dir"`, so only the type check can exclude it.
+  The mutant then died. **A directory named `something.mdx` is the real case that was
+  uncovered** — unlikely, but the filter existed for it and nothing proved it ran.
+  Pre-commit strengthening, so no Test revisions entry.
+- **Next:** Task 12 — `list_content`'s `state` argument. Expect the pre-authorized test
+  revision for `registerListContent`'s widened `deps`.
+
+### 2026-08-02 — Task 9
+
+- **Done:** `src/tools/discard-draft.ts`, registered in `src/tools/index.ts`. Suite 82/82,
+  typecheck and lint clean. The description was checked character-for-character against
+  `design.md` lines 405–420 — **verbatim, no drift.**
+- **A layer violation was caught and fixed before the commit.** The tool imported
+  `draftPath` from `lib/draft` as a value to name the file it removed. `CLAUDE.md` →
+  Patterns: *"a tool must not import `lib` for anything but a `type`"*, and
+  `code-style.md`: *"a tool must not touch `lib`."* Every other tool in `src/tools/`
+  imports lib as `type` only; this was the single exception. Fixed the way `saveDraft`
+  already solved it — `discardDraft` now returns `{ ok: true; path }` and the tool renders
+  `result.path`. No test changed; the field is additive.
+- **Verified by mutation, run directly rather than by the test agent** — it hit a session
+  limit mid-run. Unregistering `discard_draft` kills all three tests; returning the refusal
+  without `isError: true` kills T-30. Source restored byte-identical after each, confirmed
+  by `diff`.
+- **Not verified, and worth knowing:** the remaining four mutants from the sign-off brief
+  were never run, because the agent stopped. The two that were run are the load-bearing
+  ones, but this task's verification is thinner than Tasks 3–8.
+- **Next:** Task 10 — M-3, and **only a human can run it.**
+
+### 2026-08-02 — Task 8
+
+- **Done:** `src/services/discard-draft.ts`. Guard, read for the sha, delete. First attempt
+  (1/3); suite 79/79, typecheck and lint clean.
+- **T-34 was added to `design.md` before the code, not after.** `design.md` specified
+  `discardDraft` with no slug check, exactly as it had for `getContent` — and the slice 1
+  reviewer had already warned that *"slice 3's `discardDraft` would make that a `DELETE`."*
+  The guard-removal mutant confirms it: without it the fake is asked for
+  `drafts/writing/../../../../Portfolio-new/contents/package.json?.mdx`. T-33 closed that
+  hole reactively; T-34 closed this one first.
+- **Signed off** by the test agent. Five of six mutants died, including the one that matters
+  most: making the service call `readDraft` and refuse on `null` kills T-18. A draft whose
+  metadata block is broken is the one you most want to be able to throw away.
+- **One mutant survived:** changing `deleteFile`'s specified commit message breaks nothing.
+  No test pins it, and `design.md` gives the message no test ID. Recorded, not fixed.
+- **The T-17 refusal ships `design.md`'s verbatim text** — *"There is no draft at
+  {kind}/{slug}."* This contradicts `CLAUDE.md`'s rule never to state a 404 as certain
+  absence, since a token that lost write scope answers 404 too. **The human chose to ship
+  the specified text and settle the wording separately**, so the contradiction is recorded
+  as deferred work rather than resolved inside an implementation commit.
+- **Next:** Task 9 — `src/tools/discard-draft.ts` and its registration.
+
+### 2026-08-02 — Task 6
+
+- **Done:** `src/tools/save-draft.ts`, `src/tools/get-content.ts`, both registered in
+  `src/tools/index.ts`. Suite 73/73, typecheck and lint clean. Both descriptions were
+  checked character-for-character against `design.md` lines 361–403 — **verbatim, no drift.**
+  Nothing asserts that, so it is an eyes-on check that has to be repeated by review.
+- **The coder hit a real block and escalated instead of editing a test — the workflow
+  working as intended.** T-28 failed, and the cause was not the source: `draftFiles`, the
+  fixture behind `fakeDraftGithub` in `src/tools/index.test.ts`, is one `Record` at module
+  scope shared across tests. T-26 saves to `drafts/writing/a-post.mdx`, the same path T-28
+  reads, so it overwrote the seed content and sha in place. Bun runs a file's tests in
+  declaration order, so T-26 always ran first. `bun test -t "T-28"` alone passed.
+- **Fixed by the test agent, in the fixture, not the assertion:** a `beforeEach` restores
+  `draftFiles` from a frozen seed via `structuredClone`. Chosen over pointing T-28 at an
+  untouched slug because it closes the whole bug class — any later test reading that path
+  is now safe by construction rather than by declaration order. T-28's assertions are
+  unchanged and it still pins the sha. Uncommitted test file, no assertion weakened, so no
+  Test revisions entry.
+- **Signed off** by the test agent. Five of six mutants died: unregistering either tool
+  kills the matching tests, dropping the `sha` line kills T-28, and widening `kind` from the
+  enum to `z.string()` kills T-25.
+- **The sixth mutant is an SDK fact worth recording.** Making a refusal `throw` instead of
+  returning `{ ok:false }` fails nothing — the MCP SDK catches an exception inside a tool
+  callback and folds it into a normal `tools/call` result, HTTP 200 with `isError: true` and
+  the same message. So "a tool failure never becomes an HTTP error" is enforced one layer
+  below our code as well as by it. T-27 is not weaker for missing it; there is nothing
+  observable to catch. Same behaviour spec 001 already recorded for a failed Zod parse.
+- **Next:** Task 7 — M-2, and **only a human can run it.**
+
+### 2026-08-02 — Task 5
+
+- **Done:** `src/services/get-content.ts`. `readFileWithSha` → `readDraft` → three outcomes.
+  First attempt (1/3); suite 69/69, typecheck and lint clean.
+- **Signed off** by the test agent. Five mutants, four died at once: returning
+  `{ ok:true, metadata:{} }` instead of the refusal kills T-21, appending the caught parse
+  error to the refusal kills T-21, pointing `draftPath` at the wrong kind kills T-19, and
+  dropping the `sha` from the success result kills T-19.
+- **The fifth mutant survived and exposed a real gap.** Removing the `GithubNotFoundError`
+  branch so a 404 fell to the generic case passed T-20, because the generic message embeds
+  the same path and T-20 only checked that the kind and slug appeared. T-20 was strengthened
+  with `not.toContain("unreachable")` and `not.toContain(".mdx")` — the generic wording is
+  the wrong framing for a 404 (CLAUDE.md → "A 404 might mean the token scope is wrong").
+  The mutant then died. Pre-commit strengthening, so no Test revisions entry, same as T-32
+  at Task 3.
+- **`bun run lint` was failing and is now fixed.** Task 4's appended tests left an import
+  order and a formatting error in `src/services/save-draft.test.ts`, which landed in
+  `e872426`. Fixed with `biome check --write` — formatting only, no assertion, name or
+  fixture touched, count unchanged at 69. **`bun run lint` is not part of the per-task
+  verify loop and should be**; it was caught here by chance.
+- **Next:** Task 6 — the two tool files and their registration.
+
+### 2026-08-02 — Task 4
+
+- **Done:** the update path's error handling added to `src/services/save-draft.ts`. One
+  `try/catch` around `writeFile` and a `describeWriteFailure` helper following
+  `get-skill.ts`'s `describeFailure` pattern. Both refusal sentences are verbatim from
+  `design.md` lines 300–308. First attempt (1/3); suite 65/65, typecheck and biome clean.
+- **No branch was needed for the success case.** Task 3 already threads `args.sha` into the
+  single `writeFile` call, so create and update are one code path — Task 4 is failure
+  handling only. That is why **T-09 passed the moment it was written.** It was investigated
+  rather than accepted: mutating `sha: args.sha` to `sha: undefined` kills it, so it is a
+  real regression guard, not a vacuous assertion.
+- **Signed off** by the test agent. Four of five mutants died: swapping the two `instanceof`
+  branches kills T-10 and T-11, removing the `try/catch` kills all three, retrying once
+  before refusing kills T-10 on its one-call assertion, and dropping `get_content` from the
+  conflict sentence kills T-10.
+- **One mutant survived, recorded rather than fixed:** replacing `instanceof` with a
+  message-string match passes the whole suite. No test distinguishes a typed branch from a
+  string match. The code does use `instanceof`, and matching on message text is forbidden by
+  [errors-and-validation.md](../../.claude/rules/errors-and-validation.md) — but that rule is
+  enforced by review here, not by a test. `design.md` → Test cases lists no case for it, and
+  the test agent did not invent one. **Deferred work for `summary.md`, not a defect.**
+- **No `GithubNotFoundError` branch.** A 404 on a write may mean the token scope is wrong
+  rather than a missing path (Risk 5), `design.md` specifies no message for it, and it falls
+  to the generic case.
+- **Next:** Task 5 — `src/services/get-content.ts`.
+
+### 2026-08-02 — Task 3
+
+- **Done:** `src/services/save-draft.ts` written — create path only. All six tests pass on
+  the first attempt (1/3); full suite 61/61, typecheck clean, `biome check
+  src/services/save-draft.ts` clean.
+- **Order followed exactly as pinned by T-32:** `isSlug` before `listContent`, so a bad slug
+  never reaches — and never names — the site. The refusal text for an invalid slug does not
+  mention `ashutoshverma.dev`.
+- **`"workshop"` passed as a literal**, per the note left at the end of Task 2 — the type
+  still permits `"portfolio"` but nothing here can reach it.
+- **`args.sha` threaded through to `writeFile` but not otherwise handled.** No
+  `GithubConflictError`/`GithubAlreadyExistsError` branch — that is Task 4. `writeFile` is
+  called bare, no `try/catch` invented ahead of the branch that will own it.
+- **Signed off** by the test agent at `60275c8`. Green was not taken on trust: five mutants
+  were applied to a scratchpad copy and all five died — dropping the `isSlug` guard kills
+  T-32, *moving it below `listContent`* also kills T-32, dropping the reserved-key filter
+  kills T-14, dropping the published-slug check kills T-12, and forcing a `sha` onto the
+  create kills T-07. No test file was edited after the red run.
+- **T-32 was strengthened before green,** not after: as first written it asserted only
+  `{ ok:false }` and no write, which a reversed check order would also satisfy via the
+  site-unreachable path. It now asserts the refusal does **not** name `ashutoshverma.dev`,
+  which is what makes mutant 2 die. Pre-green strengthening, so no Test revisions entry.
+- **The test file was amended into the code commit.** It was first committed as source-only,
+  which would have put `save-draft.ts` in history without the test that drove it.
+- **Next:** Task 4 — `saveDraft`'s update path and the two conflict refusals.
 
 ### 2026-08-02 — Task 2
 

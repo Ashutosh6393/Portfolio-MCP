@@ -589,6 +589,9 @@ Three rules carried from [testing.md](../../.claude/rules/testing.md), all uncha
 | T-19 | Reading a draft back | unit | Fake github returning a rendered draft and `sha:"abc"` → `getContent` → `{ ok:true, metadata, body, sha:"abc" }`, metadata parsed, body exact |
 | T-20 | A draft that is not there | unit | Fake throwing `GithubNotFoundError` → `{ ok:false }` naming kind and slug |
 | T-21 | A block that will not parse | unit | Fake returning a file with a broken block → `{ ok:false }` whose message says to fix it in GitHub and save again, and which **does not contain the underlying parse error**; no partial result, no empty-metadata body |
+| T-33 | A slug that is not a slug | unit | `slug:"../../../../Portfolio-new/contents/package.json?"` → `{ ok:false }`; **`readFileWithSha` never called**. The slug becomes a path in a URL, and a traversal escapes the drafts directory and the repo |
+
+T-33 was added after the slice 2 review found the guard missing — `design.md` specified `getContent` with no slug check, so this is a hole in the spec, not a deviation by the coder.
 
 ### `discard_draft` — `src/services/discard-draft.ts`
 
@@ -597,6 +600,12 @@ Three rules carried from [testing.md](../../.claude/rules/testing.md), all uncha
 | T-16 | Discarding an existing draft | unit | Fake returning `sha:"abc"` for `drafts/writing/a-post.mdx` → `discardDraft` → `ok`; `deleteFile` called with that path **and that sha** |
 | T-17 | Discarding a draft that is not there | unit | Read throws `GithubNotFoundError` → `{ ok:false }` naming kind and slug; **`deleteFile` never called** |
 | T-18 | Discarding a draft with a broken block | unit | Fake returning a file whose metadata will not parse → `ok`, deleted. **The one you most want to be able to throw away must not need parsing** |
+| T-34 | A slug that is not a slug | unit | `slug:"../../../../Portfolio-new/contents/package.json?"` → `{ ok:false }`; **neither `readFileWithSha` nor `deleteFile` is called**. Same trust boundary as T-32 and T-33, and this one deletes |
+| T-35 | The delete itself failing | unit | `deleteFile` throws a plain `Error` → error **result** naming GitHub, nothing thrown. The read succeeded, so this is a failure of the delete, not of finding the draft |
+
+T-34 was added before slice 3's code, closing the guard gap reactively fixed for `getContent` by T-33 — `discardDraft` deletes, so writing the test ahead of the implementation this time instead of after a review found it missing.
+
+T-35 was added by the slice 3 reviewer: `readFileWithSha` is wrapped in `try`/`catch` but `deleteFile` is not, so `discardDraft` rejects instead of returning its union.
 
 ### `list_content` — `src/services/list-drafts.ts`
 
@@ -618,6 +627,9 @@ Three rules carried from [testing.md](../../.claude/rules/testing.md), all uncha
 | T-30 | A `discard_draft` refusal is a tool result | mcp | `tools/call discard_draft` on a missing slug → `isError: true`; **HTTP status still 200** |
 | T-24 | `state:"published"` is unchanged | mcp | `tools/call list_content {kind:"writing",state:"published"}` → the same catalogue text the tool returns today, from the site fake |
 | T-31 | `state:"draft"` lists drafts | mcp | `tools/list` shows `state` on `list_content`; `tools/call list_content {kind:"writing",state:"draft"}` → 200, text listing the draft slugs |
+| T-36 | `state` is required, not optional | mcp | `tools/call list_content {kind:"writing"}` with no `state` → `isError: true`; **HTTP status still 200** |
+
+T-36 was added from mutation testing at Task 12: `state` is specified as required by A-3, and turning it `.optional()` in the schema left all 16 tests in the file passing — nothing proved it.
 
 ### Manual verification
 
@@ -782,7 +794,7 @@ tests. **No changes to `list_content`, `get_skill`, `src/index.ts`, or the healt
 9. Every failure above still returns HTTP 200.
 
 **Test IDs:** T-07, T-08, T-09, T-10, T-11, T-12, T-13, T-14, T-15, T-19, T-20, T-21,
-T-25, T-26, T-27, T-28, T-32, M-2
+T-25, T-26, T-27, T-28, T-32, **T-33**, M-2
 
 ### Slice 3 — throw a draft away
 
@@ -797,7 +809,7 @@ T-25, T-26, T-27, T-28, T-32, M-2
 3. A draft whose metadata block is broken can still be discarded.
 4. Nothing in `portfolio` is reachable from this tool.
 
-**Test IDs:** T-16, T-17, T-18, T-29, T-30, M-3
+**Test IDs:** T-16, T-17, T-18, T-29, T-30, **T-34**, **T-35**, M-3
 
 ### Slice 4 — list the drafts
 
@@ -813,7 +825,7 @@ makes "published behaves as it does today" provable from the diff.
 3. `list_content({ kind, state: "published" })` returns exactly what it returns today.
 4. The rewritten description is the specified text, verbatim.
 
-**Test IDs:** T-22, T-23, T-23b, T-24, T-31, M-4
+**Test IDs:** T-22, T-23, T-23b, T-24, T-31, **T-36**, M-4
 
 ---
 
