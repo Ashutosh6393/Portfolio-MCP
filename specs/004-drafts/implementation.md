@@ -60,7 +60,7 @@ In dependency order. Each task is independently testable and maps to test IDs in
 | 5 | `src/services/get-content.ts` — read, parse, the two refusals | 1, 2 | T-19, T-20, T-21 | 2 | `done` | 1/3 | `a3da41a` |
 | 6 | `src/tools/save-draft.ts` and `src/tools/get-content.ts`, both registered in `src/tools/index.ts` | 4, 5 | T-25, T-26, T-27, T-28 | 2 | `done` | 1/3 | `366fc35` |
 | 7 | Verify the read-modify-write loop on a real client, including from the phone | 6 | M-2 | 2 | `pending` | 0/3 | — |
-| 8 | `src/services/discard-draft.ts` — read for the sha, delete, refuse if absent | 2 | T-16, T-17, T-18 | 3 | `pending` | 0/3 | — |
+| 8 | `src/services/discard-draft.ts` — read for the sha, delete, refuse if absent | 2 | T-16, T-17, T-18, **T-34** | 3 | `done` | 1/3 | `PENDING` |
 | 9 | `src/tools/discard-draft.ts` and its registration | 8 | T-29, T-30 | 3 | `pending` | 0/3 | — |
 | 10 | Verify `discard_draft` on a real client | 9 | M-3 | 3 | `pending` | 0/3 | — |
 | 11 | `src/services/list-drafts.ts` — slugs from `drafts/{kind}/` | 2 | T-22, T-23, T-23b | 4 | `pending` | 0/3 | — |
@@ -172,6 +172,28 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-08-02 — Task 8
+
+- **Done:** `src/services/discard-draft.ts`. Guard, read for the sha, delete. First attempt
+  (1/3); suite 79/79, typecheck and lint clean.
+- **T-34 was added to `design.md` before the code, not after.** `design.md` specified
+  `discardDraft` with no slug check, exactly as it had for `getContent` — and the slice 1
+  reviewer had already warned that *"slice 3's `discardDraft` would make that a `DELETE`."*
+  The guard-removal mutant confirms it: without it the fake is asked for
+  `drafts/writing/../../../../Portfolio-new/contents/package.json?.mdx`. T-33 closed that
+  hole reactively; T-34 closed this one first.
+- **Signed off** by the test agent. Five of six mutants died, including the one that matters
+  most: making the service call `readDraft` and refuse on `null` kills T-18. A draft whose
+  metadata block is broken is the one you most want to be able to throw away.
+- **One mutant survived:** changing `deleteFile`'s specified commit message breaks nothing.
+  No test pins it, and `design.md` gives the message no test ID. Recorded, not fixed.
+- **The T-17 refusal ships `design.md`'s verbatim text** — *"There is no draft at
+  {kind}/{slug}."* This contradicts `CLAUDE.md`'s rule never to state a 404 as certain
+  absence, since a token that lost write scope answers 404 too. **The human chose to ship
+  the specified text and settle the wording separately**, so the contradiction is recorded
+  as deferred work rather than resolved inside an implementation commit.
+- **Next:** Task 9 — `src/tools/discard-draft.ts` and its registration.
 
 ### 2026-08-02 — Task 6
 
