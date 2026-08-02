@@ -56,7 +56,7 @@ In dependency order. Each task is independently testable and maps to test IDs in
 | 2 | `src/lib/github.ts` — `readFileWithSha`, `writeFile`, `deleteFile`, `GithubConflictError`, `GithubAlreadyExistsError`, `fileContentSchema`, header-comment fix — **then verified against the real `workshop` repo** | — | M-1 | 1 | `done` | 1/3 | `397be30` |
 | 3 | `saveDraft`'s create path — slug check, published-slug check, reserved-key drop, render, create-only write | 1, 2 | T-07, T-08, T-12, T-13, T-14, T-32 | 2 | `done` | 1/3 | `60275c8` |
 | 4 | `saveDraft`'s update path and the two conflict refusals | 3 | T-09, T-10, T-11, T-15 | 2 | `done` | 1/3 | `e872426` |
-| 5 | `src/services/get-content.ts` — read, parse, the two refusals | 1, 2 | T-19, T-20, T-21 | 2 | `pending` | 0/3 | — |
+| 5 | `src/services/get-content.ts` — read, parse, the two refusals | 1, 2 | T-19, T-20, T-21 | 2 | `done` | 1/3 | `PENDING` |
 | 6 | `src/tools/save-draft.ts` and `src/tools/get-content.ts`, both registered in `src/tools/index.ts` | 4, 5 | T-25, T-26, T-27, T-28 | 2 | `pending` | 0/3 | — |
 | 7 | Verify the read-modify-write loop on a real client, including from the phone | 6 | M-2 | 2 | `pending` | 0/3 | — |
 | 8 | `src/services/discard-draft.ts` — read for the sha, delete, refuse if absent | 2 | T-16, T-17, T-18 | 3 | `pending` | 0/3 | — |
@@ -171,6 +171,28 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-08-02 — Task 5
+
+- **Done:** `src/services/get-content.ts`. `readFileWithSha` → `readDraft` → three outcomes.
+  First attempt (1/3); suite 69/69, typecheck and lint clean.
+- **Signed off** by the test agent. Five mutants, four died at once: returning
+  `{ ok:true, metadata:{} }` instead of the refusal kills T-21, appending the caught parse
+  error to the refusal kills T-21, pointing `draftPath` at the wrong kind kills T-19, and
+  dropping the `sha` from the success result kills T-19.
+- **The fifth mutant survived and exposed a real gap.** Removing the `GithubNotFoundError`
+  branch so a 404 fell to the generic case passed T-20, because the generic message embeds
+  the same path and T-20 only checked that the kind and slug appeared. T-20 was strengthened
+  with `not.toContain("unreachable")` and `not.toContain(".mdx")` — the generic wording is
+  the wrong framing for a 404 (CLAUDE.md → "A 404 might mean the token scope is wrong").
+  The mutant then died. Pre-commit strengthening, so no Test revisions entry, same as T-32
+  at Task 3.
+- **`bun run lint` was failing and is now fixed.** Task 4's appended tests left an import
+  order and a formatting error in `src/services/save-draft.test.ts`, which landed in
+  `e872426`. Fixed with `biome check --write` — formatting only, no assertion, name or
+  fixture touched, count unchanged at 69. **`bun run lint` is not part of the per-task
+  verify loop and should be**; it was caught here by chance.
+- **Next:** Task 6 — the two tool files and their registration.
 
 ### 2026-08-02 — Task 4
 

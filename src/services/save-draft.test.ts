@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { renderDraft } from "../lib/draft";
 import {
+	type Github,
 	GithubAlreadyExistsError,
 	GithubConflictError,
-	type Github,
 } from "../lib/github";
 import type { Project, Site, Writing } from "../lib/site";
 import { saveDraft } from "./save-draft";
@@ -205,7 +205,10 @@ describe("saveDraft — reserved keys", () => {
 
 // A github whose writeFile records the call (so a test can prove it fired
 // exactly once) and then throws the given error — used for T-10, T-11, T-15.
-function githubThrowingOnWrite(error: Error): { github: Github; calls: WriteCall[] } {
+function githubThrowingOnWrite(error: Error): {
+	github: Github;
+	calls: WriteCall[];
+} {
 	const calls: WriteCall[] = [];
 	const github: Github = {
 		...noReadPath,
