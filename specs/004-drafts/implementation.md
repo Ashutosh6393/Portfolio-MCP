@@ -55,7 +55,7 @@ In dependency order. Each task is independently testable and maps to test IDs in
 | 1 | `src/lib/draft.ts` — `renderDraft`, `readDraft`, `draftPath`, `isSlug` | — | T-01, T-02, T-03, T-04, T-05, T-06, T-06b | 1 | `done` | 1/3 | `fc39df2` |
 | 2 | `src/lib/github.ts` — `readFileWithSha`, `writeFile`, `deleteFile`, `GithubConflictError`, `GithubAlreadyExistsError`, `fileContentSchema`, header-comment fix — **then verified against the real `workshop` repo** | — | M-1 | 1 | `done` | 1/3 | `397be30` |
 | 3 | `saveDraft`'s create path — slug check, published-slug check, reserved-key drop, render, create-only write | 1, 2 | T-07, T-08, T-12, T-13, T-14, T-32 | 2 | `done` | 1/3 | `60275c8` |
-| 4 | `saveDraft`'s update path and the two conflict refusals | 3 | T-09, T-10, T-11, T-15 | 2 | `pending` | 0/3 | — |
+| 4 | `saveDraft`'s update path and the two conflict refusals | 3 | T-09, T-10, T-11, T-15 | 2 | `done` | 1/3 | `PENDING` |
 | 5 | `src/services/get-content.ts` — read, parse, the two refusals | 1, 2 | T-19, T-20, T-21 | 2 | `pending` | 0/3 | — |
 | 6 | `src/tools/save-draft.ts` and `src/tools/get-content.ts`, both registered in `src/tools/index.ts` | 4, 5 | T-25, T-26, T-27, T-28 | 2 | `pending` | 0/3 | — |
 | 7 | Verify the read-modify-write loop on a real client, including from the phone | 6 | M-2 | 2 | `pending` | 0/3 | — |
@@ -171,6 +171,32 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-08-02 — Task 4
+
+- **Done:** the update path's error handling added to `src/services/save-draft.ts`. One
+  `try/catch` around `writeFile` and a `describeWriteFailure` helper following
+  `get-skill.ts`'s `describeFailure` pattern. Both refusal sentences are verbatim from
+  `design.md` lines 300–308. First attempt (1/3); suite 65/65, typecheck and biome clean.
+- **No branch was needed for the success case.** Task 3 already threads `args.sha` into the
+  single `writeFile` call, so create and update are one code path — Task 4 is failure
+  handling only. That is why **T-09 passed the moment it was written.** It was investigated
+  rather than accepted: mutating `sha: args.sha` to `sha: undefined` kills it, so it is a
+  real regression guard, not a vacuous assertion.
+- **Signed off** by the test agent. Four of five mutants died: swapping the two `instanceof`
+  branches kills T-10 and T-11, removing the `try/catch` kills all three, retrying once
+  before refusing kills T-10 on its one-call assertion, and dropping `get_content` from the
+  conflict sentence kills T-10.
+- **One mutant survived, recorded rather than fixed:** replacing `instanceof` with a
+  message-string match passes the whole suite. No test distinguishes a typed branch from a
+  string match. The code does use `instanceof`, and matching on message text is forbidden by
+  [errors-and-validation.md](../../.claude/rules/errors-and-validation.md) — but that rule is
+  enforced by review here, not by a test. `design.md` → Test cases lists no case for it, and
+  the test agent did not invent one. **Deferred work for `summary.md`, not a defect.**
+- **No `GithubNotFoundError` branch.** A 404 on a write may mean the token scope is wrong
+  rather than a missing path (Risk 5), `design.md` specifies no message for it, and it falls
+  to the generic case.
+- **Next:** Task 5 — `src/services/get-content.ts`.
 
 ### 2026-08-02 — Task 3
 

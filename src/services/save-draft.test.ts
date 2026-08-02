@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { renderDraft } from "../lib/draft";
-import type { Github } from "../lib/github";
+import {
+	GithubAlreadyExistsError,
+	GithubConflictError,
+	type Github,
+} from "../lib/github";
 import type { Project, Site, Writing } from "../lib/site";
 import { saveDraft } from "./save-draft";
 
@@ -196,6 +200,123 @@ describe("saveDraft — reserved keys", () => {
 		expect(call.content).not.toContain("show");
 		expect(call.content).not.toContain("order");
 		expect(call.content).not.toContain("readingTime");
+	});
+});
+
+// A github whose writeFile records the call (so a test can prove it fired
+// exactly once) and then throws the given error — used for T-10, T-11, T-15.
+function githubThrowingOnWrite(error: Error): { github: Github; calls: WriteCall[] } {
+	const calls: WriteCall[] = [];
+	const github: Github = {
+		...noReadPath,
+		async writeFile(repo, path, content, options) {
+			calls.push({ repo, path, content, options });
+			throw error;
+		},
+	};
+	return { github, calls };
+}
+
+describe("saveDraft — the update path", () => {
+	test("T-09: a sha is supplied, the writer accepts it, and the writer received that exact sha", async () => {
+		const { github, calls } = githubAcceptingWrites();
+		const site = siteReturning([]);
+		const metadata = { title: "An Edited Post" };
+		const body = "Edited body.";
+
+		const result = await saveDraft(
+			{ site, github },
+			{
+				kind: "writing",
+				slug: "a-post",
+				metadata,
+				body,
+				sha: "abc",
+			},
+		);
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error("expected ok result");
+
+		expect(calls).toHaveLength(1);
+		const call = calls[0];
+		if (!call) throw new Error("expected a write call");
+		expect(call.options.sha).toBe("abc");
+	});
+});
+
+describe("saveDraft — refusing a stale or blind write", () => {
+	test("T-10: a GithubConflictError refuses without retrying, telling the model to re-read with get_content", async () => {
+		const { github, calls } = githubThrowingOnWrite(
+			new GithubConflictError("workshop", "drafts/writing/a-post.mdx"),
+		);
+		const site = siteReturning([]);
+
+		const result = await saveDraft(
+			{ site, github },
+			{
+				kind: "writing",
+				slug: "a-post",
+				metadata: { title: "A Post" },
+				body: "Body.",
+				sha: "stale-sha",
+			},
+		);
+
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("expected an error result");
+		expect(result.error).toContain("changed");
+		expect(result.error).toContain("get_content");
+		// Not a retry: the writer was called exactly once, not called again
+		// with a fresh sha or without one.
+		expect(calls).toHaveLength(1);
+	});
+
+	test("T-11: a GithubAlreadyExistsError with no sha refuses instead of silently overwriting", async () => {
+		const { github, calls } = githubThrowingOnWrite(
+			new GithubAlreadyExistsError("workshop", "drafts/writing/a-post.mdx"),
+		);
+		const site = siteReturning([]);
+
+		const result = await saveDraft(
+			{ site, github },
+			{
+				kind: "writing",
+				slug: "a-post",
+				metadata: { title: "A Post" },
+				body: "Body.",
+			},
+		);
+
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("expected an error result");
+		expect(result.error).toContain("already exists");
+		expect(result.error).toContain("get_content");
+		expect(calls).toHaveLength(1);
+	});
+
+	test("T-15: a plain GitHub error is returned as a result naming GitHub, never thrown", async () => {
+		const { github, calls } = githubThrowingOnWrite(
+			new Error("GitHub returned 500 on the workshop repo."),
+		);
+		const site = siteReturning([]);
+
+		const result = await saveDraft(
+			{ site, github },
+			{
+				kind: "writing",
+				slug: "a-post",
+				metadata: { title: "A Post" },
+				body: "Body.",
+			},
+		);
+
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("expected an error result");
+		expect(result.error).toContain("GitHub");
+		// Must not be mistaken for either refusal above.
+		expect(result.error).not.toContain("get_content");
+		expect(calls).toHaveLength(1);
 	});
 });
 

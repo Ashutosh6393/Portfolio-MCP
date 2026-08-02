@@ -1,5 +1,9 @@
 import { draftPath, isSlug, renderDraft } from "../lib/draft";
-import type { Github } from "../lib/github";
+import {
+	type Github,
+	GithubAlreadyExistsError,
+	GithubConflictError,
+} from "../lib/github";
 import type { Site } from "../lib/site";
 import { listContent } from "./list-content";
 
@@ -65,10 +69,30 @@ export async function saveDraft(
 	const text = renderDraft(metadata, args.body);
 	const path = draftPath(args.kind, args.slug);
 
-	await deps.github.writeFile("workshop", path, text, {
-		message: `save draft: ${args.kind}/${args.slug}`,
-		sha: args.sha,
-	});
+	try {
+		await deps.github.writeFile("workshop", path, text, {
+			message: `save draft: ${args.kind}/${args.slug}`,
+			sha: args.sha,
+		});
+	} catch (error) {
+		return { ok: false, error: describeWriteFailure(error, args) };
+	}
 
 	return { ok: true, path };
+}
+
+// A refusal, never a retry (design.md → Approach → save_draft, both messages
+// specified verbatim). Branches on the error type, never on its message.
+function describeWriteFailure(
+	error: unknown,
+	args: { kind: "writing" | "project"; slug: string },
+): string {
+	if (error instanceof GithubConflictError) {
+		return `That draft changed since you read it. Call get_content for ${args.kind}/${args.slug} again and re-apply the edit before saving.`;
+	}
+	if (error instanceof GithubAlreadyExistsError) {
+		return `A draft already exists at ${args.kind}/${args.slug}. Call get_content to read it, then save again with the sha it returns.`;
+	}
+	const message = error instanceof Error ? error.message : "unknown error";
+	return `GitHub is unreachable: ${message}`;
 }
