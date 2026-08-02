@@ -60,7 +60,7 @@ In dependency order. Each task is independently testable and maps to test IDs in
 | 5 | `src/services/get-content.ts` — read, parse, the two refusals | 1, 2 | T-19, T-20, T-21 | 2 | `done` | 1/3 | `a3da41a` |
 | 6 | `src/tools/save-draft.ts` and `src/tools/get-content.ts`, both registered in `src/tools/index.ts` | 4, 5 | T-25, T-26, T-27, T-28 | 2 | `done` | 1/3 | `366fc35` |
 | 7 | Verify the read-modify-write loop on a real client, including from the phone | 6 | M-2 | 2 | `pending` | 0/3 | — |
-| 8 | `src/services/discard-draft.ts` — read for the sha, delete, refuse if absent | 2 | T-16, T-17, T-18, **T-34** | 3 | `done` | 1/3 | `618e80a` |
+| 8 | `src/services/discard-draft.ts` — read for the sha, delete, refuse if absent | 2 | T-16, T-17, T-18, **T-34**, **T-35** | 3 | `done` | 1/3 | `618e80a`, fix `16103dc` |
 | 9 | `src/tools/discard-draft.ts` and its registration | 8 | T-29, T-30 | 3 | `done` | 1/3 | `e4aa9d8` |
 | 10 | Verify `discard_draft` on a real client | 9 | M-3 | 3 | `pending` | 0/3 | — |
 | 11 | `src/services/list-drafts.ts` — slugs from `drafts/{kind}/` | 2 | T-22, T-23, T-23b | 4 | `done` | 1/3 | `5db6f0e` |
@@ -139,8 +139,8 @@ Max 5–7 files (excluding tests) and 500 lines per slice.
 |---|---|---|---|---|
 | 1 | Tasks 1–2 — the format, and the ability to write | 2 | `done` — all seven acceptance criteria verified, ready for PR | — |
 | 2 | Tasks 3–7 — `save_draft` and `get_content` | 5 | **code `done`, M-2 outstanding.** Reviewed: one blocker (a traversal read through `get_content`) found and fixed in `d573a63`; five lesser findings recorded in `summary.md` | — |
-| 3 | Tasks 8–10 — `discard_draft` | 3 | `pending` | — |
-| 4 | Tasks 11–13 — `list_content`'s `state` | 2 | `pending` | — |
+| 3 | Tasks 8–10 — `discard_draft` | 3 | **code `done`, M-3 outstanding.** Reviewed: no blocker; one major — `deleteFile` was unwrapped so the service rejected — fixed in `16103dc` and pinned by T-35 | — |
+| 4 | Tasks 11–13 — `list_content`'s `state` | 2 | **code `done`, M-4 outstanding.** Reviewed: no blocker, no major; **merges as-is**. Doc findings fixed | — |
 
 Slices 2, 3 and 4 each depend only on slice 1, never on each other. If 3 or 4 has to be
 reverted, the rest stands.

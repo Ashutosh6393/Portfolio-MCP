@@ -626,3 +626,520 @@ guard inside `draftPath` would have to throw out of a pure `lib` function into s
 this repo contracts as non-throwing. The cost of that choice is that **each new
 slug-taking service must remember the guard** — `discardDraft` in slice 3 is the next one,
 and it deletes.
+
+---
+
+## Slice 3 — throw a draft away
+
+- **Slice:** 3 of 4 · **Branch:** `feat/drafts`
+- **Spec:** `design.md` · **ADR:** `docs/adr/004-drafts-are-real-mdx-in-workshop.md`
+- **Tasks:** 8–9, both `done`. **Task 10 (M-3) is outstanding and only a human can run
+  it** — discarding a real draft from a client, at least once, and confirming a missing
+  slug refuses. This slice is not ready to merge until that step happens.
+- **Tests:** 7 added over Tasks 8–9 (75 → 79 → 82), plus one more — **T-35** — added by a
+  pre-merge review after Task 11 had already started. See *What changed* and *Test
+  revisions* for why that one doesn't line up neatly with "Tasks 8–9."
+- **Size:** 3 source files, 123 insertions / 0 deletions (limit: 5–7 files excl. tests,
+  500 lines)
+
+---
+
+### TL;DR
+
+**A draft can now be permanently deleted.** `discard_draft({ kind, slug })` removes the
+file from `workshop/drafts/{kind}/{slug}.mdx`. There is no trash and no undo — the git
+commit is the only record, exactly as specified. A draft does **not** need to be readable
+to be deleted: one whose metadata block is broken can still be thrown away, on purpose,
+because "let me delete this broken thing" is exactly the request you don't want to gate
+behind "can we first parse it."
+
+The code was signed off once, and a reviewer then found a real bug in it before merge:
+if the *delete* step itself failed — not the read, the delete — the tool crashed instead
+of answering with a normal error message. That's fixed now, with a test holding it in
+place. What's still true: nobody has deleted a real draft through a real client. That's
+Task 10 (M-3), and it's the one thing standing between this slice and being finished.
+
+---
+
+### What changed
+
+#### Source
+
+| File | Change | Why |
+|---|---|---|
+| `src/services/discard-draft.ts` | **new**, 72 lines | `discardDraft` — checks the slug is a safe path segment, reads the draft only for its `sha` (never its content — a broken draft must still delete), then deletes with that `sha`. Both the read and the delete are wrapped in `try`/`catch`; the delete wrapper was missing until a reviewer caught it (see *QA* and *Test revisions*). |
+| `src/tools/discard-draft.ts` | **new**, 49 lines | The tool wrapper: the description specified verbatim in `design.md`, the `z.object` schema, `isError` on refusal. |
+| `src/tools/index.ts` | modified, +2 | Registers `discard_draft` alongside the four tools already there. Nothing already registered is touched. |
+
+#### Tests
+
+| File | Change | Why |
+|---|---|---|
+| `src/services/discard-draft.test.ts` | **new**, 204 lines | T-16…T-18, T-34, T-35 — deleting an existing draft, a missing one, one with a broken metadata block, a traversal slug, and a delete that itself fails. |
+| `src/tools/index.test.ts` | +93/−2 | T-29, T-30 — `discard_draft` exercised through the MCP handler, not by calling the tool function directly. Also relaxes a shared fake; see *Test revisions*. |
+
+#### Docs
+
+| File | Change | Why |
+|---|---|---|
+| `specs/004-drafts/design.md` | +6 | T-34 and T-35 added to the test case list, each with a note on why it wasn't there from the start. |
+| `specs/004-drafts/implementation.md` | task states, session notes for Tasks 8–9, current status | |
+
+### How it works now
+
+`discardDraft` checks the slug's shape first, exactly as `saveDraft` and `getContent` do —
+a bad slug never reaches GitHub at all. It then calls `readFileWithSha` for the current
+`sha` only; the content that comes back is discarded unread, so a draft whose metadata
+block doesn't parse is still deletable (T-18). A missing draft (`GithubNotFoundError` on
+the read) is refused with `design.md`'s exact sentence, *"There is no draft at
+{kind}/{slug}."* Any other read failure, and now any delete failure too, becomes a generic
+*"GitHub is unreachable: …"* result. Nothing in the service throws; every path returns the
+same `{ ok: true; path } | { ok: false; error: string }` union `saveDraft` already
+established.
+
+**A layer violation was caught and fixed before the first commit landed.** The tool
+originally imported `draftPath` from `lib/draft` as a *value*, to name the file it had
+just removed — `code-style.md` and this feature's `CLAUDE.md` both say a tool may import
+`lib` for a `type` only. Fixed the way `saveDraft` already solved the same problem:
+`discardDraft` returns `{ ok: true; path }`, and the tool renders `result.path` instead of
+recomputing it.
+
+---
+
+### QA
+
+**What does this let a user do that they couldn't before?**
+Delete a draft, permanently, from a client. Nothing else changes — `get_content`,
+`save_draft` and `list_content` are not in this diff.
+
+**What happens when it fails?**
+Two refusals. A missing draft names the kind and slug and states absence as fact — see the
+next answer for why that's flagged, not fixed. Any other GitHub failure, on the read *or*
+now the delete, returns a sentence naming GitHub, never a thrown error. `isError: true`
+with HTTP still 200, by the same SDK mechanism already proven for `save_draft` in slice 2.
+
+**Does this touch existing behaviour?**
+No. The non-test source diff adds three files' worth of insertions and deletes nothing.
+`get_content`, `save_draft` and `list_content` are not in the diff.
+
+**Any data migration?**
+None. Deleting a draft deletes a file; nothing else knows it existed.
+
+**Any security or auth implications?**
+The capability itself — the server can delete files in `workshop` — was already granted in
+slice 1's token widen. What's new here is the **first caller of `deleteFile`**, and two
+things are worth separating:
+
+- **A real defect shipped past sign-off, then was caught before merge.** `discardDraft`
+  wrapped the read in `try`/`catch` and left `deleteFile` bare. `deleteFile` throws on a
+  409 if the `sha` goes stale between the read and the delete, and on a 404 — the same
+  status GitHub gives a delete the token isn't scoped for (`design.md` → Risk 5). Unwrapped,
+  the service **rejected** rather than returning its union — on the one tool in this
+  feature that destroys data. The MCP SDK caught the rejection, so HTTP stayed 200 and
+  nothing leaked to the client, but the sentence the model would have acted on was chosen
+  by a layer — the SDK's generic catch — that has no idea a delete was attempted. Fixed in
+  `16103dc`, held in place by **T-35**.
+- **`writeFile`/`deleteFile` still take `repo: Repo`.** Carried forward, unchanged: the
+  type still permits a call aimed at `portfolio`. `discardDraft` passes the `"workshop"`
+  literal, so nothing in this slice can reach it — a convention, not a compiler check,
+  exactly as flagged in slices 1 and 2.
+
+**What did we deliberately not do?**
+No parsing before delete, by design — `discard_draft`'s whole reason to exist is removing
+a draft `get_content` can't read. No undo, no trash, no history: git is the history. Task
+10 (M-3), because it needs a human and a real client.
+
+---
+
+### Verify it yourself
+
+```bash
+git checkout feat/drafts
+bun install
+bun test
+```
+
+1. `bun test` → **90 pass, 0 fail** (current `HEAD` includes slice 4 too; checking out
+   `4ddcfd1` isolates slice 3 alone at **82 pass**).
+2. `bun run typecheck && bun run lint` → both clean.
+3. **Failure case** — a slug that isn't kebab-case refuses before any network call, same
+   pattern slice 2 used for `save_draft`:
+
+   ```bash
+   bun -e '
+   import { discardDraft } from "./src/services/discard-draft.ts";
+   const throwsIfCalled = async () => { throw new Error("should not be called"); };
+   const github = { readFileWithSha: throwsIfCalled, deleteFile: throwsIfCalled, readFile: throwsIfCalled, writeFile: throwsIfCalled, listDirectory: throwsIfCalled };
+   console.log(await discardDraft({ github }, { kind: "writing", slug: "../../../../Portfolio-new/contents/package.json?" }));
+   '
+   ```
+
+   Expect `{ ok: false, error: "\"...\" is not a valid slug. ..." }`. The fake never
+   throws — proof the guard runs before GitHub is ever touched, the same trust boundary
+   `getContent` needed a fix for one slice earlier.
+4. What this **cannot** verify by itself: that a delete against the real `workshop` repo
+   removes a real file, or that a missing-slug refusal behaves the same from a real
+   client. That's Task 10.
+
+---
+
+### Test coverage
+
+| Test | Verifies | File |
+|---|---|---|
+| T-16 | Deleting an existing draft calls `deleteFile` with the path and the `sha` the read returned | `src/services/discard-draft.test.ts` |
+| T-17 | A missing draft refuses, naming kind and slug, and `deleteFile` is never called | `src/services/discard-draft.test.ts` |
+| T-18 | A draft with a broken metadata block is deleted anyway — `readDraft` is never called | `src/services/discard-draft.test.ts` |
+| T-34 | A slug that isn't kebab-case refuses before either `readFileWithSha` or `deleteFile` runs | `src/services/discard-draft.test.ts` |
+| T-35 | A `deleteFile` failure is an error result naming GitHub, not a rejection | `src/services/discard-draft.test.ts` |
+| T-29 | `discard_draft` is advertised in `tools/list`; a real discard through the MCP handler names what was removed | `src/tools/index.test.ts` |
+| T-30 | A `discard_draft` refusal is `isError: true`, HTTP still 200 | `src/tools/index.test.ts` |
+| M-3 | Discarding a real draft, and a missing slug, from a real client | **pending — Task 10, human step, not run** |
+
+**Task 8's mutation check was thorough.** Five of six mutants applied to a scratchpad copy
+of `discard-draft.ts` died — most notably, making the service call `readDraft` and refuse
+on a parse failure kills T-18, which is the one mutant that matters most: a draft whose
+metadata is broken is exactly the one you most want to be able to throw away. **One mutant
+survived, recorded rather than fixed:** changing `deleteFile`'s specified commit message
+breaks nothing. No test pins it, and `design.md` gives the message no test ID.
+
+**Task 9's mutation check is thinner than the rest of the feature, and that's stated
+plainly rather than glossed over.** The verifying agent hit a session limit partway
+through and ran only two of the six mutants prepared for sign-off. Both of the two that
+ran died — unregistering `discard_draft` kills all three of its tests; returning the
+refusal without `isError: true` kills T-30 — and those are the load-bearing ones, but the
+other four were never run. No task before this one shipped with less than a full mutation
+pass.
+
+**Not covered, deliberately:** the tool description was checked character-for-character
+against `design.md` by eye at Task 9 sign-off. Nothing asserts that text, so a future
+reword would drift silently, same caveat as slices 1 and 2.
+
+### Test revisions in this slice
+
+**One, and it was recorded a commit late.** `e4aa9d8` (Task 9) changed
+`fakeDraftGithub.deleteFile` in `src/tools/index.test.ts` from a loud
+`throw new Error("deleteFile is not part of this test")` to a real
+`delete draftFiles[path]`. T-29 needs the shared fake to actually remove the entry so the
+tool has something true to report; the throwing stub — correct for every test before T-29,
+where nothing should reach `deleteFile` — would fail T-29 by construction.
+
+**The revision itself is sound. Where it landed is the part worth flagging.** It shipped
+inside Task 9's feature commit rather than as its own commit ahead of the red test, so
+`implementation.md` → Test revisions had no row for it until `16103dc` added one
+retroactively, alongside an unrelated fix. **The cost is real, not just procedural:**
+`fakeDraftGithub` backs T-25 through T-30 in one file, so an accidental `deleteFile` call
+from `save_draft` or `get_content` now passes silently where it used to throw and fail
+loudly. Nothing in this slice's tests exercises that accidental path, so it's a latent gap
+rather than an active one — but it is a gap `bun test` will not report.
+
+---
+
+### Risks and things to watch
+
+| Risk | Likelihood | What to watch |
+|---|---|---|
+| **Task 10 (M-3) hasn't run.** Nobody has discarded a real draft, or a missing one, from a real client. | **this is the open item** | Do not treat this slice as finished until Task 10 runs and its answers land in `implementation.md`. |
+| **`discardDraft`'s 404 message states absence as fact.** `design.md`'s specified sentence, *"There is no draft at {kind}/{slug},"* contradicts `CLAUDE.md`'s own rule that a 404 might mean the token scope is wrong, not that the file is missing. | low, on this token | The human chose to ship the specified text and settle the wording separately — see *Deferred work*. The condition on that deferral: it must stay on the **read** path only. |
+| **Task 9's mutation check ran two of six prepared mutants.** | low-to-medium | The two load-bearing ones died. The other four were never exercised — recorded, not silently absorbed into "signed off." |
+| **`fakeDraftGithub.deleteFile` no longer throws.** | low | A future test added to the shared block that accidentally reaches `deleteFile` from `save_draft` or `get_content` will pass instead of failing loudly. |
+| **`writeFile`/`deleteFile` still type-permit a write or delete aimed at `portfolio`.** | low today | Unchanged from slices 1–2. `discardDraft` passes `"workshop"` as a literal; the signature still allows otherwise. |
+
+**Rollback:** revert the commits. Nothing outside `src/tools/index.ts`'s one new
+registration line depends on this slice, and `get_content`/`save_draft`/`list_content`
+are untouched.
+
+---
+
+### Deferred work
+
+| Item | Why deferred | Worth doing? |
+|---|---|---|
+| **The T-17 refusal states a 404 as certain absence**, contradicting `CLAUDE.md`'s own instruction never to do that — a token that lost write scope answers 404 too. `design.md` specifies the exact sentence and the human confirmed shipping it as written. | The human made the call deliberately, and re-wording a specified, human-approved sentence mid-implementation isn't this slice's decision to make. | **yes, but only on the read branch.** The slice 3 reviewer's condition for calling this safe: a near-certain-absence read is a defensible shortcut; the same shortcut on a **write** or **delete** confirmation would not be. Watch for anyone reusing this wording elsewhere. |
+| **Task 9's mutation pass is incomplete** — two of six mutants run, the session hit a limit. | Re-running costs an agent session, not a code change. | **yes, low cost** — run the remaining four mutants (T-16 removal, the slug-check order, the sha-forwarding line, discard's commit message) before this slice is considered as thoroughly checked as Tasks 1–8. |
+| **`deleteFile`'s commit message has no test ID.** Changing `` `discard draft: ${kind}/${slug}` `` to anything else passes the whole suite. | Low value — a wrong commit message is cosmetic, not a correctness bug. | **no**, unless commit-message conventions become load-bearing for something else (e.g. a script that parses them). |
+| **`writeFile`/`deleteFile` still take `repo: Repo`.** Carried forward from slices 1–2, unchanged. | Nothing in this slice calls a writer with anything but `"workshop"`, so there's still no live caller forcing the narrowing. | **yes**, unchanged recommendation: narrow the signature so the type does the work the literal currently does by convention. |
+
+---
+
+### Documentation updated
+
+- [x] `specs/004-drafts/design.md` — T-34 and T-35 added to the test case list, each with
+      a note on how it was found
+- [x] `specs/004-drafts/implementation.md` — task states, session notes for Tasks 8–9,
+      the Test revisions table corrected for `e4aa9d8`
+- [x] `bun run docs:check` — clean, no generated-block drift
+
+---
+
+## Slice 4 — list the drafts
+
+- **Slice:** 4 of 4 · **Branch:** `feat/drafts`
+- **Spec:** `design.md` · **ADR:** `docs/adr/004-drafts-are-real-mdx-in-workshop.md`
+- **Tasks:** 11–12, both `done`. **Task 13 (M-4) is outstanding and only a human can run
+  it** — confirming `list_content` returns real drafts and an unchanged published
+  catalogue, from a real client. This slice is not ready to merge until that step happens.
+- **Tests:** 7 added over Tasks 11–12 (82 → 85 → 90). One of the tests in that range,
+  **T-35**, belongs to slice 3, not this one — see the note below.
+- **Size:** 2 source files, 92 insertions / 11 deletions (limit: 5–7 files excl. tests,
+  500 lines)
+
+---
+
+### TL;DR
+
+**`list_content` can now list drafts, not only published content.** Add
+`state: "draft"` and it returns the slugs sitting in `workshop/drafts/{kind}/` — nothing
+else, no titles, because reading one costs an API call and `get_content` already exists
+for that. `state` is required, not optional: a call that omits it is refused rather than
+silently defaulting to the published catalogue, which is a deliberate decision (`design.md`
+→ A-3), not an oversight.
+
+The strongest thing about this slice is what it doesn't touch:
+`src/services/list-content.ts` is **not in the diff**. That is what makes "published
+behaves exactly as it did yesterday" provable from the diff itself rather than argued in
+review. What's still open: nobody has run either `state` against the real `workshop` repo
+or the real site from a real client. That's Task 13 (M-4).
+
+---
+
+### What changed
+
+#### Source
+
+| File | Change | Why |
+|---|---|---|
+| `src/services/list-drafts.ts` | **new**, 53 lines | `listDrafts` — one `listDirectory("workshop", "drafts/{kind}")`, entries filtered to `.mdx` files, extension stripped. A missing directory (nothing saved yet for that `kind`) is `{ ok: true, slugs: [] }`, not an error. |
+| `src/tools/list-content.ts` | modified, +39/−11 | `state` added as a required `z.enum`. The `"draft"` branch calls `listDrafts`; the `"published"` branch is the same call to `listContent` it always was. Description rewritten verbatim from `design.md`. |
+
+#### Tests
+
+| File | Change | Why |
+|---|---|---|
+| `src/services/list-drafts.test.ts` | **new**, 115 lines | T-22, T-23, T-23b — a real listing, a missing directory, GitHub unreachable. |
+| `src/tools/index.test.ts` | +120/−2 | T-24, T-31, T-36, through the MCP handler. |
+
+#### Docs
+
+| File | Change | Why |
+|---|---|---|
+| `specs/004-drafts/design.md` | +3 | T-36 added, with the mutation finding that motivated it. |
+| `specs/004-drafts/implementation.md` | task states, session notes for Tasks 11–12, current status | |
+
+Nothing else moved. `src/services/list-content.ts` and its tests are untouched — that's
+the whole point of the slice, stated as a fact about the diff rather than a claim in
+prose.
+
+### How it works now
+
+`registerListContent`'s `deps` widens from `{ site }` to `{ site; github }`, and the
+handler branches on `state` before doing anything else. `state: "draft"` calls the new
+`listDrafts` service and renders the slugs one per line, or `"No draft {kind} found."` for
+an empty list — the same treatment the published branch already gives an empty catalogue.
+`state: "published"` is the exact call `list_content` made before this slice existed;
+`listContent` itself is not touched, so there is nothing new for it to get wrong.
+
+**`listDrafts` treats a missing directory as an empty list, on purpose.**
+`drafts/{kind}/` doesn't exist in `workshop` until the first draft of that kind is saved,
+and GitHub 404s a directory that isn't there. `design.md` calls this the failure most
+likely to be mistaken for a bug — it is answered by `GithubNotFoundError`, caught, and
+turned into `{ ok: true, slugs: [] }` rather than an error.
+
+---
+
+### QA
+
+**What does this let a user do that they couldn't before?**
+See a list of draft slugs by kind, on paper. In practice — not yet against the real repo;
+see Task 13 below. Against the fakes, every case tried behaves as specified.
+
+**What happens when it fails?**
+`GitHub is unreachable: …` for any GitHub failure other than the missing-directory case,
+which isn't a failure at all. Omitting `state` is refused with `isError: true` at HTTP 200
+— **T-36** exists specifically because the schema originally let that pass silently (see
+below).
+
+**Does this touch existing behaviour?**
+Only by addition. `src/tools/list-content.ts` gains a required argument, so any external
+caller sending `{ kind }` with no `state` — none exist in this codebase, but a caller
+outside it might — now gets a validation refusal instead of a catalogue. `list_content`'s
+description and inputs changed; `get_skill`, `save_draft`, `get_content` and
+`discard_draft` did not.
+
+**Any data migration?**
+None. Drafts are files; listing them reads a directory.
+
+**Any performance implications?**
+One extra API call per `state: "draft"` list, inside the budget slice 1 already argued.
+Nothing changes for `state: "published"` — same one call it always made.
+
+**Any security or auth implications?**
+None new. `listDrafts` only reads. The `repo: Repo` typing gap on the *writers* is
+unaffected by a slice that adds no write path.
+
+**What did we deliberately not do?**
+No titles in the draft listing — slugs only, by design (`design.md` → A-5); reading a
+title per draft would cost one API call each, and the slug already is a kebab-case title.
+No default for `state` — an omitted value is a refusal, not a silent fallback to
+`"published"`. Task 13 (M-4), because it needs a human and a real client.
+
+---
+
+### Verify it yourself
+
+```bash
+git checkout feat/drafts
+bun install
+bun test
+```
+
+1. `bun test` → **90 pass, 0 fail**.
+2. `bun run typecheck && bun run lint` → both clean.
+3. Confirm `list-content.ts`'s published path is untouched: `git diff main...HEAD --stat
+   -- src/services/list-content.ts src/services/list-content.test.ts` shows nothing —
+   neither file is in the feature's diff at all.
+4. **Failure case** — a missing drafts directory is an empty list, not an error, and needs
+   no real network:
+
+   ```bash
+   bun -e '
+   import { listDrafts } from "./src/services/list-drafts.ts";
+   import { GithubNotFoundError } from "./src/lib/github.ts";
+   const github = { listDirectory: async () => { throw new GithubNotFoundError("workshop", "drafts/project"); } };
+   console.log(await listDrafts({ github }, { kind: "project" }));
+   '
+   ```
+
+   Expect `{ ok: true, slugs: [] }`. Not `{ ok: false, ... }` — the directory not existing
+   yet is not a bug.
+5. What this **cannot** verify by itself: that the real `drafts/writing/` directory in
+   `workshop` lists correctly, or that `state: "published"` still matches the live site.
+   That's Task 13.
+
+---
+
+### Test coverage
+
+| Test | Verifies | File |
+|---|---|---|
+| T-22 | Listing drafts strips `.mdx`, keeps files, excludes a directory and a dotfile | `src/services/list-drafts.test.ts` |
+| T-23 | A missing `drafts/{kind}/` directory returns an empty list, not an error | `src/services/list-drafts.test.ts` |
+| T-23b | GitHub unreachable returns an error result, nothing thrown | `src/services/list-drafts.test.ts` |
+| T-24 | `state: "published"` returns exactly the catalogue text `list_content` returns today | `src/tools/index.test.ts` |
+| T-31 | `tools/list` shows `state` on `list_content`; `state: "draft"` lists the draft slugs instead of the published catalogue | `src/tools/index.test.ts` |
+| T-36 | Omitting `state` is refused, `isError: true`, HTTP still 200 | `src/tools/index.test.ts` |
+| M-4 | `state: "draft"` against the real drafts, `state: "published"` against the real site | **pending — Task 13, human step, not run** |
+
+**Task 11 was mutation-checked directly** (the session's agent budget was tight): turning
+the missing-directory 404 into an error kills T-23; dropping the `.mdx` filter kills T-22.
+**A third mutant survived at first and was closed before the commit.** Deleting the
+`entry.type === "file"` clause broke nothing — the test fixture's non-file entry happened
+to be named `dir`, so the `.mdx` filter alone already excluded it and the type check
+never did any work. The fixture was strengthened to a directory literally named
+`nested.mdx`, which only the type check excludes, and the mutant then died. **A directory
+named `something.mdx` was the real, previously-unproven case.** Pre-commit strengthening,
+so no Test revisions entry.
+
+**Task 12's mutant find is the more consequential one.** Making `state` `.optional()` in
+the `z.object` schema left **all 16 tests in the file passing** — nothing in the suite
+proved `state` was required. `state` being required is a deliberate decision, `design.md`
+→ Open questions → A-3, not an implementation detail: with it optional, a call omitting
+`state` would silently return the published catalogue instead of forcing the model to
+choose. **T-36** was added to close it, and the mutant now dies.
+
+**T-24 passes against the old code as well as the new, and that is by design, not a
+weak test.** It's a regression pin, not a red signal — today's non-strict `z.object`
+silently strips an unknown `state` key rather than rejecting it, so the published path ran
+unchanged even before this slice existed. **T-31 carried Task 12's actual red signal.**
+
+**The predicted test revision never happened, and that was the correct outcome.**
+`implementation.md`'s Notes on Task 12 pre-authorized a revision to `registerListContent`'s
+widened `deps` in `src/tools/index.test.ts`'s handler helper. The test agent checked the
+real call site instead of trusting the prediction: `createHandler` already passes the
+whole `deps` object, so widening the type touched nothing that needed a test change. No
+revision was manufactured to satisfy a prediction that turned out to be unnecessary.
+
+### Test revisions in this slice
+
+**None.** No assertion, test name, `describe`, or fixture value was weakened in either
+task, and every addition is additive. **Across the whole feature — slices 1 through 4 —
+there have been exactly two test revisions**, both recorded above: the widened-`Github`
+fake stubs at Task 2, and `fakeDraftGithub.deleteFile`'s relaxation at Task 9.
+
+**One boundary worth naming precisely.** T-35 — the test for the review-found delete-crash
+fix in slice 3 — landed chronologically *after* Task 11 was already committed, so the raw
+suite counter crosses through it (85 → 86) in the middle of what would otherwise read as
+slice 4's own progression (85 → 90). It is not a slice 4 test; it belongs to the slice 3
+fix and is counted there.
+
+---
+
+### Risks and things to watch
+
+| Risk | Likelihood | What to watch |
+|---|---|---|
+| **Task 13 (M-4) hasn't run.** Nobody has listed real drafts, or confirmed the published catalogue is unchanged, from a real client. | **this is the open item** | Do not treat this slice as finished until Task 13 runs and its answers land in `implementation.md`. |
+| **T-24 is a regression pin against pre-existing, non-strict `z.object` behaviour**, not a test of new code. | low | If `list_content`'s schema is ever tightened to `.strict()`, T-24 should be revisited — it currently tolerates an unknown key it was never asked to reject. |
+| **A caller outside this codebase sending `{ kind }` with no `state` now gets a refusal it didn't get before.** | low — no such caller exists inside this repo | `state` was made required deliberately (A-3); this is the accepted cost, not a bug. |
+| **`writeFile`/`deleteFile` still type-permit `portfolio`.** | low today | Unchanged. Nothing in this slice calls a writer at all. |
+
+**Rollback:** revert the commits. `src/services/list-content.ts` is untouched, and nothing
+outside `src/tools/list-content.ts` and the new `list-drafts.ts` depends on this slice.
+
+---
+
+### Deferred work
+
+| Item | Why deferred | Worth doing? |
+|---|---|---|
+| **`writeFile`/`deleteFile` still take `repo: Repo`.** Carried forward from slices 1–3, unchanged by this slice — nothing here calls a writer. | No live caller in this slice to force it. | **yes**, unchanged recommendation, now carried across four slices without a fix: narrow the signature so the type does the work the literal currently does by convention. |
+| **A directory named `something.mdx` was an untested case until Task 11's pre-commit fixture fix.** It is now covered. | Already closed. | **no** — recorded so it isn't rediscovered as if new. |
+
+---
+
+### Documentation updated
+
+- [x] `specs/004-drafts/design.md` — T-36 added to the test case list, with the mutation
+      finding that motivated it
+- [x] `specs/004-drafts/implementation.md` — task states, session notes for Tasks 11–12,
+      current status
+- [x] `bun run docs:check` — clean, no generated-block drift
+
+---
+
+## Across the whole feature — a few things worth reading once
+
+Facts that apply to more than one slice, stated here once rather than repeated in each.
+
+**Four test IDs were added to `design.md` during implementation, not written up front:
+T-33, T-34, T-35, T-36.** Two came out of a human/agent review after code was already
+signed off (T-33 in slice 2, T-35 in slice 3). One came from mutation testing catching an
+unproven assumption (T-36 in slice 4). One — T-34 — was written proactively, ahead of
+slice 3's code, because the slice 1 reviewer had already warned that `discardDraft` would
+turn the same unguarded-slug hole `get_content` had into a `DELETE`. The pattern across
+all four is the same regardless of how each was found: **`design.md`'s original test list
+never specified a slug check for `get_content` or `discard_draft`**, only for `save_draft`
+(A-4). Two of the three services that turn a slug into a GitHub path shipped in their
+first draft with no test proving the guard existed.
+
+**Every one of those four edits was made to `design.md` during implementation, and that's
+a lane nobody owns.** `SPEC-WORKFLOW.md`'s file-ownership table gives `design.md`
+exclusively to the **spec** agent — the test agent may write `*.test.ts` only, the coder
+agent source files and `implementation.md` only. All four edits happened inside task
+sessions run by the test or coder agent, not a separate spec-agent pass. The edits
+themselves look right: each closes a real, spec-level gap. But the workflow as written
+doesn't say who is allowed to make that edit when the gap is found mid-implementation,
+and right now whoever finds it just makes it.
+
+**Still open and unchanged since slice 1:** `writeFile`/`deleteFile` take `repo: Repo`, so
+the type permits a call aimed at `portfolio`. Every caller across all four slices passes
+the `"workshop"` string literal, but that is a convention enforced by review, not a
+constraint enforced by the compiler.
+
+**Manual verification is the whole of what remains before this feature can be called
+done.** M-2 (Task 7), M-3 (Task 10) and M-4 (Task 13) are all still `pending`, all
+human-only steps. Only M-1 has run. **Not one line of `save_draft`, `get_content`,
+`discard_draft` or `list_content`'s draft mode has been exercised against the real
+`workshop` repo through a real client.** Every claim in slices 2 through 4 about what a
+user can do is a claim about what the code does against a fake — correct as far as it
+goes, and not yet the same claim as "this works."

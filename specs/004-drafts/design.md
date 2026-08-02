@@ -794,7 +794,7 @@ tests. **No changes to `list_content`, `get_skill`, `src/index.ts`, or the healt
 9. Every failure above still returns HTTP 200.
 
 **Test IDs:** T-07, T-08, T-09, T-10, T-11, T-12, T-13, T-14, T-15, T-19, T-20, T-21,
-T-25, T-26, T-27, T-28, T-32, M-2
+T-25, T-26, T-27, T-28, T-32, **T-33**, M-2
 
 ### Slice 3 — throw a draft away
 
@@ -809,7 +809,7 @@ T-25, T-26, T-27, T-28, T-32, M-2
 3. A draft whose metadata block is broken can still be discarded.
 4. Nothing in `portfolio` is reachable from this tool.
 
-**Test IDs:** T-16, T-17, T-18, T-29, T-30, M-3
+**Test IDs:** T-16, T-17, T-18, T-29, T-30, **T-34**, **T-35**, M-3
 
 ### Slice 4 — list the drafts
 
@@ -825,7 +825,7 @@ makes "published behaves as it does today" provable from the diff.
 3. `list_content({ kind, state: "published" })` returns exactly what it returns today.
 4. The rewritten description is the specified text, verbatim.
 
-**Test IDs:** T-22, T-23, T-23b, T-24, T-31, M-4
+**Test IDs:** T-22, T-23, T-23b, T-24, T-31, **T-36**, M-4
 
 ---
 

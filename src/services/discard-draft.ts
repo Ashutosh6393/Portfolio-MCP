@@ -64,8 +64,16 @@ export async function discardDraft(
 			sha,
 		});
 	} catch (error) {
+		// Not "unreachable": both errors this guard was written for — a 409 on a
+		// stale sha, and the 404 GitHub answers for a delete the token may not
+		// make — mean GitHub was reached and answered. Saying otherwise would be
+		// false in exactly the disguised-token-scope case Risk 5 exists to stop
+		// being misread.
 		const message = error instanceof Error ? error.message : "unknown error";
-		return { ok: false, error: `GitHub is unreachable: ${message}` };
+		return {
+			ok: false,
+			error: `GitHub refused the delete of ${path}: ${message}`,
+		};
 	}
 
 	return { ok: true, path };
