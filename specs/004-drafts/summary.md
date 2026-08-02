@@ -291,10 +291,10 @@ future-work file — everything deferred lives here.
 
 | Item | Why deferred | Worth doing? |
 |---|---|---|
-| **Move the slug guard into `draftPath`.** `draftPath` does not enforce `isSlug`, and `design.md` wires `isSlug` into `saveDraft` only — `get_content` (design.md:314) and `discard_draft` (design.md:323) are specified with no slug check and no test ID for one. The `..` segments are collapsed by the URL parser before the request leaves, so a crafted slug **crosses repos**: `"../../../../Portfolio-new/contents/src/content/writing/evil"` resolves to a `Portfolio-new` URL. Slice 3's `discardDraft` would make that a `DELETE`. Today the only thing in the way is the token's scope — and Risk 5 says a refused write returns **404**, which `discardDraft` renders as *"There is no draft at {kind}/{slug}."* The most alarming outcome reported as the most boring one. | Found by the reviewer at the slice-1 gate. Not a blocker for this merge: nothing calls the writers, so criterion 7 holds. | **yes, and before slice 3.** Make `draftPath` refuse a non-slug so every caller inherits the guard instead of remembering it — a smaller diff than three `isSlug` calls plus three tests, and it cannot be forgotten. Add slug-shape test IDs for `getContent` and `discardDraft` to `design.md`. |
-| **Narrow the writer's `repo` parameter.** `writeFile`/`deleteFile` take `repo: Repo`, so the type permits a write to `portfolio`. Criterion 7 holds today only because nothing calls them. | Out of scope for slice 1 — surfaced by the test agent at sign-off, and there is no caller yet to constrain. | **yes.** Minimum: the first service to call a writer passes `"workshop"` as a literal. Better: narrow the signature in slice 2 so the type does the work the comment currently does. |
+| **Move the slug guard into `draftPath`.** `draftPath` does not enforce `isSlug`, and `design.md` wires `isSlug` into `saveDraft` only — `get_content` (design.md:314) and `discard_draft` (design.md:323) are specified with no slug check and no test ID for one. The `..` segments are collapsed by the URL parser before the request leaves, so a crafted slug **crosses repos**: `"../../../../Portfolio-new/contents/src/content/writing/evil"` resolves to a `Portfolio-new` URL. Slice 3's `discardDraft` would make that a `DELETE`. Today the only thing in the way is the token's scope — and Risk 5 says a refused write returns **404**, which `discardDraft` renders as *"There is no draft at {kind}/{slug}."* The most alarming outcome reported as the most boring one. | Found by the reviewer at the slice-1 gate. Not a blocker for this merge: nothing calls the writers, so criterion 7 holds. **Slice 2 invalidated that premise** — it shipped the first live caller, and the slice 2 reviewer proved a real cross-repo read through `get_content`. Fixed in `d573a63` with an `isSlug` guard in `getContent` (T-33), matching `saveDraft`. **`discardDraft` in slice 3 still needs the same guard and its own test ID.** | **yes, and before slice 3.** Make `draftPath` refuse a non-slug so every caller inherits the guard instead of remembering it — a smaller diff than three `isSlug` calls plus three tests, and it cannot be forgotten. Add slug-shape test IDs for `getContent` and `discardDraft` to `design.md`. |
+| **Narrow the writer's `repo` parameter.** `writeFile`/`deleteFile` take `repo: Repo`, so the type permits a write to `portfolio`. Criterion 7 holds today only because nothing calls them. | Out of scope for slice 1 — surfaced by the test agent at sign-off, and there is no caller yet to constrain. **Satisfied at the minimum level in slice 2:** `saveDraft` passes the `"workshop"` literal. The signature was not narrowed, so the type still permits `portfolio` and the guarantee remains a convention rather than a compiler check. | **yes.** Minimum: the first service to call a writer passes `"workshop"` as a literal — **done.** Better, still open: narrow the signature so the type does the work the comment currently does. |
 | **`readFileWithSha` lets a raw `ZodError` escape `lib`.** `github.ts:192` parses unwrapped. `design.md:449` says a service never rejects, and `get_content` is specified with exactly three outcomes; a `ZodError` is an unlisted fourth. | Only reachable on a malformed GitHub response or a directory path, so not worth code today. | **yes, in slice 2.** `getContent` needs a `catch` for it or it will reject. |
-| **`writeFile` treats `sha: ""` as a create.** `github.ts:211` uses `options.sha ? …`, so an empty-string sha silently becomes a create and the resulting `GithubAlreadyExistsError` tells the model to read the file first when it already did. | Not reachable from any current caller. | **yes** — `options.sha !== undefined` is the same length and correct on the edge. |
+| **`writeFile` treats `sha: ""` as a create.** `github.ts:211` uses `options.sha ? …`, so an empty-string sha silently becomes a create and the resulting `GithubAlreadyExistsError` tells the model to read the file first when it already did. | ~~Not reachable from any current caller.~~ **Now reachable as of slice 2:** `src/tools/save-draft.ts` types `sha` as `z.string().optional()`, and `z.string()` accepts `""`. Left alone because `github.ts` is a slice-1 file, outside slice 2's blast radius. Nothing is destroyed — the create is still refused when the file exists — so the cost is a confusing refusal, not data loss. | **yes** — `options.sha !== undefined` is the same length and correct on the edge. |
 | **M-1's successful-*update* step is proven by inference, not by an assertion.** The script printed no `OK updated` line; the 409 implies it, since a `sha` can only go stale if a write landed after it was read. | The inference is sound, and re-running M-1 costs real commits in a real repo. | **maybe** — add an explicit assertion if M-1 is ever re-run. |
 | **Four scratch commits** (`m-1: create` / `long` / `dupe` / `delete`) now sit in `workshop`'s history from the M-1 run. | Harmless — git is the history, and this is a private repo with one author. | **no.** Recorded so nobody wonders later where they came from. |
 
@@ -596,3 +596,33 @@ nothing outside `src/tools/index.ts`'s two new registration lines depends on thi
 - [ ] `specs/004-drafts/design.md` — **not updated this slice.** Nothing was verified live
       yet, so there is nothing confirmed to record. Updates when Task 7 (M-2) runs.
 - [x] `bun run docs:check` — clean, no generated-block drift
+
+---
+
+## Slice 2 — the review gate
+
+The `reviewer` agent ran against `45d0a41..HEAD` after the slice 2 summary was written. Its
+verdict was **do not merge as-is**, on one blocker. That blocker is now fixed; the rest is
+recorded here rather than silently carried.
+
+| # | Severity | Finding | State |
+|---|---|---|---|
+| 1 | **blocker** | `getContent` interpolated an unvalidated slug into the GitHub API path. A traversal slug read the `portfolio` repo, and a trailing `?` pushed the `.mdx` suffix into the query string so the read was not even limited to `.mdx`. | **Fixed** in `d573a63`. `isSlug` guard before any network call, test T-33 added to `design.md`. |
+| 2 | major | `save-draft.ts`'s header comment claimed the file had no `sha` or conflict handling. Task 4 added both and never updated it. | **Fixed** in `d573a63`. |
+| 3 | major | `summary.md` still described slice 1. | **Already stale when reported** — the reviewer read the file while the slice 2 section was still being written. |
+| 4 | major | Two slice-1 deferred items had gone false, and Task 4's surviving mutant was never carried into Deferred work. | **Fixed** — the Deferred work table above is corrected. |
+| 5 | minor | A `ZodError` from `fileContentSchema.parse` is rendered as "GitHub is unreachable", which is the wrong cause. | **Open.** Recorded below. |
+| 6 | minor | `sha: ""` reaches `writeFile` as a create. | **Open** — `github.ts` is outside slice 2's blast radius. Recorded in Deferred work. |
+| 7 | nit | 1,134 lines changed, 749 of them tests. Inside the file cap; over 500 lines only if tests count. | **Open** — `git.md` is ambiguous about whether the line cap excludes tests. Worth settling once. |
+| 8 | nit | No MCP-level test that a `get_content` refusal is `isError: true` at HTTP 200. T-27 covers `save_draft` only. | **Open.** Matches `design.md`'s test list exactly, so not a spec violation — just the one place criterion 9 rests on construction. |
+
+The reviewer confirmed clean: blast radius, the Don't list, layer discipline, error shape,
+both tool descriptions and all three refusals verbatim, append-only tests, and no secrets.
+
+**One judgement call worth naming.** Both reviewers recommended moving the slug guard into
+`draftPath` so every caller inherits it. It went into the service instead, because
+`design.md` → Validation already specifies the check as *"`isSlug` in the service"*, and a
+guard inside `draftPath` would have to throw out of a pure `lib` function into services
+this repo contracts as non-throwing. The cost of that choice is that **each new
+slug-taking service must remember the guard** — `discardDraft` in slice 3 is the next one,
+and it deletes.

@@ -138,7 +138,7 @@ Max 5–7 files (excluding tests) and 500 lines per slice.
 | Slice | Contains | Files | State | PR |
 |---|---|---|---|---|
 | 1 | Tasks 1–2 — the format, and the ability to write | 2 | `done` — all seven acceptance criteria verified, ready for PR | — |
-| 2 | Tasks 3–7 — `save_draft` and `get_content` | 5 | `pending` | — |
+| 2 | Tasks 3–7 — `save_draft` and `get_content` | 5 | **code `done`, M-2 outstanding.** Reviewed: one blocker (a traversal read through `get_content`) found and fixed in `d573a63`; five lesser findings recorded in `summary.md` | — |
 | 3 | Tasks 8–10 — `discard_draft` | 3 | `pending` | — |
 | 4 | Tasks 11–13 — `list_content`'s `state` | 2 | `pending` | — |
 
