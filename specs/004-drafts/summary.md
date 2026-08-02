@@ -323,9 +323,8 @@ Docs are live — updated in the same commit as the change that made them stale.
 
 - **Slice:** 2 of 4 · **Branch:** `feat/drafts`
 - **Spec:** `design.md` · **ADR:** `docs/adr/004-drafts-are-real-mdx-in-workshop.md`
-- **Tasks:** 3–6, all `done`. **Task 7 (M-2) is outstanding and only a human can run it** —
-  the read-modify-write loop against a real client, at least once from the phone. This
-  slice is not ready to merge until that step happens.
+- **Tasks:** 3–7, all `done`. **Task 7 (M-2) passed** — the read-modify-write loop driven
+  by the human against the real `workshop` repo, including from the phone, 2026-08-02.
 - **Tests:** 18 added (55 → 73), all passing
 - **Size:** 5 source files, 274 insertions / 0 deletions (limit: 5–7 files excl. tests,
   500 lines)
@@ -502,7 +501,7 @@ bun test
 | T-26 | `save_draft` through the MCP handler answers with the path it wrote | `src/tools/index.test.ts` |
 | T-27 | A `save_draft` refusal is `isError: true` — and HTTP status is still 200 | `src/tools/index.test.ts` |
 | T-28 | `get_content` through the MCP handler hands back the `sha` the next save needs | `src/tools/index.test.ts` |
-| M-2 | The read-modify-write loop against a real client, including from the phone | **pending — Task 7, human step, not run** |
+| M-2 | The read-modify-write loop against a real client, including from the phone | **passed** — run by the human, 2026-08-02 |
 
 **Green was not taken on trust.** Every task was mutation-checked at sign-off:
 
@@ -567,7 +566,7 @@ the state it starts from.
 
 | Risk | Likelihood | What to watch |
 |---|---|---|
-| **Task 7 (M-2) hasn't run.** Nobody has saved a draft, edited it, or read it back against the real `workshop` repo, and nobody has done it from the phone. | **this is the open item** | Do not treat this slice as finished until Task 7 runs and its answers land in `implementation.md`. |
+| ~~**Task 7 (M-2) hasn't run.**~~ **Closed 2026-08-02** — the human saved, read back and edited a draft against the real `workshop` repo, including from the phone. | closed | — |
 | Acceptance criteria 1, 3 and 4 name a real client and the phone by their own wording | same as above | They cannot be closed by a test suite. They stay open until M-2. |
 | The `instanceof` conflict-branch mutant survives | low | No test distinguishes typed branching from a string match on the caught error. The code is correct today; a future edit that switches to message-matching would pass every test and violate `errors-and-validation.md` silently. |
 | `bun run lint` is not part of the per-task loop | medium — a process gap, not a code bug | It failed silently after Task 4 (an import-order and formatting issue in the new test file) and was only caught by chance at Task 5. Nothing enforces lint per task today. |
@@ -633,9 +632,8 @@ and it deletes.
 
 - **Slice:** 3 of 4 · **Branch:** `feat/drafts`
 - **Spec:** `design.md` · **ADR:** `docs/adr/004-drafts-are-real-mdx-in-workshop.md`
-- **Tasks:** 8–9, both `done`. **Task 10 (M-3) is outstanding and only a human can run
-  it** — discarding a real draft from a client, at least once, and confirming a missing
-  slug refuses. This slice is not ready to merge until that step happens.
+- **Tasks:** 8–10, all `done`. **Task 10 (M-3) passed** — a real draft discarded from a
+  client and a missing slug refused, driven by the human, 2026-08-02.
 - **Tests:** 7 added over Tasks 8–9 (75 → 79 → 82), plus one more — **T-35** — added by a
   pre-merge review after Task 11 had already started. See *What changed* and *Test
   revisions* for why that one doesn't line up neatly with "Tasks 8–9."
@@ -794,7 +792,7 @@ bun test
 | T-35 | A `deleteFile` failure is an error result naming GitHub, not a rejection | `src/services/discard-draft.test.ts` |
 | T-29 | `discard_draft` is advertised in `tools/list`; a real discard through the MCP handler names what was removed | `src/tools/index.test.ts` |
 | T-30 | A `discard_draft` refusal is `isError: true`, HTTP still 200 | `src/tools/index.test.ts` |
-| M-3 | Discarding a real draft, and a missing slug, from a real client | **pending — Task 10, human step, not run** |
+| M-3 | Discarding a real draft, and a missing slug, from a real client | **passed** — run by the human, 2026-08-02 |
 
 **Task 8's mutation check was thorough.** Five of six mutants applied to a scratchpad copy
 of `discard-draft.ts` died — most notably, making the service call `readDraft` and refuse
@@ -839,7 +837,7 @@ rather than an active one — but it is a gap `bun test` will not report.
 
 | Risk | Likelihood | What to watch |
 |---|---|---|
-| **Task 10 (M-3) hasn't run.** Nobody has discarded a real draft, or a missing one, from a real client. | **this is the open item** | Do not treat this slice as finished until Task 10 runs and its answers land in `implementation.md`. |
+| ~~**Task 10 (M-3) hasn't run.**~~ **Closed 2026-08-02** — the human discarded a real draft and a missing one from a real client. | closed | — |
 | **`discardDraft`'s 404 message states absence as fact.** `design.md`'s specified sentence, *"There is no draft at {kind}/{slug},"* contradicts `CLAUDE.md`'s own rule that a 404 might mean the token scope is wrong, not that the file is missing. | low, on this token | The human chose to ship the specified text and settle the wording separately — see *Deferred work*. The condition on that deferral: it must stay on the **read** path only. |
 | **Task 9's mutation check ran two of six prepared mutants.** | low-to-medium | The two load-bearing ones died. The other four were never exercised — recorded, not silently absorbed into "signed off." |
 | **`fakeDraftGithub.deleteFile` no longer throws.** | low | A future test added to the shared block that accidentally reaches `deleteFile` from `save_draft` or `get_content` will pass instead of failing loudly. |
@@ -876,9 +874,9 @@ are untouched.
 
 - **Slice:** 4 of 4 · **Branch:** `feat/drafts`
 - **Spec:** `design.md` · **ADR:** `docs/adr/004-drafts-are-real-mdx-in-workshop.md`
-- **Tasks:** 11–12, both `done`. **Task 13 (M-4) is outstanding and only a human can run
-  it** — confirming `list_content` returns real drafts and an unchanged published
-  catalogue, from a real client. This slice is not ready to merge until that step happens.
+- **Tasks:** 11–13, all `done`. **Task 13 (M-4) passed** — real drafts listed and the
+  published catalogue confirmed unchanged from a real client, driven by the human,
+  2026-08-02.
 - **Tests:** 7 added over Tasks 11–12 (82 → 85 → 90). One of the tests in that range,
   **T-35**, belongs to slice 3, not this one — see the note below.
 - **Size:** 2 source files, 92 insertions / 11 deletions (limit: 5–7 files excl. tests,
@@ -1028,7 +1026,7 @@ bun test
 | T-24 | `state: "published"` returns exactly the catalogue text `list_content` returns today | `src/tools/index.test.ts` |
 | T-31 | `tools/list` shows `state` on `list_content`; `state: "draft"` lists the draft slugs instead of the published catalogue | `src/tools/index.test.ts` |
 | T-36 | Omitting `state` is refused, `isError: true`, HTTP still 200 | `src/tools/index.test.ts` |
-| M-4 | `state: "draft"` against the real drafts, `state: "published"` against the real site | **pending — Task 13, human step, not run** |
+| M-4 | `state: "draft"` against the real drafts, `state: "published"` against the real site | **passed** — run by the human, 2026-08-02 |
 
 **Task 11 was mutation-checked directly** (the session's agent budget was tight): turning
 the missing-directory 404 into an error kills T-23; dropping the `.mdx` filter kills T-22.
@@ -1078,7 +1076,7 @@ fix and is counted there.
 
 | Risk | Likelihood | What to watch |
 |---|---|---|
-| **Task 13 (M-4) hasn't run.** Nobody has listed real drafts, or confirmed the published catalogue is unchanged, from a real client. | **this is the open item** | Do not treat this slice as finished until Task 13 runs and its answers land in `implementation.md`. |
+| ~~**Task 13 (M-4) hasn't run.**~~ **Closed 2026-08-02** — the human listed real drafts and confirmed the published catalogue from a real client. | closed | — |
 | **T-24 is a regression pin against pre-existing, non-strict `z.object` behaviour**, not a test of new code. | low | If `list_content`'s schema is ever tightened to `.strict()`, T-24 should be revisited — it currently tolerates an unknown key it was never asked to reject. |
 | **A caller outside this codebase sending `{ kind }` with no `state` now gets a refusal it didn't get before.** | low — no such caller exists inside this repo | `state` was made required deliberately (A-3); this is the accepted cost, not a bug. |
 | **`writeFile`/`deleteFile` still type-permit `portfolio`.** | low today | Unchanged. Nothing in this slice calls a writer at all. |
@@ -1136,10 +1134,20 @@ the type permits a call aimed at `portfolio`. Every caller across all four slice
 the `"workshop"` string literal, but that is a convention enforced by review, not a
 constraint enforced by the compiler.
 
-**Manual verification is the whole of what remains before this feature can be called
-done.** M-2 (Task 7), M-3 (Task 10) and M-4 (Task 13) are all still `pending`, all
-human-only steps. Only M-1 has run. **Not one line of `save_draft`, `get_content`,
-`discard_draft` or `list_content`'s draft mode has been exercised against the real
-`workshop` repo through a real client.** Every claim in slices 2 through 4 about what a
-user can do is a claim about what the code does against a fake — correct as far as it
-goes, and not yet the same claim as "this works."
+**Manual verification has now run, and the feature is complete.** M-2 (Task 7), M-3
+(Task 10) and M-4 (Task 13) were all driven by the human against the real `workshop` repo
+from Claude Code, claude.ai and the phone, after the branch was deployed with
+`flyctl deploy --ha=false`. All three passed. `tools/list` over real HTTP returns all five
+tools and the deep health check returns `{"site":"ok","github":"ok"}`.
+
+**Recorded on the human's report.** No agent watched those runs and no transcript of them
+exists — the same standard as M-1, and the only standard available, since a human is the
+only thing that can drive three clients. Step-by-step observations were not captured, so if
+a regression ever appears in the read-modify-write loop this record will not narrow it
+down. `manual-verification.md` is the runbook to re-run.
+
+**One thing is genuinely outstanding, and it is not code.** `MCP_SECRET_PATH` was pasted in
+plain text into an agent conversation while checking the health endpoint. That path is the
+entire auth model for this server — anyone holding it can save, read and delete drafts in
+`workshop`. The human has chosen to rotate it later. **Until they do, treat the server as
+having no working auth.**

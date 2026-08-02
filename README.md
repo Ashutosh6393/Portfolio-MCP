@@ -7,7 +7,9 @@ Six tools that move bytes. The model does the writing; the server reads content,
 skills, saves drafts, and opens a pull request. **It never merges.** The merge button is
 the gate, and it is somewhere the model cannot reach.
 
-**Status: no server code yet.** The site side is done; this repo is at Slice 1.
+**Status: deployed, and five of the six tools are live.** `list_content`, `get_skill`,
+`save_draft`, `get_content` and `discard_draft` all work from Claude Code, claude.ai and the
+phone. `publish` is next, and it is the one that opens the pull request.
 
 ---
 
@@ -60,10 +62,10 @@ Plumbing before anything interesting.
 | Slice | Ships | State |
 |---|---|---|
 | 0 | Site prep: the five JSON routes, OG images | **done** — in `portfolio` |
-| 1 | Skeleton, secret path, `/health`, `get_skill` only. Deployed | next |
-| 2 | Reads: `list_content`, `get_content` | |
-| 3 | Cheap writes: `save_draft`, `discard_draft` | |
-| 4 | `publish`: validation, branch, PR, idempotency | |
+| 1 | Skeleton, secret path, `/health`, `get_skill` only. Deployed | **done** |
+| 2 | Reads: `list_content`, `get_content` | **done** |
+| 3 | Cheap writes: `save_draft`, `discard_draft` | **done** |
+| 4 | `publish`: validation, branch, PR, idempotency | next |
 | 5 | Polish: lazy reconciliation, response nudges, Claude Project | |
 
 Slice 1 is deliberately almost nothing. The riskiest unknown in the plan is whether a

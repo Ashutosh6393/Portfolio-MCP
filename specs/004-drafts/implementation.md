@@ -5,13 +5,12 @@ reads this file first and picks up from it.
 
 Update it after every task. Never batch updates.
 
-- **Status:** in-progress
+- **Status:** complete
 - **Branch:** `feat/drafts`
 - **Spec:** `design.md` · **ADR:** `docs/adr/004-drafts-are-real-mdx-in-workshop.md`
-- **Current task:** none. **Slice 2's code is complete** — Tasks 3, 4, 5 and 6 are `done`
-  and the suite is 73/73. What remains in slice 2 is **Task 7 (M-2), which only a human can
-  run**: the read-modify-write loop against a real client, at least once from the phone.
-  Slice 1 shipped in PR #7.
+- **Current task:** none. **All 13 tasks are `done` and the spec is complete.** Suite 90/90.
+  Slice 1 shipped in PR #7; slices 2–4 ship together. M-2, M-3 and M-4 were all run by the
+  human against the real `workshop` repo, from Claude Code, claude.ai and the phone.
 - `design.md` was approved 2026-08-01 with all seven Open questions confirmed as written; no
   alternative was taken.
 
@@ -59,13 +58,13 @@ In dependency order. Each task is independently testable and maps to test IDs in
 | 4 | `saveDraft`'s update path and the two conflict refusals | 3 | T-09, T-10, T-11, T-15 | 2 | `done` | 1/3 | `e872426` |
 | 5 | `src/services/get-content.ts` — read, parse, the two refusals | 1, 2 | T-19, T-20, T-21 | 2 | `done` | 1/3 | `a3da41a` |
 | 6 | `src/tools/save-draft.ts` and `src/tools/get-content.ts`, both registered in `src/tools/index.ts` | 4, 5 | T-25, T-26, T-27, T-28 | 2 | `done` | 1/3 | `366fc35` |
-| 7 | Verify the read-modify-write loop on a real client, including from the phone | 6 | M-2 | 2 | `pending` | 0/3 | — |
+| 7 | Verify the read-modify-write loop on a real client, including from the phone | 6 | M-2 | 2 | `done` | 1/3 | human-run |
 | 8 | `src/services/discard-draft.ts` — read for the sha, delete, refuse if absent | 2 | T-16, T-17, T-18, **T-34**, **T-35** | 3 | `done` | 1/3 | `618e80a`, fix `16103dc` |
 | 9 | `src/tools/discard-draft.ts` and its registration | 8 | T-29, T-30 | 3 | `done` | 1/3 | `e4aa9d8` |
-| 10 | Verify `discard_draft` on a real client | 9 | M-3 | 3 | `pending` | 0/3 | — |
+| 10 | Verify `discard_draft` on a real client | 9 | M-3 | 3 | `done` | 1/3 | human-run |
 | 11 | `src/services/list-drafts.ts` — slugs from `drafts/{kind}/` | 2 | T-22, T-23, T-23b | 4 | `done` | 1/3 | `5db6f0e` |
 | 12 | `src/tools/list-content.ts` — the `state` argument, the branch, the rewritten description | 11 | T-24, T-31, **T-36** | 4 | `done` | 1/3 | `a47fe10` |
-| 13 | Verify both `list_content` states on a real client | 12 | M-4 | 4 | `pending` | 0/3 | — |
+| 13 | Verify both `list_content` states on a real client | 12 | M-4 | 4 | `done` | 1/3 | human-run |
 
 ### Notes on specific tasks
 
@@ -138,9 +137,9 @@ Max 5–7 files (excluding tests) and 500 lines per slice.
 | Slice | Contains | Files | State | PR |
 |---|---|---|---|---|
 | 1 | Tasks 1–2 — the format, and the ability to write | 2 | `done` — all seven acceptance criteria verified, ready for PR | — |
-| 2 | Tasks 3–7 — `save_draft` and `get_content` | 5 | **code `done`, M-2 outstanding.** Reviewed: one blocker (a traversal read through `get_content`) found and fixed in `d573a63`; five lesser findings recorded in `summary.md` | — |
-| 3 | Tasks 8–10 — `discard_draft` | 3 | **code `done`, M-3 outstanding.** Reviewed: no blocker; one major — `deleteFile` was unwrapped so the service rejected — fixed in `16103dc` and pinned by T-35 | — |
-| 4 | Tasks 11–13 — `list_content`'s `state` | 2 | **code `done`, M-4 outstanding.** Reviewed: no blocker, no major; **merges as-is**. Doc findings fixed | — |
+| 2 | Tasks 3–7 — `save_draft` and `get_content` | 5 | `done` — M-2 passed. Reviewed: one blocker (a traversal read through `get_content`) found and fixed in `d573a63`; five lesser findings recorded in `summary.md` | — |
+| 3 | Tasks 8–10 — `discard_draft` | 3 | `done` — M-3 passed. Reviewed: no blocker; one major — `deleteFile` was unwrapped so the service rejected — fixed in `16103dc` and pinned by T-35 | — |
+| 4 | Tasks 11–13 — `list_content`'s `state` | 2 | `done` — M-4 passed. Reviewed: no blocker, no major; merged as-is. Doc findings fixed | — |
 
 Slices 2, 3 and 4 each depend only on slice 1, never on each other. If 3 or 4 has to be
 reverted, the rest stands.
@@ -173,6 +172,27 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-08-02 — Tasks 7, 10 and 13 — the manual checks
+
+- **All three passed.** M-2, M-3 and M-4 were run against the real `workshop` repo through
+  Claude Code, claude.ai and the mobile app, after `flyctl deploy --ha=false` put the branch
+  live. `tools/list` over real HTTP returns all five tools; the deep health check returns
+  `{"site":"ok","github":"ok"}`.
+- **Recorded on the human's report.** No agent observed these runs and no transcript of them
+  exists — the same standard as M-1, and the only standard available, since a human is the
+  only thing that can drive three clients. Step-by-step observations were not captured; if a
+  regression ever appears in the read-modify-write loop, this record will not narrow it down.
+  The runbook in `manual-verification.md` is what to re-run.
+- **Deploying needed an unrelated fix.** `flyctl` was blocked by Windows Smart App Control
+  — the binary is a large unsigned Go executable — which surfaced as a bare
+  "Permission denied" in Git Bash and was only diagnosable from PowerShell's clearer
+  "An Application Control policy has blocked this file." Nothing to do with this repo, but it
+  cost a round of debugging and is worth knowing before the next deploy.
+- **A secret was exposed and needs rotating.** `MCP_SECRET_PATH` was pasted in plain text
+  into an agent conversation while checking the health endpoint. That path is the entire auth
+  model for this server. The human has chosen to rotate it later — **it is still outstanding**
+  and is recorded in `summary.md` → Deferred work.
 
 ### 2026-08-02 — Task 12
 
