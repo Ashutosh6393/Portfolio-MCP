@@ -339,11 +339,12 @@ metadata, body and `sha`. Editing means calling `get_content`, changing what it 
 and calling `save_draft` again with that `sha` — there is no separate update tool.
 
 Every path through both services is exercised by a fake `github` and a fake `site`, and
-the suite is 73/73. What is **not** yet true: nobody has driven this from Claude Code, from
-claude.ai, or from a phone against the real `workshop` repo. That is Task 7 — M-2 — and it
-is the one thing left before this slice can be called finished. Three of the design's nine
-acceptance criteria (1, 3, 4) name a real client or the phone by their own wording, and
-none of the three can be claimed from a test suite. They are open until a human runs M-2.
+the suite is 73/73. Since this was first drafted, a human has driven this from Claude Code,
+from claude.ai, and from a phone against the real `workshop` repo — Task 7, M-2, run
+2026-08-02, and reported as passing. Three of the design's nine acceptance criteria (1, 3,
+4) name a real client or the phone by their own wording; none of the three could be claimed
+from a test suite, and none of them rest on a transcript either — no agent watched the run,
+so all three now rest on the human's report.
 
 ---
 
@@ -405,10 +406,10 @@ needs to prove nothing else has written to that path in between.
 ### QA
 
 **What does this let a user do that they couldn't before?**
-On paper, save an idea as a real file and read it back to edit it. In practice: not yet,
-because nobody has done it against the real repo. The tools are registered and answer
-correctly against every fake case tried, but `tools/list` returning `save_draft` and
-`get_content` is not the same claim as a human having used them.
+Save an idea as a real file and read it back to edit it. A human has since done exactly
+that against the real `workshop` repo, including from the phone — Task 7, M-2, recorded on
+the human's report; no agent watched the run and no transcript exists, so this is a report,
+not a proof.
 
 **What happens when it fails?**
 Every failure is a returned result, never a thrown error, all the way out to the tool
@@ -443,8 +444,7 @@ guard, exactly as slice 1's summary flagged. Nothing in this slice closes that g
 **What did we deliberately not do?**
 No metadata validation at save — a draft with only a title is accepted, on purpose
 (ADR-004). No update tool — editing is `get_content` then `save_draft` with the `sha`. No
-retry on a stale `sha` — it's a refusal, and re-reading is the model's decision. Task 7
-(M-2), because it needs a human and a phone.
+retry on a stale `sha` — it's a refusal, and re-reading is the model's decision.
 
 ---
 
@@ -592,8 +592,9 @@ nothing outside `src/tools/index.ts`'s two new registration lines depends on thi
 
 - [x] `specs/004-drafts/implementation.md` — task states, session notes for Tasks 3–6,
       current status
-- [ ] `specs/004-drafts/design.md` — **not updated this slice.** Nothing was verified live
-      yet, so there is nothing confirmed to record. Updates when Task 7 (M-2) runs.
+- [ ] `specs/004-drafts/design.md` — **still not updated.** M-2 ran 2026-08-02 and passed
+      on the human's report, but unlike M-1 no step-by-step answers were captured to write
+      back — see *Across the whole feature* below.
 - [x] `bun run docs:check` — clean, no generated-block drift
 
 ---
@@ -654,8 +655,8 @@ behind "can we first parse it."
 The code was signed off once, and a reviewer then found a real bug in it before merge:
 if the *delete* step itself failed — not the read, the delete — the tool crashed instead
 of answering with a normal error message. That's fixed now, with a test holding it in
-place. What's still true: nobody has deleted a real draft through a real client. That's
-Task 10 (M-3), and it's the one thing standing between this slice and being finished.
+place. Since this was first drafted, a human has deleted a real draft through a real
+client — Task 10, M-3, run 2026-08-02 — and reports it worked as specified.
 
 ---
 
@@ -744,8 +745,7 @@ things are worth separating:
 
 **What did we deliberately not do?**
 No parsing before delete, by design — `discard_draft`'s whole reason to exist is removing
-a draft `get_content` can't read. No undo, no trash, no history: git is the history. Task
-10 (M-3), because it needs a human and a real client.
+a draft `get_content` can't read. No undo, no trash, no history: git is the history.
 
 ---
 
@@ -777,7 +777,9 @@ bun test
    `getContent` needed a fix for one slice earlier.
 4. What this **cannot** verify by itself: that a delete against the real `workshop` repo
    removes a real file, or that a missing-slug refusal behaves the same from a real
-   client. That's Task 10.
+   client. Task 10 (M-3) has since checked both by hand and reports both passed — no agent
+   watched it, so treat that as a report, not a transcript. `manual-verification.md` is the
+   runbook to re-run.
 
 ---
 
@@ -896,8 +898,9 @@ silently defaulting to the published catalogue, which is a deliberate decision (
 The strongest thing about this slice is what it doesn't touch:
 `src/services/list-content.ts` is **not in the diff**. That is what makes "published
 behaves exactly as it did yesterday" provable from the diff itself rather than argued in
-review. What's still open: nobody has run either `state` against the real `workshop` repo
-or the real site from a real client. That's Task 13 (M-4).
+review. Since this was first drafted, a human has run both `state` values against the real
+`workshop` repo and the real site, from a real client — Task 13, M-4, run 2026-08-02 — and
+reports both passed.
 
 ---
 
@@ -948,8 +951,9 @@ turned into `{ ok: true, slugs: [] }` rather than an error.
 ### QA
 
 **What does this let a user do that they couldn't before?**
-See a list of draft slugs by kind, on paper. In practice — not yet against the real repo;
-see Task 13 below. Against the fakes, every case tried behaves as specified.
+See a list of draft slugs by kind. A human has since run this against the real repo and
+the real site — Task 13, M-4 — and reports it behaved as specified there too. No agent
+watched the run, so that's a report, not a transcript.
 
 **What happens when it fails?**
 `GitHub is unreachable: …` for any GitHub failure other than the missing-directory case,
@@ -979,7 +983,7 @@ unaffected by a slice that adds no write path.
 No titles in the draft listing — slugs only, by design (`design.md` → A-5); reading a
 title per draft would cost one API call each, and the slug already is a kebab-case title.
 No default for `state` — an omitted value is a refusal, not a silent fallback to
-`"published"`. Task 13 (M-4), because it needs a human and a real client.
+`"published"`.
 
 ---
 
@@ -1012,7 +1016,9 @@ bun test
    yet is not a bug.
 5. What this **cannot** verify by itself: that the real `drafts/writing/` directory in
    `workshop` lists correctly, or that `state: "published"` still matches the live site.
-   That's Task 13.
+   Task 13 (M-4) has since checked both by hand and reports both passed — no agent watched
+   it, so treat that as a report, not a transcript. `manual-verification.md` is the runbook
+   to re-run.
 
 ---
 
