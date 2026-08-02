@@ -627,6 +627,9 @@ T-35 was added by the slice 3 reviewer: `readFileWithSha` is wrapped in `try`/`c
 | T-30 | A `discard_draft` refusal is a tool result | mcp | `tools/call discard_draft` on a missing slug → `isError: true`; **HTTP status still 200** |
 | T-24 | `state:"published"` is unchanged | mcp | `tools/call list_content {kind:"writing",state:"published"}` → the same catalogue text the tool returns today, from the site fake |
 | T-31 | `state:"draft"` lists drafts | mcp | `tools/list` shows `state` on `list_content`; `tools/call list_content {kind:"writing",state:"draft"}` → 200, text listing the draft slugs |
+| T-36 | `state` is required, not optional | mcp | `tools/call list_content {kind:"writing"}` with no `state` → `isError: true`; **HTTP status still 200** |
+
+T-36 was added from mutation testing at Task 12: `state` is specified as required by A-3, and turning it `.optional()` in the schema left all 16 tests in the file passing — nothing proved it.
 
 ### Manual verification
 

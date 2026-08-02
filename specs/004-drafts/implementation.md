@@ -64,7 +64,7 @@ In dependency order. Each task is independently testable and maps to test IDs in
 | 9 | `src/tools/discard-draft.ts` and its registration | 8 | T-29, T-30 | 3 | `done` | 1/3 | `e4aa9d8` |
 | 10 | Verify `discard_draft` on a real client | 9 | M-3 | 3 | `pending` | 0/3 | — |
 | 11 | `src/services/list-drafts.ts` — slugs from `drafts/{kind}/` | 2 | T-22, T-23, T-23b | 4 | `done` | 1/3 | `5db6f0e` |
-| 12 | `src/tools/list-content.ts` — the `state` argument, the branch, the rewritten description | 11 | T-24, T-31 | 4 | `pending` | 0/3 | — |
+| 12 | `src/tools/list-content.ts` — the `state` argument, the branch, the rewritten description | 11 | T-24, T-31, **T-36** | 4 | `done` | 1/3 | `PENDING` |
 | 13 | Verify both `list_content` states on a real client | 12 | M-4 | 4 | `pending` | 0/3 | — |
 
 ### Notes on specific tasks
@@ -173,6 +173,31 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-08-02 — Task 12
+
+- **Done:** `src/tools/list-content.ts`. `state` added as a required enum, the draft branch
+  routed to `listDrafts`, description rewritten verbatim from `design.md` lines 422–439.
+  Suite 90/90, typecheck, lint and `docs:check` clean.
+- **`src/services/list-content.ts` is not in the diff.** That is what makes "published
+  behaves exactly as it does today" provable rather than argued.
+- **The predicted test revision never happened, and that is the right outcome.** This file's
+  Notes section pre-authorized one for `registerListContent`'s widened `deps`. The test agent
+  checked the actual call site instead of trusting the prediction: `createHandler` already
+  passes the whole `deps` object, and the test helpers already build `{ site, github }`, so
+  widening the parameter type touched nothing. `design.md` line 349 says exactly this. **No
+  revision was manufactured to fulfil a prediction.**
+- **Mutation-verified directly.** Making the draft branch unreachable kills T-31; routing
+  the published branch to `listDrafts` kills T-31 the other way.
+- **A third mutant survived and was closed before the commit.** Making `state` `.optional()`
+  left all 16 tests passing. `state` being required is a deliberate decision — `design.md` →
+  Open questions → A-3 — and with it optional a call omitting it silently returns the
+  published catalogue instead of making the model choose. **T-36** now pins the refusal, and
+  the mutant dies. Added to `design.md`'s MCP table.
+- **T-24 passes against the old code as well as the new**, by design. It is a regression pin,
+  not a red test: today's non-strict `z.object` silently strips an unknown `state` key, so
+  the published path ran unchanged. T-31 carried this task's red signal.
+- **Next:** Task 13 — M-4, and **only a human can run it.**
 
 ### 2026-08-02 — Task 11
 

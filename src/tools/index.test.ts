@@ -264,8 +264,9 @@ beforeEach(() => {
 });
 
 // save_draft writes; get_content reads with a sha. Neither ever calls
-// listDirectory or the plain readFile/deleteFile, so those still throw —
-// an accidental call fails loudly rather than passing silently.
+// listDirectory or the plain readFile, so those still throw — an
+// accidental call fails loudly rather than passing silently. deleteFile
+// is real (Task 9's T-29/T-30 need it to actually delete).
 const fakeDraftGithub: Github = {
 	async listDirectory(): Promise<never> {
 		throw new Error("listDirectory is not part of this test");
@@ -547,5 +548,120 @@ describe("tools/call discard_draft", () => {
 
 		const text = textOf(payload);
 		expect(text).toContain("writing/no-such-draft");
+	});
+});
+
+// T-24, T-31 — specs/004-drafts/design.md → Test cases, Task 12. `list_content`
+// gains a required `state` argument: "published" routes to the existing,
+// untouched `listContent` service (T-24, a regression pin — design.md says
+// twice that this path must behave exactly as it does today); "draft" routes
+// to the new `listDrafts` service (T-31).
+
+// Derives from `draftFiles` (reset by the `beforeEach` above) rather than a
+// separate fixture, so it can never drift out of sync with what
+// `fakeDraftGithub` reads and writes elsewhere in this file.
+const fakeDraftListingGithub: Github = {
+	async listDirectory(_repo, path) {
+		const prefix = `${path}/`;
+		return Object.keys(draftFiles)
+			.filter((file) => file.startsWith(prefix))
+			.map((file) => ({ name: file.slice(prefix.length), type: "file" }));
+	},
+	async readFile(): Promise<never> {
+		throw new Error("readFile is not part of this test");
+	},
+	async readFileWithSha(): Promise<never> {
+		throw new Error("readFileWithSha is not part of this test");
+	},
+	async writeFile(): Promise<never> {
+		throw new Error("writeFile is not part of this test");
+	},
+	async deleteFile(): Promise<never> {
+		throw new Error("deleteFile is not part of this test");
+	},
+};
+
+describe("tools/list — list_content state", () => {
+	test("T-31: advertises state on list_content with the enum exactly published, draft", async () => {
+		const { status, payload } = await postJsonRpc({
+			jsonrpc: "2.0",
+			id: 16,
+			method: "tools/list",
+		});
+
+		expect(status).toBe(200);
+
+		const tools = payload.result.tools;
+		const listContentTool = tools.find(
+			(tool: { name: string }) => tool.name === "list_content",
+		);
+		expect(listContentTool).toBeDefined();
+
+		const stateEnum = listContentTool.inputSchema.properties.state?.enum;
+		expect(stateEnum).toEqual(["published", "draft"]);
+	});
+});
+
+describe("tools/call list_content — state", () => {
+	test('T-24: state "published" returns the same catalogue text list_content returns today', async () => {
+		const { status, payload } = await postJsonRpcWithDeps(
+			{
+				jsonrpc: "2.0",
+				id: 17,
+				method: "tools/call",
+				params: {
+					name: "list_content",
+					arguments: { kind: "writing", state: "published" },
+				},
+			},
+			{ site: fakeSiteWithPublishedPost, github: fakeGithub },
+		);
+
+		expect(status).toBe(200);
+		expect(payload.error).toBeUndefined();
+		expect(payload.result.isError).toBeFalsy();
+
+		// Pinned from the tool's real output: run this exact request against
+		// today's source (kind + state, before state exists in the schema) and
+		// this is the text it returns — state is silently dropped and the
+		// published path runs unchanged. Verified empirically, not paraphrased.
+		expect(textOf(payload)).toBe("a-post — A Post\nalready live");
+	});
+
+	test('T-31: state "draft" lists the draft slugs instead of the published catalogue', async () => {
+		const { status, payload } = await postJsonRpcWithDeps(
+			{
+				jsonrpc: "2.0",
+				id: 18,
+				method: "tools/call",
+				params: {
+					name: "list_content",
+					arguments: { kind: "writing", state: "draft" },
+				},
+			},
+			{ site: fakeSite, github: fakeDraftListingGithub },
+		);
+
+		expect(status).toBe(200);
+		expect(payload.error).toBeUndefined();
+		expect(payload.result.isError).toBeFalsy();
+		expect(textOf(payload)).toContain("a-post");
+	});
+
+	// design.md → Open questions → A-3: `state` is required, not
+	// optional-defaulting-to-published. Follows T-15's pattern above — the SDK
+	// folds a failed Zod parse into a normal `tools/call` result (`isError:
+	// true`), not a JSON-RPC error, and HTTP status stays 200.
+	test("T-36: a list_content call with no state is refused, HTTP status still 200", async () => {
+		const { status, payload } = await postJsonRpc({
+			jsonrpc: "2.0",
+			id: 19,
+			method: "tools/call",
+			params: { name: "list_content", arguments: { kind: "writing" } },
+		});
+
+		expect(status).toBe(200);
+		expect(payload.error).toBeUndefined();
+		expect(payload.result.isError).toBe(true);
 	});
 });
