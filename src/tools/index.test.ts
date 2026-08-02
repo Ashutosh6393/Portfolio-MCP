@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { type Github, GithubNotFoundError } from "../lib/github";
 import type { Site } from "../lib/site";
 import { createHandler } from "./index";
@@ -232,5 +232,231 @@ describe("tools/call get_skill", () => {
 		expect(text).toContain("nope");
 		// Actionable in the same turn: it names what does exist.
 		expect(text).toContain("linkedin-post");
+	});
+});
+
+// T-25, T-26, T-27, T-28 — specs/004-drafts/design.md → Test cases, Task 6.
+// Tools are exercised through the MCP handler, never by calling the tool
+// function directly.
+//
+// The shared `fakeGithub` and `fakeSite` above are left untouched: their
+// write/read-with-sha methods throw on purpose (specs/004-drafts CLAUDE.md's
+// "Critical constraint"), and `fakeSite` returns `[]`. Everything below is an
+// addition — new fakes for the draft tools, never a revision of the shared
+// ones.
+
+const seedDraftFiles = {
+	"drafts/writing/a-post.mdx": {
+		content:
+			'export const metadata = {\n  "title": "Draft Title Two"\n}\n\n... draft body ...',
+		sha: "draft-sha-1",
+	},
+};
+
+// T-26 writes to this same path (fakeDraftGithub.writeFile mutates the
+// object in place), so without a reset a later test reading it back — T-28 —
+// would see T-26's write instead of the seed. Reset before every test rather
+// than pointing T-28 at a slug T-26 never writes: it also protects any future
+// test that reads "a-post.mdx" from the same contamination.
+let draftFiles: Record<string, { content: string; sha: string }>;
+beforeEach(() => {
+	draftFiles = structuredClone(seedDraftFiles);
+});
+
+// save_draft writes; get_content reads with a sha. Neither ever calls
+// listDirectory or the plain readFile/deleteFile, so those still throw —
+// an accidental call fails loudly rather than passing silently.
+const fakeDraftGithub: Github = {
+	async listDirectory(): Promise<never> {
+		throw new Error("listDirectory is not part of this test");
+	},
+	async readFile(): Promise<never> {
+		throw new Error("readFile is not part of this test");
+	},
+	async readFileWithSha(_repo, path) {
+		const file = draftFiles[path];
+		if (!file) throw new GithubNotFoundError("workshop", path);
+		return file;
+	},
+	async writeFile(_repo, path, content) {
+		draftFiles[path] = { content, sha: "draft-sha-2" };
+	},
+	async deleteFile(): Promise<never> {
+		throw new Error("deleteFile is not part of this test");
+	},
+};
+
+// A site that already publishes "a-post" as a writing — the shadowing case
+// save_draft has to refuse (T-27). The shared `fakeSite` above stays
+// untouched and keeps returning `[]`.
+const fakeSiteWithPublishedPost: Site = {
+	async fetchContent(kind) {
+		if (kind !== "writing") return [];
+		return [
+			{
+				slug: "a-post",
+				title: "A Post",
+				date: "2026-01-01",
+				readingTime: "3 min",
+				summary: "already live",
+			},
+		];
+	},
+};
+
+async function postJsonRpcWithDeps(
+	body: unknown,
+	deps: { site: Site; github: Github },
+) {
+	const handler = createHandler(deps);
+	const response = await handler.fetch(
+		new Request("http://localhost/mcp", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Accept: "application/json, text/event-stream",
+			},
+			body: JSON.stringify(body),
+		}),
+	);
+
+	const text = await response.text();
+	const dataLine = text.split("\n").find((line) => line.startsWith("data:"));
+	if (!dataLine) {
+		throw new Error(`expected an SSE data frame, got: ${text}`);
+	}
+	const payload = JSON.parse(dataLine.slice("data:".length).trim());
+
+	return { status: response.status, payload };
+}
+
+describe("tools/list — save_draft, get_content", () => {
+	test("T-25: advertises save_draft and get_content with non-empty descriptions and the kind enum exactly writing, project, and the earlier tools stay listed", async () => {
+		const { status, payload } = await postJsonRpc({
+			jsonrpc: "2.0",
+			id: 7,
+			method: "tools/list",
+		});
+
+		expect(status).toBe(200);
+
+		const tools = payload.result.tools;
+
+		const saveDraftTool = tools.find(
+			(tool: { name: string }) => tool.name === "save_draft",
+		);
+		expect(saveDraftTool).toBeDefined();
+		expect(typeof saveDraftTool.description).toBe("string");
+		expect(saveDraftTool.description.length).toBeGreaterThan(0);
+		expect(saveDraftTool.inputSchema.properties.kind.enum).toEqual([
+			"writing",
+			"project",
+		]);
+
+		const getContentTool = tools.find(
+			(tool: { name: string }) => tool.name === "get_content",
+		);
+		expect(getContentTool).toBeDefined();
+		expect(typeof getContentTool.description).toBe("string");
+		expect(getContentTool.description.length).toBeGreaterThan(0);
+		expect(getContentTool.inputSchema.properties.kind.enum).toEqual([
+			"writing",
+			"project",
+		]);
+
+		// Registering two more tools must not drop the earlier ones.
+		expect(
+			tools.find((tool: { name: string }) => tool.name === "list_content"),
+		).toBeDefined();
+		expect(
+			tools.find((tool: { name: string }) => tool.name === "get_skill"),
+		).toBeDefined();
+	});
+});
+
+describe("tools/call save_draft", () => {
+	test("T-26: saving a new draft succeeds and names the path it was saved to", async () => {
+		const { status, payload } = await postJsonRpcWithDeps(
+			{
+				jsonrpc: "2.0",
+				id: 8,
+				method: "tools/call",
+				params: {
+					name: "save_draft",
+					arguments: {
+						kind: "writing",
+						slug: "a-post",
+						metadata: { title: "x" },
+						body: "some draft body",
+					},
+				},
+			},
+			{ site: fakeSite, github: fakeDraftGithub },
+		);
+
+		expect(status).toBe(200);
+		expect(payload.error).toBeUndefined();
+		expect(payload.result.isError).toBeFalsy();
+
+		const text = textOf(payload);
+		expect(text).toContain("drafts/writing/a-post.mdx");
+	});
+
+	test("T-27: saving over an already-published slug is refused with an actionable sentence, HTTP status still 200", async () => {
+		const { status, payload } = await postJsonRpcWithDeps(
+			{
+				jsonrpc: "2.0",
+				id: 9,
+				method: "tools/call",
+				params: {
+					name: "save_draft",
+					arguments: {
+						kind: "writing",
+						slug: "a-post",
+						metadata: { title: "x" },
+						body: "some draft body",
+					},
+				},
+			},
+			{ site: fakeSiteWithPublishedPost, github: fakeDraftGithub },
+		);
+
+		// design.md → Approach → Errors: a tool that failed still answers 200.
+		expect(status).toBe(200);
+		expect(payload.error).toBeUndefined();
+		expect(payload.result.isError).toBe(true);
+
+		const text = textOf(payload);
+		expect(text).toContain("a-post");
+		// Actionable: it says what to do instead of retrying blindly.
+		expect(text).toMatch(/choose a different slug|edit the published/i);
+	});
+});
+
+describe("tools/call get_content", () => {
+	test("T-28: reading a draft back returns its metadata, its body and its sha", async () => {
+		const { status, payload } = await postJsonRpcWithDeps(
+			{
+				jsonrpc: "2.0",
+				id: 10,
+				method: "tools/call",
+				params: {
+					name: "get_content",
+					arguments: { kind: "writing", slug: "a-post" },
+				},
+			},
+			{ site: fakeSite, github: fakeDraftGithub },
+		);
+
+		expect(status).toBe(200);
+		expect(payload.error).toBeUndefined();
+		expect(payload.result.isError).toBeFalsy();
+
+		const text = textOf(payload);
+		expect(text).toContain("Draft Title Two"); // the title from the stored metadata
+		expect(text).toContain("... draft body ...");
+		// Without the sha in the rendered text, save_draft has nothing to
+		// close the read-modify-write loop with.
+		expect(text).toContain("draft-sha-1");
 	});
 });

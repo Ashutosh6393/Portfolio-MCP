@@ -8,9 +8,10 @@ Update it after every task. Never batch updates.
 - **Status:** in-progress
 - **Branch:** `feat/drafts`
 - **Spec:** `design.md` · **ADR:** `docs/adr/004-drafts-are-real-mdx-in-workshop.md`
-- **Current task:** Task 3 (`saveDraft`'s create path) is `green`, awaiting the test agent's
-  sign-off. Slice 1 is complete and at the human gate — Tasks 1 and 2 are `done`, M-1 passed
-  against the real `workshop` repo, and all seven acceptance criteria are verified.
+- **Current task:** none. **Slice 2's code is complete** — Tasks 3, 4, 5 and 6 are `done`
+  and the suite is 73/73. What remains in slice 2 is **Task 7 (M-2), which only a human can
+  run**: the read-modify-write loop against a real client, at least once from the phone.
+  Slice 1 shipped in PR #7.
 - `design.md` was approved 2026-08-01 with all seven Open questions confirmed as written; no
   alternative was taken.
 
@@ -57,7 +58,7 @@ In dependency order. Each task is independently testable and maps to test IDs in
 | 3 | `saveDraft`'s create path — slug check, published-slug check, reserved-key drop, render, create-only write | 1, 2 | T-07, T-08, T-12, T-13, T-14, T-32 | 2 | `done` | 1/3 | `60275c8` |
 | 4 | `saveDraft`'s update path and the two conflict refusals | 3 | T-09, T-10, T-11, T-15 | 2 | `done` | 1/3 | `e872426` |
 | 5 | `src/services/get-content.ts` — read, parse, the two refusals | 1, 2 | T-19, T-20, T-21 | 2 | `done` | 1/3 | `a3da41a` |
-| 6 | `src/tools/save-draft.ts` and `src/tools/get-content.ts`, both registered in `src/tools/index.ts` | 4, 5 | T-25, T-26, T-27, T-28 | 2 | `pending` | 0/3 | — |
+| 6 | `src/tools/save-draft.ts` and `src/tools/get-content.ts`, both registered in `src/tools/index.ts` | 4, 5 | T-25, T-26, T-27, T-28 | 2 | `done` | 1/3 | `PENDING` |
 | 7 | Verify the read-modify-write loop on a real client, including from the phone | 6 | M-2 | 2 | `pending` | 0/3 | — |
 | 8 | `src/services/discard-draft.ts` — read for the sha, delete, refuse if absent | 2 | T-16, T-17, T-18 | 3 | `pending` | 0/3 | — |
 | 9 | `src/tools/discard-draft.ts` and its registration | 8 | T-29, T-30 | 3 | `pending` | 0/3 | — |
@@ -171,6 +172,35 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-08-02 — Task 6
+
+- **Done:** `src/tools/save-draft.ts`, `src/tools/get-content.ts`, both registered in
+  `src/tools/index.ts`. Suite 73/73, typecheck and lint clean. Both descriptions were
+  checked character-for-character against `design.md` lines 361–403 — **verbatim, no drift.**
+  Nothing asserts that, so it is an eyes-on check that has to be repeated by review.
+- **The coder hit a real block and escalated instead of editing a test — the workflow
+  working as intended.** T-28 failed, and the cause was not the source: `draftFiles`, the
+  fixture behind `fakeDraftGithub` in `src/tools/index.test.ts`, is one `Record` at module
+  scope shared across tests. T-26 saves to `drafts/writing/a-post.mdx`, the same path T-28
+  reads, so it overwrote the seed content and sha in place. Bun runs a file's tests in
+  declaration order, so T-26 always ran first. `bun test -t "T-28"` alone passed.
+- **Fixed by the test agent, in the fixture, not the assertion:** a `beforeEach` restores
+  `draftFiles` from a frozen seed via `structuredClone`. Chosen over pointing T-28 at an
+  untouched slug because it closes the whole bug class — any later test reading that path
+  is now safe by construction rather than by declaration order. T-28's assertions are
+  unchanged and it still pins the sha. Uncommitted test file, no assertion weakened, so no
+  Test revisions entry.
+- **Signed off** by the test agent. Five of six mutants died: unregistering either tool
+  kills the matching tests, dropping the `sha` line kills T-28, and widening `kind` from the
+  enum to `z.string()` kills T-25.
+- **The sixth mutant is an SDK fact worth recording.** Making a refusal `throw` instead of
+  returning `{ ok:false }` fails nothing — the MCP SDK catches an exception inside a tool
+  callback and folds it into a normal `tools/call` result, HTTP 200 with `isError: true` and
+  the same message. So "a tool failure never becomes an HTTP error" is enforced one layer
+  below our code as well as by it. T-27 is not weaker for missing it; there is nothing
+  observable to catch. Same behaviour spec 001 already recorded for a failed Zod parse.
+- **Next:** Task 7 — M-2, and **only a human can run it.**
 
 ### 2026-08-02 — Task 5
 
