@@ -31,8 +31,9 @@ Everything up to here has been reversible. This is not: a merged PR is the live 
 5. Read `../../CONTEXT.md` for the domain vocabulary. `writing`, `project`, `post`,
    `draft`, `published`, `publish`, `revise`, `slug` each mean one specific thing and none
    is a synonym for another.
-6. **Slice 3 does not start until M-2 has passed.** The ruleset on `portfolio`'s `main` is a
-   prerequisite, not a follow-up. If it has not been confirmed, stop and ask.
+6. **Slice 3 does not start until M-2 has passed.** The ruleset on `portfolio`'s `main` is
+   already configured, but M-2 — proving it refuses a push with *this* token — has not run.
+   That is the prerequisite. If it has not been confirmed, stop and ask.
 
 ---
 
@@ -116,6 +117,12 @@ it.
 **An unknown schema keyword is an error.** Never skip it, never `continue`, never treat it
 as satisfied. A validator that ignores what it does not understand is worse than none,
 because it produces confidence. This is T-11 and it is the reason a library was not used.
+
+**`format` has exactly one real implementation: `uri`.** `format: "date"` is accepted as
+satisfied, deliberately, because the live schema puts a full `pattern` beside it that is
+strictly stronger. **Write the comment saying so** — without it the next reader sees a hole.
+This is the one documented exception to the rule above; any *other* unrecognised `format`
+value is still an error.
 
 **Collect every validation error.** Return `string[]`, not the first failure. One error per
 turn costs four round trips on a new writing.

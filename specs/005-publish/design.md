@@ -398,7 +398,7 @@ None of these can be asserted from a test suite. All run against the real repos.
 
 | ID | Verifies | When |
 |---|---|---|
-| M-2 | **The ruleset refuses a direct push to `main`** on `portfolio`, with the widened token. A deliberate attempt, by hand. | **Before slice 3's code is written** |
+| M-2 | **The ruleset refuses a direct push to `main`** on `portfolio`, with the widened token. A deliberate attempt, by hand. The ruleset is already configured — this proves it actually refuses *this* token, which is a different claim. | **Before slice 3's code is written** |
 | M-1 | A real PR opens on `portfolio` from a real client, the preview build runs, and the file lands at the right path — including the plural `projects` for a project | End of slice 3 |
 | M-3 | Publishing twice from a phone leaves exactly one PR | End of slice 4 |
 
@@ -429,22 +429,25 @@ None of these can be asserted from a test suite. All run against the real repos.
 | `renderDraft` reformats a hand-written post's metadata on first `revise` | A noisy diff that looks like a bigger change than it is | Accepted, documented above. Values identical; only quoting changes. |
 | Generalising `github.ts`'s `request` breaks the five shipped methods | Every tool breaks at once | The refactor lands as its own task **before** any new method uses it, and the existing suite must stay green across it |
 | `readDraft` gets pointed at a `portfolio` file | Plausible-looking wrong metadata, silently | Published reads go through the site's API, never GitHub. `CLAUDE.md` → Don't. |
+| **`format: "date"` is a no-op.** If the site ever drops the `pattern` on `writing.date` and keeps only the `format`, dates stop being checked — silently | A malformed date reaches the site and the post sorts wrongly or fails to render | Accepted knowingly (Open questions). The code comment names the dependency, so anyone reading `validate.ts` sees that the `pattern` is doing the work. Nothing detects the site dropping it. |
 
 ---
 
 ## Open questions
 
-Resolve before Status becomes `approved`. Unanswered questions here are the most common
-cause of a blocked task later.
+All three resolved on 2026-08-03. Kept rather than deleted — the answers are decisions the
+implementation depends on.
 
-- [ ] **Does the ruleset exist on `portfolio`'s `main` yet?** M-2 cannot run until it does,
-      and slice 3 cannot start until M-2 passes. — **owner:** Ashutosh
-- [ ] **`format: date` handling.** The live schema puts both `format: "date"` and a full
-      `pattern` on `writing.date`. The `pattern` is strictly stronger. Proposed: implement
-      `format` for `uri` only and treat `date` as a no-op **documented in the code**, since
-      the pattern beside it does the real work. Confirm this is not too clever.
-      — **owner:** Ashutosh
-- [ ] **Is `"1 min"` right for a near-empty body**, or should publish refuse a body under
-      some length? Proposed: `"1 min"`, no refusal — an empty post is a mistake the preview
-      build makes obvious, and a length threshold is a rule nobody will remember.
-      — **owner:** Ashutosh
+- [x] **Does the ruleset exist on `portfolio`'s `main`?** **Yes, already in place.** M-2 is
+      therefore a *verification* step, not a setup step, and it still runs by hand before
+      slice 3. A ruleset that exists and a ruleset that actually refuses the push with this
+      token are different claims, and only the second one is the guarantee.
+- [x] **`format: date` handling.** **Implement `format: "uri"` only. `format: "date"` is
+      accepted as satisfied, with a comment in the code saying why** — the `pattern` beside
+      it in the live schema is strictly stronger, and a second date parser could disagree
+      with the site's own regex and produce a refusal nobody can explain. See the risk below
+      for what this costs.
+- [x] **`readingTime` for a near-empty body.** **`"1 min"`, and never a refusal.** No
+      minimum word count. `"0 min"` would satisfy the schema's `minLength: 1` and ship
+      nonsense to a reader, which is why the floor exists; a length threshold is an
+      arbitrary number that would one day refuse a deliberately short post.

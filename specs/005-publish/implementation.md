@@ -43,7 +43,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 7 | `services/get-content.ts` — the `state` argument and the published branch | 6 | T-20, T-21, T-22, T-23, T-24, T-25 | 2 | `pending` | 0/3 | — |
 | 8 | `tools/get-content.ts` — `state` in the input schema, description rewritten | 7 | T-26, T-27 | 2 | `pending` | 0/3 | — |
 | 9 | `tools/save-draft.ts` — the slug instruction in the description. **Text only.** | — | none — see note | 2 | `pending` | 0/3 | — |
-| — | **M-2 — the ruleset refuses a push to `main`.** Blocks slice 3. | — | M-2 | 3 | `pending` | — | — |
+| — | **M-2 — prove the ruleset refuses a push to `main`.** The ruleset is already configured; this proves it refuses *this* token. Blocks slice 3. | — | M-2 | 3 | `pending` | — | — |
 | 10 | `lib/github.ts` — generalise `request` to take a path suffix. **Refactor only, no new behaviour.** | M-2 | none — existing suite stays green | 3 | `pending` | 0/3 | — |
 | 11 | `lib/github.ts` — `getBranchHead`, `createBranch`, `createPullRequest`; a `branch` option on `writeFile`; narrow the write functions' `repo` parameter | 10 | none — see design.md → Seams | 3 | `pending` | 0/3 | — |
 | 12 | `lib/publish.ts` — `publishedPath`, `branchName`, `publicUrl`, `renderPrBody`. Pure. | — | T-39, T-40 | 3 | `pending` | 0/3 | — |
