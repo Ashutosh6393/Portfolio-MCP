@@ -31,9 +31,9 @@ and an `order`. Both keys are **absent from the write schema**, which is
 `additionalProperties: false`, and `save_draft` already strips them from every draft. So a
 naive `revise` renders a file without them and silently drops the project off the
 homepage. Writings have no `show`/`order` at all — this is a projects-only hazard.
-`content.json` already returns both keys, which
-[`portfolio-implementations.md`](../portfolio-implementations.md) records as its reason
-for keeping them.
+`content.json` returns both keys, which
+[`portfolio-implementations.md`](../portfolio-implementations.md) kept deliberately so the
+server could reach them, and `list_content` already surfaces them today.
 
 **Every existing post was published by hand.** No draft exists in `workshop` for any of
 them, and `get_content` reads drafts only. There is currently no path from a phone to
@@ -103,20 +103,69 @@ whose description has to explain both to the model. It also reopens ADR-004's ex
 The post archive is not cancelled, only unbuilt. It gets its own ADR if it is still wanted
 once posts are being drafted regularly.
 
-### 4. `show` and `order` are carried over, after validation
+### 4. `show` and `order` are asked for, every time, and stated in the PR body
 
-On a `revise` publish, the live `show` and `order` for that slug are read from
-`content.json` and re-attached to the metadata **after** it has been validated and
-**before** the file is rendered.
+`show` and `order` are **required arguments** on `publish` when `kind` is `project`. They
+are supplied by the human, relayed by the model, and never computed, defaulted or carried
+over. Writings have neither key, so the arguments do not apply there.
 
-The ordering is load-bearing in both directions. Attach first and validation fails, because
-the write schema forbids both keys. Skip the attach and a featured project silently leaves
-the homepage.
+One rule for every project publish, create and `revise` alike. There is no branch and no
+silent path — the case where a value moves without anyone deciding it is exactly what this
+removes. `list_content` already returns both keys for projects, so the model reads the
+current values first and offers them back rather than asking cold: *"it is `show: true`,
+`order: 2` today — keep that?"* Answering is one word.
 
-The model never sees, sets, or influences either value. `mcp-design.md`'s rule 1 — *"never
-let a tool set `show` or `order`"* — holds exactly as written; the server moves a value it
-read from the site back to the site, and never invents one. The PR body states what was
-carried, so the diff is not a mystery to whoever reads it on a phone.
+They are attached **after** validation and **before** the file is rendered. The ordering is
+load-bearing in both directions: attach first and validation fails, because the write
+schema is `additionalProperties: false` and omits both keys; skip the attach and a featured
+project leaves the homepage.
+
+**The tool arguments are the nudge. The PR body is the guarantee.** The server cannot see
+the conversation, so it can never verify the question was asked — a required argument
+forces the model to have a value, not to have obtained it honestly. So the PR body leads
+with what was supplied, in words:
+
+```
+-> ashutoshverma.dev/project/yapper
+   This URL is permanent after merge.
+
+   Homepage: show: true, order: 2
+   Supplied, not computed. Fix them in this diff before merging if wrong.
+```
+
+That places the last check at the merge button, which is the one gate in this design that
+actually holds. It is also the check that works on a phone, where the diff is unreadable
+but two lines of prose are not.
+
+This narrows `mcp-design.md` rule 1 rather than breaking it. The rule's reasoning is *"a
+model that just wrote a post is the worst possible judge of whether it belongs on your
+front page"* — and it still never judges. What changes is that "you add those by hand" now
+means answering a question, with the rendered value shown back to you at the gate, instead
+of editing the file yourself.
+
+**The rejected alternative was the previous version of this decision:** read the live
+values from `content.json` and re-attach them silently. It is less code and it never asks
+you anything, but it makes featured status unchangeable through the tool, and it restores
+the silent path in the one case — `revise` on a live project — where a wrong value moves
+something real.
+
+### 4b. The slug is confirmed at the same gate
+
+The slug is chosen at `save_draft`, not here — it is the draft's filename, and it has been
+a required argument since spec 004. So there is nothing to make required. What changes is
+its description: **the slug is the permanent URL, and if the human has not named one, ask
+— do not derive it from the title.**
+
+That is a nudge with no enforcement, for the same reason as above, so it is backed at the
+same gate: the PR body leads with the live URL and says it is permanent after merge.
+Nothing is fixed until the merge, so a wrong slug is still free to fix — `save_draft`
+under the right one and `discard_draft` the old, two calls that already exist.
+
+Detecting the mechanical derivation — refusing when the slug is exactly the kebab-cased
+title — was considered and rejected. That is very often the slug a human would genuinely
+choose, including `how-agents-remember-things` on the live site today, so it would refuse
+the correct answer most of the time. Same false-positive failure as the MDX heuristic in
+decision 2.
 
 ### 5. The PR is found by branch name, never recorded
 
@@ -194,10 +243,22 @@ keywords, and that wager is re-examined the first time the refusal fires.
 found by Vercel, not by the tool, so the correction happens on a PR page rather than in
 the conversation. Accepted because the build was always going to be the real check.
 
-**`show`/`order` move without being asked about.** The carry-over is correct in the case
-it was designed for and unexplained in every other. If a project is ever deliberately
-un-featured by hand between two publishes, the next `revise` puts it back. The PR body
-naming what was carried is the only thing standing between that and a surprise.
+**Every project publish now costs a question.** Two values must be answered even when
+nothing about the homepage is changing, which is most of the time. The mitigation is that
+the model reads the current values first and offers them back, so the honest answer is
+usually "keep it" — but it is still a turn that a silent carry-over would not have needed.
+
+**A required argument proves nothing.** The model must have a value for `show`; it does not
+have to have asked for one, and no code here can tell the difference. If it invents one on
+a phone, the only thing between that and a moved project is you reading two lines of the PR
+body before merging. That is a genuine reliance on a human doing a small thing correctly,
+and it is stated plainly rather than dressed up: the argument is a nudge, the merge gate is
+the guarantee, and there is nothing in between.
+
+**The PR body becomes load-bearing.** It is now the last place a wrong slug or a wrong
+homepage value can be caught, which makes its wording part of the product in the same way
+the tool descriptions are. A future edit that "tidies" it into a terse summary removes a
+safety layer without touching a line of logic.
 
 **`portfolio` is writable now, and it stays writable.** This is the single largest
 increase in blast radius in the project, and it does not shrink again. Nothing but the
@@ -232,6 +293,16 @@ time. `publish` cannot run without it, so `/{secret}/health` gains its `schema.j
 check — the third and last of the three checks `mcp-design.md` planned, each arriving with
 the slice that needs it.
 
+**Touches an existing tool's description.** `save_draft`'s description gains the slug
+instruction (decision 4b). That text is specified verbatim in
+[spec 004](../../specs/004-drafts/), and nothing asserts it in a test, so the two must be
+changed together or they drift silently. It is the first time this project edits a shipped
+tool description.
+
+**Makes `list_content` a soft prerequisite of a project publish.** Nothing enforces the
+ordering, but a model that publishes a project without reading the current `show`/`order`
+first has to ask you cold, which is a worse question than the one it could have asked.
+
 **Does not change:** the publish gate. The server opens a PR and a human merges it. No
 tool in this repo merges anything, and the token cannot.
 
@@ -247,6 +318,12 @@ The existing seams are enough. No new one is introduced.
 - **The publish service takes `deps` as an argument**, as every service here does, and is
   tested with fake `github` and `site` object literals. Every branch of the idempotency
   matrix and every refusal is reachable that way.
+- **The PR body is asserted, not eyeballed.** It carries two safety statements now
+  (decisions 4 and 4b), so a test pins that the rendered body names the live URL and the
+  supplied `show`/`order`. Tool description text in this project has always been
+  review-only, and every slice so far recorded that as a drift risk — this is the one piece
+  of prose worth breaking the pattern for, because a human reads it at the gate and nothing
+  else catches a wrong slug after merge.
 - **The new GitHub methods are not unit-tested.** They are a thin wrapper over someone
   else's API, and `testing.md` is explicit that testing one against a mock of that API
   tests the mock. They are proven by a manual verification against the real repos, as the
@@ -267,8 +344,11 @@ A sketch. `to-spec` refines it.
 3. **The PR path.** The token widen, the ruleset, the narrowed write signature, the new
    GitHub methods, and `publish` for the create case only. The first slice that writes to
    the public repo.
-4. **Idempotency and `revise`.** The four branch/PR states, the two published checks, and
-   the `show`/`order` carry-over.
+4. **Idempotency and `revise`.** The four branch/PR states and the two published checks.
+
+The `show`/`order` arguments and the PR body wording belong to slice 3, not slice 4 — they
+are required on a first publish, not only on a revise, so the create path cannot ship
+without them.
 
 Slice 3 carries the external prerequisites and all of the new risk. Slices 1 and 2 are
 deliberately ahead of it so that nothing is waiting on a setting in a browser.
