@@ -1,7 +1,7 @@
 # ADR-005: `publish` opens a pull request on `portfolio`
 
 - **Date:** 2026-08-03
-- **Status:** proposed
+- **Status:** accepted
 - **Deciders:** Ashutosh Verma
 
 ## Context

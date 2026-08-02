@@ -73,7 +73,7 @@ not what we know now.}
 | [002](002-github-access-and-workshop.md) | GitHub access and the workshop repo | accepted — skill storage and `get_skill`'s contract superseded by [003](003-skills-and-templates-are-separate.md) | 2026-07-31 |
 | [003](003-skills-and-templates-are-separate.md) | Skills and templates are separate things in `workshop` | accepted | 2026-07-31 |
 | [004](004-drafts-are-real-mdx-in-workshop.md) | Drafts are real MDX in `workshop` | accepted — narrowed by the review on 2026-08-01 | 2026-07-31 |
-| [005](005-publish-opens-a-pull-request.md) | `publish` opens a pull request on `portfolio` | proposed | 2026-08-03 |
+| [005](005-publish-opens-a-pull-request.md) | `publish` opens a pull request on `portfolio` | accepted | 2026-08-03 |
 
 [`mcp-design.md`](mcp-design.md) is unnumbered on purpose. It is the design discussion the
 server was settled in, kept as reference — the numbered ADRs are the decisions taken from
