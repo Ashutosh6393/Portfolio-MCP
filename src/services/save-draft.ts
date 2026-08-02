@@ -7,10 +7,6 @@ import {
 import type { Site } from "../lib/site";
 import { listContent } from "./list-content";
 
-// design.md → Approach → `save_draft` (lines 274–311). This task is the
-// create path only: no `sha`, no `GithubConflictError` /
-// `GithubAlreadyExistsError` handling — those arrive with the update path.
-//
 // Purpose:            write a draft into `workshop`, refusing to shadow a
 //                     published slug or accept a slug that is not a safe path
 //                     segment.

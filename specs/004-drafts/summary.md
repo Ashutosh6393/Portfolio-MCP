@@ -316,3 +316,283 @@ Docs are live — updated in the same commit as the change that made them stale.
 - [x] `docs/adr/004-drafts-are-real-mdx-in-workshop.md`, `docs/adr/README.md` — body
       reconciled with the acceptance review, indexed as accepted
 - [x] `bun run docs:check` — clean, no generated-block drift
+
+---
+
+## Slice 2 — save a draft, and read it back
+
+- **Slice:** 2 of 4 · **Branch:** `feat/drafts`
+- **Spec:** `design.md` · **ADR:** `docs/adr/004-drafts-are-real-mdx-in-workshop.md`
+- **Tasks:** 3–6, all `done`. **Task 7 (M-2) is outstanding and only a human can run it** —
+  the read-modify-write loop against a real client, at least once from the phone. This
+  slice is not ready to merge until that step happens.
+- **Tests:** 18 added (55 → 73), all passing
+- **Size:** 5 source files, 274 insertions / 0 deletions (limit: 5–7 files excl. tests,
+  500 lines)
+
+---
+
+### TL;DR
+
+**The code is done. It has not been used yet.** Two new tools land — `save_draft` writes a
+draft into `workshop/drafts/{kind}/{slug}.mdx`, and `get_content` reads one back with its
+metadata, body and `sha`. Editing means calling `get_content`, changing what it returns,
+and calling `save_draft` again with that `sha` — there is no separate update tool.
+
+Every path through both services is exercised by a fake `github` and a fake `site`, and
+the suite is 73/73. What is **not** yet true: nobody has driven this from Claude Code, from
+claude.ai, or from a phone against the real `workshop` repo. That is Task 7 — M-2 — and it
+is the one thing left before this slice can be called finished. Three of the design's nine
+acceptance criteria (1, 3, 4) name a real client or the phone by their own wording, and
+none of the three can be claimed from a test suite. They are open until a human runs M-2.
+
+---
+
+### What changed
+
+#### Source
+
+| File | Change | Why |
+|---|---|---|
+| `src/services/save-draft.ts` | **new**, 98 lines | `saveDraft` — checks the slug is a safe path segment, checks it is not already published, drops `show`/`order`/`readingTime`, renders the draft, and calls `writeFile`. Branches on `GithubConflictError` and `GithubAlreadyExistsError` by type, never by matching a message string. |
+| `src/services/get-content.ts` | **new**, 52 lines | `getContent` — reads the file with its `sha`, runs it through `readDraft`, and returns `{ metadata, body, sha }` or a refusal. Never claims a 404 means the file doesn't exist, because a mis-scoped token answers 404 too. |
+| `src/tools/save-draft.ts` | **new**, 61 lines | The tool wrapper: the description specified verbatim in `design.md`, the `z.object` schema, and turning `{ ok:false }` into `isError: true`. |
+| `src/tools/get-content.ts` | **new**, 59 lines | Same shape, for reading. Formats the success text as `sha`, a blank line, the metadata, a blank line, the body — the `sha` first and unmissable, because it's the one thing the next `save_draft` needs. |
+| `src/tools/index.ts` | modified, +4 | Registers both new tools alongside the two that already existed. `list_content` and `get_skill` are untouched. |
+
+#### Tests
+
+| File | Change | Why |
+|---|---|---|
+| `src/services/save-draft.test.ts` | **new**, 351 lines | T-07…T-15, T-32 — the create path, the update path, both conflict refusals, the published-slug and unreachable-site refusals, and the reserved-key drop. |
+| `src/services/get-content.test.ts` | **new**, 171 lines | T-19…T-21 — the round trip, the missing-draft refusal, the unparseable-block refusal. |
+| `src/tools/index.test.ts` | +228, −0 | T-25…T-28, exercised through the MCP handler, not by calling the tool functions directly. Also adds a `beforeEach` that resets a shared fixture — see *Test revisions* below. |
+
+#### Docs
+
+| File | Change | Why |
+|---|---|---|
+| `specs/004-drafts/implementation.md` | +111/−8 | Task states, session notes for Tasks 3–6, and the current status. |
+
+Nothing else moved. `design.md` and the ADR are untouched this slice, on purpose: unlike
+slice 1, nothing here was verified live yet, so there is nothing confirmed to write back
+into the spec. That happens when Task 7 runs.
+
+### How it works now
+
+`save_draft` and `get_content` are thin: both go straight to their service and turn the
+result into MCP content. All the real logic is in the two service files.
+
+**Saving.** `saveDraft` checks the slug's shape before it checks anything else — a bad
+slug never even reaches `listContent`, so the refusal for `"../../etc/passwd"` never
+mentions the site. It then lists the published items of that `kind` and refuses if the
+slug is already live. Reserved keys (`show`, `order`, `readingTime`) are silently dropped,
+never rejected — nothing in this slice validates metadata, by design. The draft is
+rendered with `renderDraft` from slice 1 and written with `writeFile`, also from slice 1.
+Create and update are the same call: omitting `sha` creates, supplying it means
+update-if-unchanged, and that distinction is entirely GitHub's, not this code's. A stale
+`sha` or a create over an existing path comes back as a `GithubConflictError` or a
+`GithubAlreadyExistsError`, and the service branches on the error's type to produce one of
+two specific sentences, each naming `get_content` as the next step.
+
+**Reading.** `getContent` calls `readFileWithSha`, feeds the content to `readDraft`, and
+returns the parsed metadata, the body, and the `sha` — or a refusal if the file can't be
+found or the metadata block won't parse. The `sha` is never a guess: it comes straight off
+the GitHub response and is handed back unchanged, because it's what the next `save_draft`
+needs to prove nothing else has written to that path in between.
+
+---
+
+### QA
+
+**What does this let a user do that they couldn't before?**
+On paper, save an idea as a real file and read it back to edit it. In practice: not yet,
+because nobody has done it against the real repo. The tools are registered and answer
+correctly against every fake case tried, but `tools/list` returning `save_draft` and
+`get_content` is not the same claim as a human having used them.
+
+**What happens when it fails?**
+Every failure is a returned result, never a thrown error, all the way out to the tool
+response — `isError: true` with a sentence naming what to do next, and the HTTP response
+stays 200. That's asserted directly for `save_draft` (T-27). For `get_content` it isn't
+asserted at the MCP layer — there is no test ID for it in this slice — but it's true for a
+structural reason rather than a service-specific one: the MCP SDK catches whatever a tool
+callback throws and folds it into a normal `tools/call` result before it becomes an HTTP
+error. That was already true for `get_skill` in spec 001, and Task 6's session notes
+record confirming it again by mutation: turning a `save_draft` refusal into a `throw`
+passes every test, because there's nothing observable to fail.
+
+**Does this touch existing behaviour?**
+No. `list_content` and `get_skill` are not in the diff. `src/tools/index.ts` only gains
+two `register…` calls; nothing already registered is edited.
+
+**Any data migration?**
+None. A draft is a file; none exists yet for a real user.
+
+**Any performance implications?**
+One extra API call per save (list the published items, to check for shadowing) and one
+per read. Both are within the same low-volume budget slice 1 already argued — no cache,
+no retry, no rate limiter.
+
+**Any security or auth implications?**
+Nothing new widens here — the token was already widened to read/write `workshop` in
+slice 1. What's worth restating: `writeFile`/`deleteFile` still take `repo: Repo`, so the
+**type** still permits a write to `portfolio`. `saveDraft` passes the `"workshop"` literal,
+so no caller in this slice can reach it — but that is a comment and a convention, not a
+guard, exactly as slice 1's summary flagged. Nothing in this slice closes that gap.
+
+**What did we deliberately not do?**
+No metadata validation at save — a draft with only a title is accepted, on purpose
+(ADR-004). No update tool — editing is `get_content` then `save_draft` with the `sha`. No
+retry on a stale `sha` — it's a refusal, and re-reading is the model's decision. Task 7
+(M-2), because it needs a human and a phone.
+
+---
+
+### Verify it yourself
+
+```bash
+git checkout feat/drafts
+bun install
+bun test
+```
+
+1. `bun test` → **73 pass, 0 fail** (243 `expect()` calls, 9 files).
+2. `bun run typecheck && bun run lint` → both clean.
+3. `bash .claude/hooks/check-test-count.sh` → `Test count OK: 55 -> 73`. No test removed or
+   skipped.
+4. **Failure case** — a slug that isn't kebab-case refuses before either fake is called, so
+   this needs no network and no token:
+
+   ```bash
+   bun -e '
+   import { saveDraft } from "./src/services/save-draft.ts";
+   const throwsIfCalled = async () => { throw new Error("should not be called"); };
+   const github = { writeFile: throwsIfCalled, readFile: throwsIfCalled, readFileWithSha: throwsIfCalled, deleteFile: throwsIfCalled, listDirectory: throwsIfCalled };
+   const site = { fetchContent: throwsIfCalled };
+   console.log(await saveDraft({ site, github }, { kind: "writing", slug: "../../etc/passwd", metadata: {}, body: "x" }));
+   '
+   ```
+
+   Expect `{ ok: false, error: "\"../../etc/passwd\" is not a valid slug. ..." }`. Neither
+   fake throws — proof that the slug check runs before the site or GitHub is ever touched.
+5. What this **cannot** verify by itself: that a real save reaches `workshop`, that a real
+   `sha` round-trips, or that any of this works from the phone. That's Task 7.
+
+---
+
+### Test coverage
+
+| Test | Verifies | File |
+|---|---|---|
+| T-07 | A new writing draft, metadata with only a title, is written to `drafts/writing/{slug}.mdx` with no `sha` | `src/services/save-draft.test.ts` |
+| T-08 | Same, for a project draft, written to `drafts/project/{slug}.mdx` | `src/services/save-draft.test.ts` |
+| T-09 | A supplied `sha` reaches `writeFile` unchanged | `src/services/save-draft.test.ts` |
+| T-10 | A stale `sha` refuses instead of overwriting, and names `get_content` | `src/services/save-draft.test.ts` |
+| T-11 | A create over an existing path refuses instead of silently overwriting | `src/services/save-draft.test.ts` |
+| T-12 | A slug already published refuses, and `writeFile` is never called | `src/services/save-draft.test.ts` |
+| T-13 | An unreachable site refuses — it can't prove the slug is free, so it doesn't guess — and `writeFile` is never called | `src/services/save-draft.test.ts` |
+| T-14 | `show`, `order` and `readingTime` are dropped silently; the title survives | `src/services/save-draft.test.ts` |
+| T-15 | Any other GitHub failure returns an error result, nothing thrown | `src/services/save-draft.test.ts` |
+| T-32 | A slug that isn't kebab-case refuses before the site is ever named | `src/services/save-draft.test.ts` |
+| T-19 | A saved draft reads back with its metadata, its body, and its `sha` | `src/services/get-content.test.ts` |
+| T-20 | A missing draft refuses, naming kind and slug, without claiming which cause it is | `src/services/get-content.test.ts` |
+| T-21 | A block that won't parse refuses without leaking the `JSON.parse` error | `src/services/get-content.test.ts` |
+| T-25 | `tools/list` advertises `save_draft` and `get_content`; `list_content` and `get_skill` still listed | `src/tools/index.test.ts` |
+| T-26 | `save_draft` through the MCP handler answers with the path it wrote | `src/tools/index.test.ts` |
+| T-27 | A `save_draft` refusal is `isError: true` — and HTTP status is still 200 | `src/tools/index.test.ts` |
+| T-28 | `get_content` through the MCP handler hands back the `sha` the next save needs | `src/tools/index.test.ts` |
+| M-2 | The read-modify-write loop against a real client, including from the phone | **pending — Task 7, human step, not run** |
+
+**Green was not taken on trust.** Every task was mutation-checked at sign-off:
+
+- **Task 3:** five mutants applied, all five died — dropping the slug guard, moving it
+  below the published-slug check, dropping the reserved-key filter, dropping the
+  published-slug check, and forcing a `sha` onto a create all fail a test.
+- **Task 4:** five mutants, four died — swapping the two `instanceof` branches, removing
+  the `try/catch`, retrying before refusing, and dropping `get_content` from the conflict
+  sentence each fail a test. **The fifth survived**: replacing `instanceof` with a
+  message-string match on the caught error still passes the whole suite. The code
+  correctly uses `instanceof` — `errors-and-validation.md` requires it — but no assertion
+  would catch a future regression to string matching. See *Deferred work*.
+- **Task 5:** five mutants, four died at once. **The fifth exposed a real gap and was
+  fixed before sign-off, not deferred**: with the `GithubNotFoundError` branch removed, a
+  404 fell through to the generic message, and T-20 still passed because the generic
+  message happens to embed the same path. T-20 was strengthened with
+  `not.toContain("unreachable")` and `not.toContain(".mdx")` before commit, and the mutant
+  then died. This is a pre-commit strengthening, not a Test revision — nothing was
+  weakened, and it landed with the rest of Task 5's first attempt.
+- **Task 6:** six mutants, five died — unregistering either tool, dropping the `sha` line,
+  and widening `kind` from the enum to `z.string()` each fail a test. **The sixth is the
+  SDK fact above**: a thrown refusal instead of a returned one passes everything, because
+  the SDK already turns it into the same result. Recorded, not treated as a gap in this
+  code — it's one layer below what this code controls.
+
+**T-09 deserves a note.** It passed the moment it was written, because Task 3 already
+threads `args.sha` straight into `writeFile` — create and update were always one code
+path. A test that's green on arrival is normally suspicious; this one was checked by
+mutation (`sha: args.sha` → `sha: undefined`) and does fail, so it's a real regression
+guard rather than an assertion that never had a chance to fail.
+
+**Not covered, deliberately:** both tool descriptions were checked character-for-character
+against `design.md` lines 361–403 by eye at Task 6 sign-off. Nothing asserts that text, so
+it is a review-only guarantee — if a future edit rewords either description, no test will
+catch the drift. Re-check it by hand if either file changes.
+
+### Test revisions in this slice
+
+**None.** No assertion, test name, `describe`, or fixture *value* was weakened, and the
+test count moved only by addition (55 → 73, `check-test-count.sh` enforces it).
+
+One thing is worth reading closely even though it isn't a revision: **Task 6 hit a real
+block.** T-28 failed on the first run, and the cause wasn't `save-draft.ts` or
+`get-content.ts` — it was `draftFiles`, a `Record` at module scope in
+`src/tools/index.test.ts` shared by every test in that block. T-26 writes to
+`drafts/writing/a-post.mdx`; T-28 reads the same path; Bun runs a file's tests in
+declaration order, so T-26 always ran first and overwrote the seed content and `sha` T-28
+expected. `bun test -t "T-28"` alone passed, which is what pointed at shared state rather
+than a source bug.
+
+**The coder escalated instead of touching the test — the workflow working as intended.**
+The fix landed in the fixture, not the assertion: a `beforeEach` restores `draftFiles`
+from a frozen seed via `structuredClone` before every test. That closes the whole bug
+class — any later test reading that path is now safe by construction, not by which order
+Bun happens to run tests in. T-28's assertions, including the pinned `sha`, are unchanged.
+No Test revisions entry, because nothing that makes a test pass or fail was touched — only
+the state it starts from.
+
+---
+
+### Risks and things to watch
+
+| Risk | Likelihood | What to watch |
+|---|---|---|
+| **Task 7 (M-2) hasn't run.** Nobody has saved a draft, edited it, or read it back against the real `workshop` repo, and nobody has done it from the phone. | **this is the open item** | Do not treat this slice as finished until Task 7 runs and its answers land in `implementation.md`. |
+| Acceptance criteria 1, 3 and 4 name a real client and the phone by their own wording | same as above | They cannot be closed by a test suite. They stay open until M-2. |
+| The `instanceof` conflict-branch mutant survives | low | No test distinguishes typed branching from a string match on the caught error. The code is correct today; a future edit that switches to message-matching would pass every test and violate `errors-and-validation.md` silently. |
+| `bun run lint` is not part of the per-task loop | medium — a process gap, not a code bug | It failed silently after Task 4 (an import-order and formatting issue in the new test file) and was only caught by chance at Task 5. Nothing enforces lint per task today. |
+| `writeFile`/`deleteFile` still type-permit a write to `portfolio` | low today | Unchanged from slice 1. `saveDraft` passes `"workshop"` as a literal, so nothing in this slice can reach it — but the type still allows it, and that's a comment, not a guard. |
+| `get_content`'s HTTP-200-on-failure isn't independently asserted at the MCP layer | low | True by the same SDK mechanism T-27 proves for `save_draft` (see QA), but there is no `get_content`-specific test ID for it in this slice. |
+
+**Rollback:** revert the commits. `list_content` and `get_skill` are untouched, and
+nothing outside `src/tools/index.ts`'s two new registration lines depends on this slice.
+
+---
+
+### Deferred work
+
+| Item | Why deferred | Worth doing? |
+|---|---|---|
+| **No test distinguishes `instanceof` branching from a message-string match** in `describeWriteFailure` (`src/services/save-draft.ts`). Surfaced by mutation testing at Task 4 sign-off. | The code is correct as written, and adding a test for "the error was matched by type, not by string" is awkward to express without reaching into the error class itself. | **maybe** — worth a test if this branch is ever touched again; not worth blocking this slice for. |
+| **`bun run lint` isn't run per task**, only at whatever point someone happens to run it. It silently failed for one commit between Task 4 and Task 5. | Not part of this slice's scope — a workflow gap, not a code defect. | **yes**, but as a change to the loop in `SPEC-WORKFLOW.md`/`testing.md`, not to this diff. |
+| **`writeFile`/`deleteFile` still take `repo: Repo`.** Carried forward from slice 1's Deferred work — unchanged by this slice. | Nothing in slice 2 calls a writer with anything but `"workshop"`, so there's still no live caller to force the narrowing. | **yes**, unchanged recommendation: narrow the signature so the type does the work the literal currently does by convention. |
+
+---
+
+### Documentation updated
+
+- [x] `specs/004-drafts/implementation.md` — task states, session notes for Tasks 3–6,
+      current status
+- [ ] `specs/004-drafts/design.md` — **not updated this slice.** Nothing was verified live
+      yet, so there is nothing confirmed to record. Updates when Task 7 (M-2) runs.
+- [x] `bun run docs:check` — clean, no generated-block drift

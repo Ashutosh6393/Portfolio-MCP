@@ -1,4 +1,4 @@
-import { draftPath, readDraft } from "../lib/draft";
+import { draftPath, isSlug, readDraft } from "../lib/draft";
 import { type Github, GithubNotFoundError } from "../lib/github";
 
 // design.md → Approach → `get_content` (lines 312–319).
@@ -16,6 +16,16 @@ export async function getContent(
 	deps: { github: Github },
 	args: { kind: "writing" | "project"; slug: string },
 ): Promise<GetContentResult> {
+	// The slug becomes a path in a repo this server can read from — checked
+	// before it is ever interpolated into draftPath or handed to GitHub
+	// (mirrors save-draft.ts's guard; same trust boundary, T-32).
+	if (!isSlug(args.slug)) {
+		return {
+			ok: false,
+			error: `"${args.slug}" is not a valid slug. Use lowercase letters, numbers and hyphens only, e.g. "a-post".`,
+		};
+	}
+
 	const path = draftPath(args.kind, args.slug);
 
 	let content: string;

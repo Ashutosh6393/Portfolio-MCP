@@ -589,6 +589,9 @@ Three rules carried from [testing.md](../../.claude/rules/testing.md), all uncha
 | T-19 | Reading a draft back | unit | Fake github returning a rendered draft and `sha:"abc"` → `getContent` → `{ ok:true, metadata, body, sha:"abc" }`, metadata parsed, body exact |
 | T-20 | A draft that is not there | unit | Fake throwing `GithubNotFoundError` → `{ ok:false }` naming kind and slug |
 | T-21 | A block that will not parse | unit | Fake returning a file with a broken block → `{ ok:false }` whose message says to fix it in GitHub and save again, and which **does not contain the underlying parse error**; no partial result, no empty-metadata body |
+| T-33 | A slug that is not a slug | unit | `slug:"../../../../Portfolio-new/contents/package.json?"` → `{ ok:false }`; **`readFileWithSha` never called**. The slug becomes a path in a URL, and a traversal escapes the drafts directory and the repo |
+
+T-33 was added after the slice 2 review found the guard missing — `design.md` specified `getContent` with no slug check, so this is a hole in the spec, not a deviation by the coder.
 
 ### `discard_draft` — `src/services/discard-draft.ts`
 

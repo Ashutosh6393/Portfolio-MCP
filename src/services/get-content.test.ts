@@ -169,3 +169,46 @@ describe("getContent — a draft whose metadata block will not parse", () => {
 		expect((result as { body?: unknown }).body).toBeUndefined();
 	});
 });
+
+describe("getContent — the slug is a trust boundary", () => {
+	// Slice 2 review found this guard missing: getContent built the path with
+	// no isSlug check, so a traversal slug becomes a path segment that fetch
+	// interpolates straight into the GitHub API URL. A trailing "?" pushes the
+	// ".mdx" suffix into the query string, so the escape isn't even limited to
+	// .mdx files (design.md → get_content test cases → T-33).
+	test("T-33: a slug that is not a slug is refused before any read is attempted", async () => {
+		const { github, calls } = githubReturning("irrelevant", "abc");
+
+		const result = await getContent(
+			{ github },
+			{
+				kind: "writing",
+				slug: "../../../../Portfolio-new/contents/package.json?",
+			},
+		);
+
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("expected an error result");
+		// Names the slug problem, not a "not found" — this must read as a
+		// refusal to even try, never as GitHub having answered 404.
+		expect(result.error).toContain("slug");
+		expect(result.error).not.toContain("could not be read");
+		expect(result.error).not.toContain("token cannot see");
+
+		// The guard runs before any network call — no request is attempted at
+		// all, escaped or otherwise.
+		expect(calls).toHaveLength(0);
+	});
+
+	test("T-33: a slug that climbs out of the drafts directory is refused before any read is attempted", async () => {
+		const { github, calls } = githubReturning("irrelevant", "abc");
+
+		const result = await getContent(
+			{ github },
+			{ kind: "project", slug: "../../../etc/passwd" },
+		);
+
+		expect(result.ok).toBe(false);
+		expect(calls).toHaveLength(0);
+	});
+});
