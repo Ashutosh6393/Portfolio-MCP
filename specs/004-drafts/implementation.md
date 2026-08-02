@@ -63,7 +63,7 @@ In dependency order. Each task is independently testable and maps to test IDs in
 | 8 | `src/services/discard-draft.ts` — read for the sha, delete, refuse if absent | 2 | T-16, T-17, T-18, **T-34** | 3 | `done` | 1/3 | `618e80a` |
 | 9 | `src/tools/discard-draft.ts` and its registration | 8 | T-29, T-30 | 3 | `done` | 1/3 | `e4aa9d8` |
 | 10 | Verify `discard_draft` on a real client | 9 | M-3 | 3 | `pending` | 0/3 | — |
-| 11 | `src/services/list-drafts.ts` — slugs from `drafts/{kind}/` | 2 | T-22, T-23, T-23b | 4 | `pending` | 0/3 | — |
+| 11 | `src/services/list-drafts.ts` — slugs from `drafts/{kind}/` | 2 | T-22, T-23, T-23b | 4 | `done` | 1/3 | `PENDING` |
 | 12 | `src/tools/list-content.ts` — the `state` argument, the branch, the rewritten description | 11 | T-24, T-31 | 4 | `pending` | 0/3 | — |
 | 13 | Verify both `list_content` states on a real client | 12 | M-4 | 4 | `pending` | 0/3 | — |
 
@@ -172,6 +172,26 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-08-02 — Task 11
+
+- **Done:** `src/services/list-drafts.ts`. One listing, parsed with the existing
+  `entryListSchema`, filtered to `.mdx` files, extension stripped. First attempt (1/3);
+  suite 85/85, typecheck and lint clean. `src/services/list-content.ts` untouched.
+- **A missing `drafts/{kind}/` is `{ ok: true, slugs: [] }`,** not an error. The directory
+  does not exist until the first draft of that kind is saved, and GitHub 404s it.
+  `design.md` calls this the failure most likely to be mistaken for a bug.
+- **Mutation-verified directly** (the session's agent budget is tight). Turning the 404 into
+  an error kills T-23; dropping the `.mdx` filter kills T-22.
+- **A third mutant survived at first and was closed before the commit.** Deleting the
+  `entry.type === "file"` clause broke nothing: T-22's directory entry was named `dir`, so
+  the `.mdx` filter already excluded it and the type check never did any work. The fixture's
+  directory is now `nested.mdx` with `type: "dir"`, so only the type check can exclude it.
+  The mutant then died. **A directory named `something.mdx` is the real case that was
+  uncovered** — unlikely, but the filter existed for it and nothing proved it ran.
+  Pre-commit strengthening, so no Test revisions entry.
+- **Next:** Task 12 — `list_content`'s `state` argument. Expect the pre-authorized test
+  revision for `registerListContent`'s widened `deps`.
 
 ### 2026-08-02 — Task 9
 
