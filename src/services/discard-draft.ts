@@ -7,7 +7,12 @@ import { type Github, GithubNotFoundError } from "../lib/github";
 // Non-responsibilities: no parsing (T-18 — a draft with a broken metadata
 //                     block is exactly the one you most want to be able to
 //                     throw away), no publishing, no writing.
-export type DiscardDraftResult = { ok: true } | { ok: false; error: string };
+// `path` rides out so the tool can name what it removed without importing
+// `draftPath` itself — a tool may import `lib` only for a `type` (CLAUDE.md →
+// Patterns). Same shape as saveDraft's result, for the same reason.
+export type DiscardDraftResult =
+	| { ok: true; path: string }
+	| { ok: false; error: string };
 
 export async function discardDraft(
 	deps: { github: Github },
@@ -51,5 +56,5 @@ export async function discardDraft(
 		sha,
 	});
 
-	return { ok: true };
+	return { ok: true, path };
 }

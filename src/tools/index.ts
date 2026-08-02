@@ -2,6 +2,7 @@ import type { McpHttpHandler } from "@modelcontextprotocol/server";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import type { Github } from "../lib/github";
 import type { Site } from "../lib/site";
+import { registerDiscardDraft } from "./discard-draft";
 import { registerGetContent } from "./get-content";
 import { registerGetSkill } from "./get-skill";
 import { registerListContent } from "./list-content";
@@ -19,6 +20,7 @@ export function createHandler(deps: {
 		registerGetSkill(server, deps);
 		registerSaveDraft(server, deps);
 		registerGetContent(server, deps);
+		registerDiscardDraft(server, deps);
 		return server;
 	});
 }

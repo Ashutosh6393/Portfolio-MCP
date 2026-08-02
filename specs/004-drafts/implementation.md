@@ -61,7 +61,7 @@ In dependency order. Each task is independently testable and maps to test IDs in
 | 6 | `src/tools/save-draft.ts` and `src/tools/get-content.ts`, both registered in `src/tools/index.ts` | 4, 5 | T-25, T-26, T-27, T-28 | 2 | `done` | 1/3 | `366fc35` |
 | 7 | Verify the read-modify-write loop on a real client, including from the phone | 6 | M-2 | 2 | `pending` | 0/3 | — |
 | 8 | `src/services/discard-draft.ts` — read for the sha, delete, refuse if absent | 2 | T-16, T-17, T-18, **T-34** | 3 | `done` | 1/3 | `618e80a` |
-| 9 | `src/tools/discard-draft.ts` and its registration | 8 | T-29, T-30 | 3 | `pending` | 0/3 | — |
+| 9 | `src/tools/discard-draft.ts` and its registration | 8 | T-29, T-30 | 3 | `done` | 1/3 | `PENDING` |
 | 10 | Verify `discard_draft` on a real client | 9 | M-3 | 3 | `pending` | 0/3 | — |
 | 11 | `src/services/list-drafts.ts` — slugs from `drafts/{kind}/` | 2 | T-22, T-23, T-23b | 4 | `pending` | 0/3 | — |
 | 12 | `src/tools/list-content.ts` — the `state` argument, the branch, the rewritten description | 11 | T-24, T-31 | 4 | `pending` | 0/3 | — |
@@ -172,6 +172,27 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-08-02 — Task 9
+
+- **Done:** `src/tools/discard-draft.ts`, registered in `src/tools/index.ts`. Suite 82/82,
+  typecheck and lint clean. The description was checked character-for-character against
+  `design.md` lines 405–420 — **verbatim, no drift.**
+- **A layer violation was caught and fixed before the commit.** The tool imported
+  `draftPath` from `lib/draft` as a value to name the file it removed. `CLAUDE.md` →
+  Patterns: *"a tool must not import `lib` for anything but a `type`"*, and
+  `code-style.md`: *"a tool must not touch `lib`."* Every other tool in `src/tools/`
+  imports lib as `type` only; this was the single exception. Fixed the way `saveDraft`
+  already solved it — `discardDraft` now returns `{ ok: true; path }` and the tool renders
+  `result.path`. No test changed; the field is additive.
+- **Verified by mutation, run directly rather than by the test agent** — it hit a session
+  limit mid-run. Unregistering `discard_draft` kills all three tests; returning the refusal
+  without `isError: true` kills T-30. Source restored byte-identical after each, confirmed
+  by `diff`.
+- **Not verified, and worth knowing:** the remaining four mutants from the sign-off brief
+  were never run, because the agent stopped. The two that were run are the load-bearing
+  ones, but this task's verification is thinner than Tasks 3–8.
+- **Next:** Task 10 — M-3, and **only a human can run it.**
 
 ### 2026-08-02 — Task 8
 

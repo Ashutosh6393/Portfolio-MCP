@@ -281,8 +281,11 @@ const fakeDraftGithub: Github = {
 	async writeFile(_repo, path, content) {
 		draftFiles[path] = { content, sha: "draft-sha-2" };
 	},
-	async deleteFile(): Promise<never> {
-		throw new Error("deleteFile is not part of this test");
+	// Task 9 needs this to actually delete: discard_draft reads the sha via
+	// readFileWithSha above, then calls deleteFile. structuredClone in the
+	// beforeEach means this mutation never leaks into another test.
+	async deleteFile(_repo, path) {
+		delete draftFiles[path];
 	},
 };
 
@@ -458,5 +461,91 @@ describe("tools/call get_content", () => {
 		// Without the sha in the rendered text, save_draft has nothing to
 		// close the read-modify-write loop with.
 		expect(text).toContain("draft-sha-1");
+	});
+});
+
+// T-29, T-30 — specs/004-drafts/design.md → Test cases, Task 9. Same fixtures
+// as T-25 through T-28: `fakeDraftGithub` and `draftFiles`, reset by the
+// `beforeEach` above before every test in this file, so a delete here can
+// never leak into another test's read.
+
+describe("tools/list — discard_draft", () => {
+	test("T-29: advertises discard_draft with a non-empty description and the kind enum exactly writing, project, and the earlier tools stay listed", async () => {
+		const { status, payload } = await postJsonRpc({
+			jsonrpc: "2.0",
+			id: 11,
+			method: "tools/list",
+		});
+
+		expect(status).toBe(200);
+
+		const tools = payload.result.tools;
+
+		const discardDraftTool = tools.find(
+			(tool: { name: string }) => tool.name === "discard_draft",
+		);
+		expect(discardDraftTool).toBeDefined();
+		expect(typeof discardDraftTool.description).toBe("string");
+		expect(discardDraftTool.description.length).toBeGreaterThan(0);
+		expect(discardDraftTool.inputSchema.properties.kind.enum).toEqual([
+			"writing",
+			"project",
+		]);
+
+		// Registering a fourth tool must not drop the earlier ones.
+		expect(
+			tools.find((tool: { name: string }) => tool.name === "save_draft"),
+		).toBeDefined();
+		expect(
+			tools.find((tool: { name: string }) => tool.name === "get_content"),
+		).toBeDefined();
+	});
+});
+
+describe("tools/call discard_draft", () => {
+	test("T-29: discarding an existing draft succeeds and names what was removed", async () => {
+		const { status, payload } = await postJsonRpcWithDeps(
+			{
+				jsonrpc: "2.0",
+				id: 12,
+				method: "tools/call",
+				params: {
+					name: "discard_draft",
+					arguments: { kind: "writing", slug: "a-post" },
+				},
+			},
+			{ site: fakeSite, github: fakeDraftGithub },
+		);
+
+		expect(status).toBe(200);
+		expect(payload.error).toBeUndefined();
+		expect(payload.result.isError).toBeFalsy();
+
+		const text = textOf(payload);
+		expect(text).toContain("drafts/writing/a-post.mdx");
+	});
+
+	test("T-30: discarding a missing slug is a tool result, not an HTTP error", async () => {
+		const { status, payload } = await postJsonRpcWithDeps(
+			{
+				jsonrpc: "2.0",
+				id: 13,
+				method: "tools/call",
+				params: {
+					name: "discard_draft",
+					arguments: { kind: "writing", slug: "no-such-draft" },
+				},
+			},
+			{ site: fakeSite, github: fakeDraftGithub },
+		);
+
+		// design.md → Approach → Errors: a tool that failed still answers 200.
+		// design.md line 660: asserted directly by T-30.
+		expect(status).toBe(200);
+		expect(payload.error).toBeUndefined();
+		expect(payload.result.isError).toBe(true);
+
+		const text = textOf(payload);
+		expect(text).toContain("writing/no-such-draft");
 	});
 });
