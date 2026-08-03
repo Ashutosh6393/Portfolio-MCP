@@ -311,16 +311,22 @@ assertion was ever weakened to reach green, and the count never dropped — it o
 
 This is the section that matters most before approving a PR that writes to a public repo.
 
-- **M-1 has never run.** A real pull request on `portfolio`, opened by a real client
-  talking to the deployed server, with a real Vercel preview. Everything in slices 3 and 4
-  is proven only against fakes and unit tests. The service logic is well-tested; the
-  actual GitHub API has never been asked to do any of this.
-- **M-3 has never run.** Publishing the same thing twice from a real client, checked
-  against the real repo, to confirm it really does leave one pull request rather than
-  two. Also proven only against fakes.
-- **`delete_branch_on_merge` on `portfolio` is unverified, and one test (T-47) assumes
-  it's on.** That is **not** GitHub's default — it's a per-repo setting, off unless
-  someone switched it on. If it's off: merge a PR, then `revise` the same slug, and the
+- ~~**M-1 has never run.**~~ **M-1 passed, 2026-08-03**, against the real `Portfolio-new`
+  through the MCP handler. Pull request #1 opened; the file landed at
+  `content/projects/m1-scratch.mdx` (**plural**) while the branch stayed
+  `publish/project/m1-scratch` (**singular**); the PR body came out byte-identical to the
+  specified template; `main` was never touched. The first attempt failed **403** — the
+  token had `Contents: write` but not `Pull requests: write`, which are separate
+  permissions. See [ADR-006](../../docs/adr/006-the-token-needs-two-permissions.md). That
+  failure also exercised the half-written recovery path (T-62/T-63) on its first real
+  outing, and the retry exercised branch-exists-no-PR.
+- ~~**M-3 has never run.**~~ **M-3 passed, 2026-08-03.** The draft was edited through
+  `get_content` → `save_draft` with its sha and published again. The result said
+  **"updated"**, returned the **same** PR #1, and GitHub showed exactly one pull request
+  with three commits on it. PR closed unmerged, branch deleted, draft discarded.
+- **`delete_branch_on_merge` on `portfolio` is OFF** — confirmed by the owner on
+  2026-08-03 — **and one test (T-47) assumes it's on.** That is not GitHub's default. Since
+  it is off: merge a PR, then `revise` the same slug, and the
   code hits `createBranch` throwing `AlreadyExists` and updates the stale branch in place
   instead of cutting a fresh one from current `main`. Not destructive — a human still
   merges — but the diff in that PR would be based on a stale `main`, not today's. Recorded

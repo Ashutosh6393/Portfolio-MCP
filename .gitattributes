@@ -1,0 +1,14 @@
+# Normalise line endings to LF in the repository, whatever the checkout OS.
+#
+# Added 2026-08-03 after a run of doc edits on Windows silently rewrote four
+# spec files from LF to CRLF. Nothing broke, but every line of each file showed
+# as changed, which buries the two lines that actually changed and makes a diff
+# unreviewable. Without this, whether a file flips depends on which machine and
+# which tool touched it last.
+* text=auto eol=lf
+
+# Binary — never touched.
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary

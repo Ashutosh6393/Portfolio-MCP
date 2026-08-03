@@ -7,10 +7,14 @@ Six tools that move bytes. The model does the writing; the server reads content,
 skills, saves drafts, and opens a pull request. **It never merges.** The merge button is
 the gate, and it is somewhere the model cannot reach.
 
-**Status: all six tools are built.** `list_content`, `get_skill`, `save_draft`,
-`get_content` and `discard_draft` are deployed and work from Claude Code, claude.ai and the
-phone. `publish` — the one that opens the pull request — is written and green, and is
-waiting on its first run against the real repo before it can be called live.
+**Status: all six tools are built, and `publish` has opened a real pull request.**
+`list_content`, `get_skill`, `save_draft`, `get_content` and `discard_draft` work from
+Claude Code, claude.ai and the phone. `publish` — the last one, and the only one that
+writes to the public repo — was proven against the real repo on 2026-08-03: a draft became
+a pull request, publishing it twice left exactly one, and `main` was never touched.
+
+An idea on a train now reaches a Vercel preview URL with no laptop involved, and the merge
+button is still the only thing that makes it real.
 
 ---
 
