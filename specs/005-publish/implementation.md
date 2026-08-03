@@ -8,7 +8,7 @@ Update it after every task. Never batch updates.
 - **Status:** in-progress — slice 1
 - **Branch:** `feat/publish`
 - **Spec:** `design.md` · **ADR:** `docs/adr/005-publish-opens-a-pull-request.md`
-- **Current task:** 5 — `src/index.ts`, the `schema` health check
+- **Current task:** none — slice 1 complete, awaiting review. Next is task 6.
 
 ---
 
@@ -38,7 +38,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 2 | `lib/validate.ts` — structure: `type`, `properties`, `required`, `additionalProperties`, and the **unknown-keyword refusal** | — | T-01, T-02, T-03, T-04, T-11, T-12 | 1 | `done` | 1/3 | `da25fc0` |
 | 3 | `lib/validate.ts` — constraints: `minLength`, `enum`, `pattern`, `format`, `minItems`, `items` | 2 | T-05, T-06, T-07, T-08, T-09, T-10 | 1 | `done` | 1/3 | `8b9b286` |
 | 4 | `lib/site.ts` — `fetchSchema` and the two-key envelope schema | — | T-16, T-17 | 1 | `done` | 1/3 | `30008b5` |
-| 5 | `src/index.ts` — the `schema` health check | 4 | T-18, T-19 | 1 | `done` | 1/3 | `pending` |
+| 5 | `src/index.ts` — the `schema` health check | 4 | T-18, T-19 | 1 | `done` | 1/3 | `2215d76` |
 | 6 | `lib/site.ts` — `fetchDocument(kind, slug)` and its response schema | — | T-20 (via 7) | 2 | `pending` | 0/3 | — |
 | 7 | `services/get-content.ts` — the `state` argument and the published branch | 6 | T-20, T-21, T-22, T-23, T-24, T-25 | 2 | `pending` | 0/3 | — |
 | 8 | `tools/get-content.ts` — `state` in the input schema, description rewritten | 7 | T-26, T-27 | 2 | `pending` | 0/3 | — |
@@ -100,7 +100,7 @@ Max 5–7 files (excluding tests) and 500 lines per slice.
 
 | Slice | Contains | Files | State | PR |
 |---|---|---|---|---|
-| 1 | Tasks 1–5 — the schema arrives, health reports it | 4 | `pending` | — |
+| 1 | Tasks 1–5 — the schema arrives, health reports it | 4 | `awaiting review` | — |
 | 2 | Tasks 6–9 — `get_content` reads published content | 4 | `pending` | — |
 | 3 | M-2, Tasks 10–14, M-1 — the PR path | 5 | `pending` | — |
 | 4 | Tasks 15–18, M-3 — idempotency and `revise` | 2 | `pending` | — |
