@@ -53,7 +53,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 15 | `lib/github.ts` — `findPullRequest` by head branch; a `ref` on `readFileWithSha` | 11 | none — see design.md → Seams | 4 | `done` | 1/3 | `pending` |
 | 16 | `services/publish.ts` — the four branch/PR states | 15 | T-44, T-45, T-46, T-48 | 4 | `done` | 1/3 | pending |
 | 17 | `services/publish.ts` — `revise`, the published-slug escape, and updating an existing file | 16 | T-47, T-49, T-50, T-51 | 4 | `done` | 1/3 | pending |
-| 18 | `tools/publish.ts` — the `revise` argument and the description update | 17 | covered by T-42 | 4 | `pending` | 0/3 | — |
+| 18 | `tools/publish.ts` — the `revise` argument and the description update | 17 | covered by T-42 | 4 | `done` | 1/3 | `pending` |
 | — | **M-3 — publishing twice from a phone leaves one PR** | 18 | M-3 | 4 | `pending` | — | — |
 
 ### Notes on specific tasks
@@ -103,7 +103,7 @@ Max 5–7 files (excluding tests) and 500 lines per slice.
 | 1 | Tasks 1–5 — the schema arrives, health reports it | 4 | `awaiting review` | — |
 | 2 | Tasks 6–9 — `get_content` reads published content | 4 | `awaiting review` | — |
 | 3 | M-2, Tasks 10–14, M-1 — the PR path | 5 | `code done, M-1 outstanding` | — |
-| 4 | Tasks 15–18, M-3 — idempotency and `revise` | 2 | `pending` | — |
+| 4 | Tasks 15–18, M-3 — idempotency and `revise` | 2 | `code done, M-3 outstanding` | — |
 
 ---
 

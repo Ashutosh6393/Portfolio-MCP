@@ -31,6 +31,12 @@ a field is missing or wrong the whole list comes back at once and
 nothing is written. readingTime is computed from the body — do not
 supply it.
 
+revise: pass true to publish changes to something already live, or to
+a post whose pull request has already been merged. Without it those
+are refused, because changing a live post is deliberate. It is not
+needed for an open pull request — publishing the same slug again just
+updates it, and leaves one PR rather than two.
+
 The slug becomes the permanent public URL after merge.`;
 
 export function registerPublish(
@@ -50,10 +56,13 @@ export function registerPublish(
 				// shape was wrong.
 				show: z.boolean().optional(),
 				order: z.number().optional(),
+				// The one argument that lets a live post be changed. Optional and
+				// never defaulted: the default has to be the safe one.
+				revise: z.boolean().optional(),
 			}),
 		},
-		async ({ kind, slug, show, order }) => {
-			const result = await publish(deps, { kind, slug, show, order });
+		async ({ kind, slug, show, order, revise }) => {
+			const result = await publish(deps, { kind, slug, show, order, revise });
 
 			if (!result.ok) {
 				return {
