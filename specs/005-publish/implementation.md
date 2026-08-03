@@ -8,7 +8,7 @@ Update it after every task. Never batch updates.
 - **Status:** in-progress — slice 3
 - **Branch:** `feat/publish`
 - **Spec:** `design.md` · **ADR:** `docs/adr/005-publish-opens-a-pull-request.md`
-- **Current task:** 14 — `tools/publish.ts` and registration
+- **Current task:** none — slice 3 code done. M-1 is by hand. Next is task 15.
 
 ---
 
@@ -48,7 +48,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 11 | `lib/github.ts` — `getBranchHead`, `createBranch`, `createPullRequest`; a `branch` option on `writeFile`; narrow the write functions' `repo` parameter | 10 | none — see design.md → Seams | 3 | `done` | 1/3 | `pending` |
 | 12 | `lib/publish.ts` — `publishedPath`, `branchName`, `publicUrl`, `renderPrBody`. Pure. | — | T-39, T-40 | 3 | `done` | 1/3 | `pending` |
 | 13 | `services/publish.ts` — the create path end to end | 1, 3, 4, 11, 12 | T-28 … T-38, T-41, T-43 | 3 | `done` | 1/3 | `pending` |
-| 14 | `tools/publish.ts` + registration in `tools/index.ts` | 13 | T-42 | 3 | `pending` | 0/3 | — |
+| 14 | `tools/publish.ts` + registration in `tools/index.ts` | 13 | T-42 | 3 | `done` | 1/3 | `pending` |
 | — | **M-1 — a real PR on `portfolio` from a real client** | 14 | M-1 | 3 | `pending` | — | — |
 | 15 | `lib/github.ts` — `findPullRequest` by head branch; a `ref` on `readFileWithSha` | 11 | none — see design.md → Seams | 4 | `pending` | 0/3 | — |
 | 16 | `services/publish.ts` — the four branch/PR states | 15 | T-44, T-45, T-46, T-48 | 4 | `pending` | 0/3 | — |

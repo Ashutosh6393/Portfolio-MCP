@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { renderDraft } from "../lib/draft";
 import { type Github, GithubNotFoundError } from "../lib/github";
-import type { Site } from "../lib/site";
+import type { SchemaEnvelope, Site } from "../lib/site";
 import { createHandler } from "./index";
 
 // T-10, T-15 — see specs/001-server-skeleton/design.md → Test cases, and →
@@ -798,6 +799,175 @@ describe("tools/call list_content — state", () => {
 			params: { name: "list_content", arguments: { kind: "writing" } },
 		});
 
+		expect(status).toBe(200);
+		expect(payload.error).toBeUndefined();
+		expect(payload.result.isError).toBe(true);
+	});
+});
+
+// T-42, T-60 — specs/005-publish/design.md → Test cases, Slice 3, Task 14.
+// `publish` is exercised through the MCP handler, never by calling the tool
+// function directly.
+
+// The live writing schema, mirrored from src/services/publish.test.ts — only
+// the fields a writing publish actually needs.
+const publishWritingSchema: SchemaEnvelope = {
+	writing: {
+		$schema: "https://json-schema.org/draft/2020-12/schema",
+		type: "object",
+		properties: {
+			title: { type: "string", minLength: 1 },
+			date: { type: "string", format: "date" },
+			readingTime: { type: "string", minLength: 1 },
+			summary: { type: "string", minLength: 1 },
+		},
+		required: ["title", "date", "readingTime", "summary"],
+		additionalProperties: false,
+	},
+	project: {
+		$schema: "https://json-schema.org/draft/2020-12/schema",
+		type: "object",
+		properties: {},
+		required: [],
+		additionalProperties: false,
+	},
+};
+
+// A draft that already exists in workshop, saved without readingTime (as
+// save_draft always leaves it) — exactly what publish reads before validating.
+const publishDraftFile = renderDraft(
+	{
+		title: "What CRDTs taught me",
+		date: "2026-08-03",
+		summary: "A short summary.",
+	},
+	"Hello world. This is the body of the post.",
+);
+
+// A site that has never published "crdts" and answers the writing schema
+// above. New fake, not a revision of `fakeSite`: neither `fakeSite` nor
+// `fakeSiteWithPublishedPost` has a resolving `fetchSchema`, and a real
+// publish needs one.
+const fakeSiteForPublish: Site = {
+	async fetchContent() {
+		return [];
+	},
+	async fetchSchema() {
+		return publishWritingSchema;
+	},
+	async fetchDocument(): Promise<never> {
+		throw new Error("fetchDocument is not part of this test");
+	},
+};
+
+// A Github fake that actually completes a publish: reads the draft, writes
+// the published file, cuts the branch and opens the PR. New fake, not a
+// revision of the shared `fakeGithub`: that one throws on every publish
+// method on purpose, and this test needs the opposite.
+const fakeGithubForPublish: Github = {
+	async listDirectory(): Promise<never> {
+		throw new Error("listDirectory is not part of this test");
+	},
+	async readFile(): Promise<never> {
+		throw new Error("readFile is not part of this test");
+	},
+	async readFileWithSha() {
+		return { content: publishDraftFile, sha: "draft-sha" };
+	},
+	async writeFile() {},
+	async deleteFile(): Promise<never> {
+		throw new Error("deleteFile is not part of this test");
+	},
+	async getBranchHead() {
+		return "main-head-sha";
+	},
+	async createBranch() {},
+	async createPullRequest() {
+		return {
+			number: 7,
+			url: "https://github.com/example/portfolio/pull/7",
+		};
+	},
+};
+
+describe("tools/list — publish", () => {
+	test("T-60: advertises publish with a non-empty description and the kind enum exactly writing, project, and the earlier tools stay listed", async () => {
+		const { status, payload } = await postJsonRpc({
+			jsonrpc: "2.0",
+			id: 22,
+			method: "tools/list",
+		});
+
+		expect(status).toBe(200);
+
+		const tools = payload.result.tools;
+
+		const publishTool = tools.find(
+			(tool: { name: string }) => tool.name === "publish",
+		);
+		expect(publishTool).toBeDefined();
+		expect(typeof publishTool.description).toBe("string");
+		expect(publishTool.description.length).toBeGreaterThan(0);
+		expect(publishTool.inputSchema.properties.kind.enum).toEqual([
+			"writing",
+			"project",
+		]);
+
+		// Registering a sixth tool must not drop any of the earlier five.
+		for (const name of [
+			"list_content",
+			"get_skill",
+			"save_draft",
+			"get_content",
+			"discard_draft",
+		]) {
+			expect(
+				tools.find((tool: { name: string }) => tool.name === name),
+			).toBeDefined();
+		}
+	});
+});
+
+describe("tools/call publish", () => {
+	test("T-42: a successful publish returns the PR URL through the handler, isError unset", async () => {
+		const { status, payload } = await postJsonRpcWithDeps(
+			{
+				jsonrpc: "2.0",
+				id: 23,
+				method: "tools/call",
+				params: {
+					name: "publish",
+					arguments: { kind: "writing", slug: "crdts" },
+				},
+			},
+			{ site: fakeSiteForPublish, github: fakeGithubForPublish },
+		);
+
+		expect(status).toBe(200);
+		expect(payload.error).toBeUndefined();
+		expect(payload.result.isError).toBeFalsy();
+
+		const text = textOf(payload);
+		expect(text).toContain("https://github.com/example/portfolio/pull/7");
+	});
+
+	test("T-42: a refusal comes back as isError true, HTTP status still 200", async () => {
+		// A traversal slug is refused before anything is touched (design.md →
+		// Test cases T-38), so the shared throwing fakes are safe to reuse here.
+		const { status, payload } = await postJsonRpcWithDeps(
+			{
+				jsonrpc: "2.0",
+				id: 24,
+				method: "tools/call",
+				params: {
+					name: "publish",
+					arguments: { kind: "writing", slug: "../../../etc/passwd" },
+				},
+			},
+			{ site: fakeSite, github: fakeGithub },
+		);
+
+		// design.md → Approach → Errors: a tool that failed still answers 200.
 		expect(status).toBe(200);
 		expect(payload.error).toBeUndefined();
 		expect(payload.result.isError).toBe(true);

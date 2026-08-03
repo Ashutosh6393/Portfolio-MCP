@@ -6,6 +6,7 @@ import { registerDiscardDraft } from "./discard-draft";
 import { registerGetContent } from "./get-content";
 import { registerGetSkill } from "./get-skill";
 import { registerListContent } from "./list-content";
+import { registerPublish } from "./publish";
 import { registerSaveDraft } from "./save-draft";
 
 // The factory runs once per HTTP request (see task brief's SDK facts), so the
@@ -21,6 +22,7 @@ export function createHandler(deps: {
 		registerSaveDraft(server, deps);
 		registerGetContent(server, deps);
 		registerDiscardDraft(server, deps);
+		registerPublish(server, deps);
 		return server;
 	});
 }
