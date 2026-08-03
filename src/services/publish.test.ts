@@ -122,6 +122,7 @@ type Calls = {
 		options: { title: string; body: string; head: string; base: string };
 	}>;
 	getBranchHead: Array<{ repo: string; branch: string }>;
+	findPullRequest: Array<{ repo: string; branch: string }>;
 };
 
 function emptyCalls(): Calls {
@@ -130,6 +131,7 @@ function emptyCalls(): Calls {
 		createBranch: [],
 		createPullRequest: [],
 		getBranchHead: [],
+		findPullRequest: [],
 	};
 }
 
@@ -143,6 +145,17 @@ function githubFake(options: {
 	branchHeadSha?: string | Error;
 	createBranchThrows?: Error;
 	createPullRequestResult?: { number: number; url: string };
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. `publish` now calls
+	// `findPullRequest` on every run (Task 16), so a stub that throws
+	// unconditionally would fail every slice-3 test before it reaches what it
+	// asserts. `null` — no pull request has ever existed for this branch — is
+	// the truthful default for these fixtures, which all describe a slug that
+	// has never been published. Configurable so a scenario can supply one.
+	findPullRequestResult?:
+		| { number: number; url: string; state: string; merged: boolean }
+		| null
+		| Error;
 }): { github: Github; calls: Calls } {
 	const calls = emptyCalls();
 	const github: Github = {
@@ -183,15 +196,12 @@ function githubFake(options: {
 				}
 			);
 		},
-		// Test revision, 2026-08-03 — see Test revisions table in
-		// specs/005-publish/implementation.md. Task 15 adds `findPullRequest` to
-		// `Github`, so this fake must carry it to typecheck. `publish` under
-		// test here does not call it yet, so this throws rather than returning
-		// `null` — `null` is a meaningful answer here ("no PR exists for this
-		// branch"), and a stub that returned it could let an idempotency test
-		// pass without publish ever having called it.
-		async findPullRequest(): Promise<never> {
-			throw new Error("findPullRequest is not part of publish");
+		async findPullRequest(repo, branch) {
+			calls.findPullRequest.push({ repo, branch });
+			if (options.findPullRequestResult instanceof Error) {
+				throw options.findPullRequestResult;
+			}
+			return options.findPullRequestResult ?? null;
 		},
 	};
 	return { github, calls };
@@ -487,31 +497,14 @@ describe("publish — refusals before any write", () => {
 
 		expect(result.ok).toBe(false);
 	});
-
-	test("T-41: an existing branch refuses cleanly, naming it, not a crash and not a silent overwrite", async () => {
-		const { github, calls } = githubFake({
-			draft: draftFile(validWritingDraftMetadata(), shortBody),
-			createBranchThrows: new GithubAlreadyExistsError(
-				"portfolio",
-				"publish/writing/crdts",
-			),
-		});
-		const site = siteFake({});
-
-		const result = await publish(
-			{ github, site },
-			{ kind: "writing", slug: "crdts" },
-		);
-
-		expect(result.ok).toBe(false);
-		if (result.ok) throw new Error("expected an error result");
-		expect(result.error).toContain("publish/writing/crdts");
-
-		expect(calls.createBranch).toHaveLength(1);
-		expect(calls.writeFile).toHaveLength(0);
-		expect(calls.createPullRequest).toHaveLength(0);
-	});
 });
+
+// T-41 superseded, 2026-08-03 — see Test revisions table in
+// specs/005-publish/implementation.md and design.md → Test cases → Slice 3.
+// The scenario this used to cover ("an existing branch") now lives below, in
+// "publish — a leftover branch with no pull request (T-41, superseded by
+// T-44)", pinned to what slice 4 actually guarantees instead of what slice 3
+// used to.
 
 describe("publish — nothing is ever written to portfolio on a refusal (T-43)", () => {
 	const scenarios: Array<{
@@ -524,10 +517,6 @@ describe("publish — nothing is ever written to portfolio on a refusal (T-43)",
 		};
 		github: () => { github: Github; calls: Calls };
 		site: () => Site;
-		// T-41 forces createBranch to be called once on this path — it's the only way
-		// GitHub reveals the branch already exists. The call throws and creates nothing,
-		// so it's still zero *writes* per T-43, just not zero *calls*.
-		expectedCreateBranchCalls?: number;
 	}> = [
 		{
 			name: "invalid metadata (missing summary)",
@@ -599,20 +588,6 @@ describe("publish — nothing is ever written to portfolio on a refusal (T-43)",
 				}),
 			site: () => siteFake({}),
 		},
-		{
-			name: "an existing branch",
-			args: { kind: "writing", slug: "crdts" },
-			github: () =>
-				githubFake({
-					draft: draftFile(validWritingDraftMetadata(), shortBody),
-					createBranchThrows: new GithubAlreadyExistsError(
-						"portfolio",
-						"publish/writing/crdts",
-					),
-				}),
-			site: () => siteFake({}),
-			expectedCreateBranchCalls: 1,
-		},
 	];
 
 	for (const scenario of scenarios) {
@@ -624,9 +599,7 @@ describe("publish — nothing is ever written to portfolio on a refusal (T-43)",
 
 			expect(result.ok).toBe(false);
 			expect(calls.writeFile).toHaveLength(0);
-			expect(calls.createBranch).toHaveLength(
-				scenario.expectedCreateBranchCalls ?? 0,
-			);
+			expect(calls.createBranch).toHaveLength(0);
 			expect(calls.createPullRequest).toHaveLength(0);
 		});
 	}
@@ -733,5 +706,382 @@ describe("publish — half-written portfolio state (T-62, T-63)", () => {
 
 		expect(calls.createBranch).toHaveLength(1);
 		expect(calls.writeFile).toHaveLength(1);
+	});
+});
+
+// T-41 superseded by T-44, 2026-08-03 — see Test revisions table in
+// specs/005-publish/implementation.md and design.md → Test cases → Slice 3 /
+// Edge cases and failure modes. Slice 3's T-41 pinned "an existing branch
+// refuses cleanly", true only "until slice 4 ships" (design.md's own words).
+// Slice 4 ships idempotency: a leftover branch is the expected case of a
+// publish that didn't finish, or of publishing the same slug again, and it
+// is handled rather than refused. What survives from T-41's intent — no
+// crash, no silent overwrite — is pinned here instead: a branch with no
+// tracked pull request proceeds, writes without a stale sha (a create, not
+// an overwrite of someone else's content), and opens a fresh PR.
+describe("publish — a leftover branch with no pull request (T-41, superseded by T-44)", () => {
+	test("T-41: a leftover branch with no pull request proceeds — writes fresh (no sha) and opens a new PR, rather than refusing or silently overwriting", async () => {
+		const { github, calls } = statefulGithubFake({
+			draft: draftFile(validWritingDraftMetadata(), shortBody),
+			branchAlreadyExists: true,
+			// No `initialPullRequest` (findPullRequest resolves null) and no
+			// `fileOnBranch` — a branch survives from an earlier attempt that
+			// died before any commit landed (T-62's scenario), and nothing has
+			// ever opened a PR for it.
+		});
+		const site = siteFake({});
+
+		const result = await publish(
+			{ github, site },
+			{ kind: "writing", slug: "crdts" },
+		);
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error("expected ok result");
+		expect(result.status).toBe("created");
+
+		expect(calls.createBranch).toHaveLength(1);
+		expect(calls.writeFile).toHaveLength(1);
+		// No sha sent — this is a create, not an overwrite of an existing file.
+		expect(calls.writeFile[0]?.options.sha).toBeUndefined();
+		expect(calls.createPullRequest).toHaveLength(1);
+	});
+});
+
+// T-44 … T-51 — see specs/005-publish/design.md → Test cases → Slice 4.
+//
+// Signature under test, extended here for the same reason the Slice 3 header
+// comment above gives — design.md leaves the exact shape to the implementer:
+//
+//   publish(
+//     deps,
+//     args: { kind; slug; show?; order?; revise?: boolean },
+//   ): Promise<
+//     | { ok: true; url: string; number: number;
+//         status: "created" | "updated" | "recreated" }
+//     | { ok: false; error: string }
+//   >
+//
+// `status` is new: "created" on a first publish (Slice 3's tests never check
+// it and stay green either way), "updated" when an open PR's branch is
+// amended in place (T-44), "recreated" when a closed-but-unmerged PR is
+// replaced with a fresh one (T-48).
+
+type StatefulCalls = Calls & {
+	findPullRequest: Array<{ repo: string; branch: string }>;
+};
+
+function emptyStatefulCalls(): StatefulCalls {
+	return { ...emptyCalls(), findPullRequest: [] };
+}
+
+type PrState = {
+	number: number;
+	url: string;
+	state: string;
+	merged: boolean;
+} | null;
+
+// A second, stateful Github fake for Slice 4. Unlike `githubFake` above —
+// built fresh for one call, then thrown away — this one carries branch/PR/
+// file state *between* calls on the same instance. T-45 is the reason: it
+// drives the same `publish` call twice and the second call has to see what
+// the first one actually did, not a hand-faked idea of it.
+function statefulGithubFake(options: {
+	draft?: { content: string; sha: string } | Error;
+	initialPullRequest?: PrState;
+	fileOnBranch?: { content: string; sha: string };
+	branchAlreadyExists?: boolean;
+}): { github: Github; calls: StatefulCalls } {
+	const calls = emptyStatefulCalls();
+	let pr: PrState = options.initialPullRequest ?? null;
+	let branchExists = options.branchAlreadyExists ?? false;
+	let fileOnBranch = options.fileOnBranch;
+
+	const github: Github = {
+		async listDirectory(): Promise<never> {
+			throw new Error("listDirectory is not part of publish");
+		},
+		async readFile(): Promise<never> {
+			throw new Error("readFile is not part of publish");
+		},
+		async readFileWithSha(repo, path, _ref) {
+			if (repo === "workshop") {
+				if (options.draft instanceof Error) throw options.draft;
+				if (!options.draft) {
+					throw new Error("no draft configured for this fake");
+				}
+				return options.draft;
+			}
+			// repo === "portfolio": the branch read that decides create vs.
+			// update — the same call T-50 pins the `sha` from.
+			if (!fileOnBranch) throw new GithubNotFoundError("portfolio", path);
+			return fileOnBranch;
+		},
+		async writeFile(repo, path, content, writeOptions) {
+			calls.writeFile.push({ repo, path, content, options: writeOptions });
+			fileOnBranch = { content, sha: "sha-after-write" };
+		},
+		async deleteFile(): Promise<never> {
+			throw new Error("deleteFile is not part of publish");
+		},
+		async getBranchHead(repo, branch) {
+			calls.getBranchHead.push({ repo, branch });
+			return "main-head-sha";
+		},
+		async createBranch(repo, branch, fromSha) {
+			calls.createBranch.push({ repo, branch, fromSha });
+			if (branchExists) throw new GithubAlreadyExistsError(repo, branch);
+			branchExists = true;
+		},
+		async createPullRequest(repo, prOptions) {
+			calls.createPullRequest.push({ repo, options: prOptions });
+			const number = 100 + calls.createPullRequest.length;
+			const url = `https://github.com/example/portfolio/pull/${number}`;
+			pr = { number, url, state: "open", merged: false };
+			return { number, url };
+		},
+		async findPullRequest(repo, branch) {
+			calls.findPullRequest.push({ repo, branch });
+			return pr;
+		},
+	};
+
+	return { github, calls };
+}
+
+describe("publish — branch and PR state (Slice 4, Task 16)", () => {
+	test("T-44: branch exists with an open PR — updates the file and returns the same PR number, saying 'updated'", async () => {
+		const { github, calls } = statefulGithubFake({
+			draft: draftFile(validWritingDraftMetadata(), shortBody),
+			initialPullRequest: {
+				number: 42,
+				url: "https://github.com/example/portfolio/pull/42",
+				state: "open",
+				merged: false,
+			},
+			branchAlreadyExists: true,
+			fileOnBranch: { content: "old content", sha: "existing-file-sha" },
+		});
+		const site = siteFake({});
+
+		const result = await publish(
+			{ github, site },
+			{ kind: "writing", slug: "crdts" },
+		);
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error("expected ok result");
+		expect(result.number).toBe(42);
+		expect(result.status).toBe("updated");
+
+		// Same PR, so nothing new is opened.
+		expect(calls.createPullRequest).toHaveLength(0);
+		expect(calls.writeFile).toHaveLength(1);
+		expect(calls.writeFile[0]?.options.sha).toBe("existing-file-sha");
+	});
+
+	test("T-45: publishing the same slug twice leaves exactly one PR", async () => {
+		const { github, calls } = statefulGithubFake({
+			draft: draftFile(validWritingDraftMetadata(), shortBody),
+		});
+		const site = siteFake({});
+		const args = { kind: "writing" as const, slug: "crdts" };
+
+		const first = await publish({ github, site }, args);
+		expect(first.ok).toBe(true);
+
+		// Same fake instance, so the second call genuinely sees the branch and
+		// PR the first call created — not a hand-set-up "second world".
+		const second = await publish({ github, site }, args);
+		expect(second.ok).toBe(true);
+
+		expect(calls.createPullRequest).toHaveLength(1);
+	});
+
+	test("T-46: a merged PR refuses without revise", async () => {
+		const { github, calls } = statefulGithubFake({
+			draft: draftFile(validWritingDraftMetadata(), shortBody),
+			initialPullRequest: {
+				number: 42,
+				url: "https://github.com/example/portfolio/pull/42",
+				// GitHub reports "closed" for both a merged and an abandoned PR —
+				// only `merged` may drive this refusal, not `state`. T-48 below
+				// uses the identical `state`, differing only in `merged`.
+				state: "closed",
+				merged: true,
+			},
+		});
+		const site = siteFake({});
+
+		const result = await publish(
+			{ github, site },
+			{ kind: "writing", slug: "crdts" },
+		);
+
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("expected an error result");
+		expect(result.error).toContain("revise");
+
+		expect(calls.writeFile).toHaveLength(0);
+		expect(calls.createBranch).toHaveLength(0);
+		expect(calls.createPullRequest).toHaveLength(0);
+	});
+
+	test("T-48: a closed, unmerged PR is recreated and the result says so", async () => {
+		const { github, calls } = statefulGithubFake({
+			draft: draftFile(validWritingDraftMetadata(), shortBody),
+			initialPullRequest: {
+				number: 42,
+				url: "https://github.com/example/portfolio/pull/42",
+				// Identical `state` to T-46, opposite `merged` — the two must be
+				// told apart by `merged` alone.
+				state: "closed",
+				merged: false,
+			},
+			branchAlreadyExists: true,
+			fileOnBranch: { content: "old content", sha: "existing-file-sha" },
+		});
+		const site = siteFake({});
+
+		const result = await publish(
+			{ github, site },
+			{ kind: "writing", slug: "crdts" },
+		);
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error("expected ok result");
+		expect(result.status).toBe("recreated");
+
+		expect(calls.createPullRequest).toHaveLength(1);
+	});
+});
+
+describe("publish — revise (Slice 4, Task 17)", () => {
+	test("T-47: a merged PR + revise proceeds — a new branch and a new PR", async () => {
+		const { github, calls } = statefulGithubFake({
+			draft: draftFile(validWritingDraftMetadata(), shortBody),
+			initialPullRequest: {
+				number: 42,
+				url: "https://github.com/example/portfolio/pull/42",
+				state: "closed",
+				merged: true,
+			},
+			// GitHub deletes a branch on merge by default — nothing left to
+			// update, so a fresh `createBranch` succeeds rather than throwing.
+			branchAlreadyExists: false,
+		});
+		const site = siteFake({});
+
+		const result = await publish(
+			{ github, site },
+			{ kind: "writing", slug: "crdts", revise: true },
+		);
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error("expected ok result");
+
+		expect(calls.createBranch).toHaveLength(1);
+		expect(calls.createPullRequest).toHaveLength(1);
+	});
+
+	test("T-49: a published slug + revise proceeds instead of refusing", async () => {
+		const { github, calls } = statefulGithubFake({
+			draft: draftFile(validWritingDraftMetadata(), shortBody),
+		});
+		const publishedWriting: Writing = {
+			slug: "crdts",
+			title: "What CRDTs taught me",
+			date: "2026-01-01",
+			readingTime: "3 min",
+			summary: "Already live.",
+		};
+		const site = siteFake({ content: [publishedWriting] });
+
+		const result = await publish(
+			{ github, site },
+			{ kind: "writing", slug: "crdts", revise: true },
+		);
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error("expected ok result");
+		expect(calls.createBranch).toHaveLength(1);
+		expect(calls.createPullRequest).toHaveLength(1);
+	});
+
+	test("T-50: revise updates an existing file on the branch — the commit carries its sha", async () => {
+		const { github, calls } = statefulGithubFake({
+			draft: draftFile(validWritingDraftMetadata(), shortBody),
+			initialPullRequest: {
+				number: 42,
+				url: "https://github.com/example/portfolio/pull/42",
+				state: "open",
+				merged: false,
+			},
+			branchAlreadyExists: true,
+			fileOnBranch: { content: "old content", sha: "existing-file-sha" },
+		});
+		const site = siteFake({});
+
+		const result = await publish(
+			{ github, site },
+			{ kind: "writing", slug: "crdts", revise: true },
+		);
+
+		expect(result.ok).toBe(true);
+		expect(calls.writeFile[0]?.options.sha).toBe("existing-file-sha");
+	});
+
+	test("T-50 (other direction): revise creates rather than updates when the branch carries no file yet — no sha is sent", async () => {
+		const { github, calls } = statefulGithubFake({
+			draft: draftFile(validWritingDraftMetadata(), shortBody),
+			initialPullRequest: {
+				number: 42,
+				url: "https://github.com/example/portfolio/pull/42",
+				state: "open",
+				merged: false,
+			},
+			branchAlreadyExists: true,
+			// No `fileOnBranch` — the branch exists (an open PR) but never got a
+			// commit, e.g. a prior attempt died between createBranch and
+			// writeFile (T-62's scenario).
+		});
+		const site = siteFake({});
+
+		const result = await publish(
+			{ github, site },
+			{ kind: "writing", slug: "crdts", revise: true },
+		);
+
+		expect(result.ok).toBe(true);
+		expect(calls.writeFile[0]?.options.sha).toBeUndefined();
+	});
+
+	test("T-51: revise on a featured project keeps it featured — show and order both land in the written file", async () => {
+		const { github, calls } = statefulGithubFake({
+			draft: draftFile(validProjectDraftMetadata(), shortBody),
+			initialPullRequest: {
+				number: 42,
+				url: "https://github.com/example/portfolio/pull/42",
+				state: "open",
+				merged: false,
+			},
+			branchAlreadyExists: true,
+			fileOnBranch: { content: "old content", sha: "existing-file-sha" },
+		});
+		const site = siteFake({});
+
+		const result = await publish(
+			{ github, site },
+			{ kind: "project", slug: "yapper", show: true, order: 2, revise: true },
+		);
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error("expected ok result");
+
+		const write = calls.writeFile[0];
+		if (!write) throw new Error("expected a write call");
+		expect(write.content).toContain('"show": true');
+		expect(write.content).toContain('"order": 2');
 	});
 });

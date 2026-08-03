@@ -28,8 +28,20 @@ import { listContent } from "./list-content";
 //
 // Four steps and no branching until the last one. Every step returns a refusal
 // rather than throwing, in the union every service here uses.
+// `status` says which of the three things happened, because "published" is
+// three different outcomes and a human on a phone needs to know which:
+//   created    — a fresh pull request
+//   updated    — the branch already had an open PR; the file was amended and
+//                the same PR carries it. Publishing twice leaves ONE PR.
+//   recreated  — a PR existed but had been closed without merging, so a new
+//                one was opened over the same branch.
 export type PublishResult =
-	| { ok: true; url: string; number: number }
+	| {
+			ok: true;
+			url: string;
+			number: number;
+			status: "created" | "updated" | "recreated";
+	  }
 	| { ok: false; error: string };
 
 export async function publish(
@@ -39,6 +51,7 @@ export async function publish(
 		slug: string;
 		show?: boolean;
 		order?: number;
+		revise?: boolean;
 	},
 ): Promise<PublishResult> {
 	// First, before anything names the site or GitHub. The slug becomes a path
@@ -83,10 +96,13 @@ export async function publish(
 	const published = await listContent(deps, { kind: args.kind });
 	if (!published.ok) return published;
 
-	if (published.items.some((item) => item.slug === args.slug)) {
+	// `revise` is the escape. Republishing a live post is a deliberate act, so
+	// it has to be asked for — but it is not forbidden, because revising a post
+	// from a phone is the whole point of the feature.
+	if (published.items.some((item) => item.slug === args.slug) && !args.revise) {
 		return {
 			ok: false,
-			error: `${args.kind}/${args.slug} is already published. Editing a live post is not built yet — change it on the site by hand.`,
+			error: `${args.kind}/${args.slug} is already published. Pass revise: true to publish changes to it.`,
 		};
 	}
 
@@ -160,6 +176,27 @@ export async function publish(
 	const branch = branchName(args.kind, args.slug);
 	const destination = publishedPath(args.kind, args.slug);
 
+	// What already happened to this slug. Found by branch name, never by a
+	// number recorded anywhere — the branch name is deterministic, so GitHub
+	// can just be asked (ADR-005 decision 5).
+	let existing: Awaited<ReturnType<Github["findPullRequest"]>>;
+	try {
+		existing = await deps.github.findPullRequest("portfolio", branch);
+	} catch (error) {
+		return { ok: false, error: describeGithubFailure(error) };
+	}
+
+	// A merged pull request means this post is live. Amending it silently is
+	// the one accident the publish gate exists to prevent, so it takes an
+	// explicit `revise` — and `merged` is what decides, never `state`, which
+	// reads "closed" for a merged and an abandoned PR alike.
+	if (existing?.merged && !args.revise) {
+		return {
+			ok: false,
+			error: `${args.kind}/${args.slug} was already published and merged (pull request #${existing.number}). Pass revise: true to publish changes to it.`,
+		};
+	}
+
 	let base: string;
 	try {
 		base = await deps.github.getBranchHead("portfolio", "main");
@@ -170,15 +207,30 @@ export async function publish(
 	try {
 		await deps.github.createBranch("portfolio", branch, base);
 	} catch (error) {
-		// A clean refusal, not a crash and not a silent overwrite. Slice 4 turns
-		// this into an update of the existing branch.
-		if (error instanceof GithubAlreadyExistsError) {
-			return {
-				ok: false,
-				error: `The branch ${branch} already exists, so this may have been published before. Open or close its pull request on GitHub, then try again.`,
-			};
+		// The branch surviving from a previous publish is now the expected case,
+		// not a refusal: the file on it gets updated below and the existing pull
+		// request picks the change up. This is what makes publishing twice leave
+		// one PR rather than two (T-45).
+		if (!(error instanceof GithubAlreadyExistsError)) {
+			return { ok: false, error: describeGithubFailure(error) };
 		}
-		return { ok: false, error: describeGithubFailure(error) };
+	}
+
+	// Create or update? The branch may already carry this file from an earlier
+	// publish, and GitHub needs its `sha` to replace it. Asking is one call and
+	// removes the guess.
+	let existingFileSha: string | undefined;
+	try {
+		({ sha: existingFileSha } = await deps.github.readFileWithSha(
+			"portfolio",
+			destination,
+			branch,
+		));
+	} catch (error) {
+		// Not there yet — a create, with no `sha`. Any other failure is real.
+		if (!(error instanceof GithubNotFoundError)) {
+			return { ok: false, error: describeGithubFailure(error) };
+		}
 	}
 
 	try {
@@ -193,8 +245,24 @@ export async function publish(
 				// Never omitted. Without it GitHub commits to the default branch,
 				// which is the one thing this whole design exists to prevent.
 				branch,
+				// Present only when the branch already carried the file. Sending
+				// none is a create, and GitHub refuses a create over something
+				// that exists rather than replacing it.
+				sha: existingFileSha,
 			},
 		);
+
+		// An open pull request already carries this branch, so the commit above
+		// is already in it. Opening a second would be the duplicate M-3 exists
+		// to rule out.
+		if (existing && !existing.merged && existing.state === "open") {
+			return {
+				ok: true,
+				url: existing.url,
+				number: existing.number,
+				status: "updated",
+			};
+		}
 
 		const pull = await deps.github.createPullRequest("portfolio", {
 			title: pullRequestTitle(args.kind, args.slug),
@@ -217,7 +285,16 @@ export async function publish(
 			base: "main",
 		});
 
-		return { ok: true, url: pull.url, number: pull.number };
+		return {
+			ok: true,
+			url: pull.url,
+			number: pull.number,
+			// A closed-but-unmerged PR was abandoned, and reopening the work
+			// deserves saying so — the previous one was closed for a reason
+			// somebody may want to remember. A merged one revised under
+			// `revise` is a fresh publish, not a recreation of that PR.
+			status: existing && !existing.merged ? "recreated" : "created",
+		};
 	} catch (error) {
 		// The branch survives a failure here on purpose. Deleting it would throw
 		// away the commit, and the branch name is deterministic, so a retry
