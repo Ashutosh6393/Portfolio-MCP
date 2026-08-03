@@ -475,6 +475,7 @@ listed here, there is no test for it, and it does not get built.
 | T-61 | **Added, slice 3 review, 2026-08-03.** A project without `show`/`order` refuses | unit | `kind: "project"` with `order` omitted → a refusal naming both `show` and `order`, zero calls to `createBranch`, `writeFile`, `createPullRequest` |
 | T-62 | **Added, slice 3 review, 2026-08-03.** `writeFile` fails after the branch was cut | unit | the commit step throws → a refusal naming the branch and the GitHub branch URL (`github.com/.../tree/publish/...`), never the live site URL, `createPullRequest` never called |
 | T-63 | **Added, slice 3 review, 2026-08-03.** `createPullRequest` fails after the commit landed | unit | the PR step throws → a refusal naming the branch and the GitHub branch URL, not claiming GitHub is unreachable |
+| T-65 | **Added after the live M-1 run, 2026-08-03.** `createPullRequest` rejects with `GithubForbiddenError` (a 403 — GitHub answered) | unit | `createPullRequest` throws `GithubForbiddenError` → a refusal naming both `Contents` and `Pull requests`, not "unreachable" and not phrased as retryable. A 403 is a token-scope problem, not a transient failure — a retry can never fix it. |
 
 ### Slice 4 — idempotency and revise
 

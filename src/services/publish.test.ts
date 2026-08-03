@@ -3,6 +3,7 @@ import { renderDraft } from "../lib/draft";
 import {
 	type Github,
 	GithubAlreadyExistsError,
+	GithubForbiddenError,
 	GithubNotFoundError,
 } from "../lib/github";
 import type { Project, SchemaEnvelope, Site, Writing } from "../lib/site";
@@ -1126,5 +1127,43 @@ describe("publish — revise (Slice 4, Task 17)", () => {
 		if (!write) throw new Error("expected a write call");
 		expect(write.content).toContain('"show": true');
 		expect(write.content).toContain('"order": 2');
+	});
+});
+
+// T-65, added after the live M-1 run, 2026-08-03 — see Test revisions table
+// in specs/005-publish/implementation.md and design.md → Test cases →
+// Slice 3. M-1 hit this for real: the token had `Contents: write` but not
+// `Pull requests: write` on the portfolio repo, and before the fix in
+// src/lib/github.ts and src/services/publish.ts (commit 3518ddd) this fell
+// through to the generic branch, whose message reads like a network fault —
+// exactly the wrong lead for the one failure a retry can never fix.
+describe("publish — GitHub refuses for a missing token permission (T-65)", () => {
+	test("T-65: createPullRequest rejects with GithubForbiddenError — publish refuses naming both Contents and Pull requests, not as an unreachable/retryable failure", async () => {
+		const { github, calls } = githubFake({
+			draft: draftFile(validWritingDraftMetadata(), shortBody),
+		});
+		github.createPullRequest = (async () => {
+			throw new GithubForbiddenError("portfolio", "pulls");
+		}) as typeof github.createPullRequest;
+		const site = siteFake({});
+
+		const result = await publish(
+			{ github, site },
+			{ kind: "writing", slug: "crdts" },
+		);
+
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("expected an error result");
+		// Branch on the type, not the message: GithubForbiddenError is what
+		// publish checks with `instanceof`, so the fixture throws the real
+		// class rather than a lookalike Error with a matching string.
+		expect(result.error).toContain("Contents");
+		expect(result.error).toContain("Pull requests");
+		expect(result.error.toLowerCase()).not.toContain("unreachable");
+		// Not phrased as something a retry could fix — no "try again".
+		expect(result.error.toLowerCase()).not.toContain("try again");
+
+		expect(calls.createBranch).toHaveLength(1);
+		expect(calls.writeFile).toHaveLength(1);
 	});
 });
