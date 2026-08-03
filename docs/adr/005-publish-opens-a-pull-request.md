@@ -1,8 +1,24 @@
 # ADR-005: `publish` opens a pull request on `portfolio`
 
 - **Date:** 2026-08-03
-- **Status:** accepted
+- **Status:** accepted — **one premise in decision 8 superseded by
+  [ADR-006](006-the-token-needs-two-permissions.md)**
 - **Deciders:** Ashutosh Verma
+
+> **Corrected in part, 2026-08-03.** Decision 8 says *"GitHub grants committing to `main`
+> and opening a PR through the same permission"*. That is false — `Contents` and
+> `Pull requests` are separate fine-grained permissions, and the token needs **both**.
+> Found by M-1 against the real repo, which returned 403 on `POST /pulls`. See
+> [ADR-006](006-the-token-needs-two-permissions.md).
+>
+> **Decision 8 itself stands.** `Contents: write` alone really does permit committing to
+> `main`, and a fine-grained PAT really cannot be scoped to a branch, so the ruleset is
+> still what carries the guarantee. Only the sentence explaining why there was no narrower
+> option was wrong. The text below is left exactly as decided — it is the record of what
+> was believed before anything was run against the real API.
+>
+> **Everything else here stands:** all seven other decisions, the tradeoffs, and the slice
+> plan.
 
 ## Context
 
