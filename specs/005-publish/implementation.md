@@ -8,7 +8,7 @@ Update it after every task. Never batch updates.
 - **Status:** in-progress — slice 3
 - **Branch:** `feat/publish`
 - **Spec:** `design.md` · **ADR:** `docs/adr/005-publish-opens-a-pull-request.md`
-- **Current task:** 10 — `lib/github.ts`, generalise `request`. M-2 has passed.
+- **Current task:** 11 — `lib/github.ts`, the four new methods
 
 ---
 
@@ -44,7 +44,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 8 | `tools/get-content.ts` — `state` in the input schema, description rewritten | 7 | T-26, T-27 | 2 | `done` | 1/3 | `6b97c8c` |
 | 9 | `tools/save-draft.ts` — the slug instruction in the description. **Text only.** | — | none — see note | 2 | `done` | 1/3 | `48cf191` |
 | — | **M-2 — prove the ruleset refuses a push to `main`.** The ruleset is already configured; this proves it refuses *this* token. Blocks slice 3. | — | M-2 | 3 | `done` 2026-08-03 | — | see below |
-| 10 | `lib/github.ts` — generalise `request` to take a path suffix. **Refactor only, no new behaviour.** | M-2 | none — existing suite stays green | 3 | `pending` | 0/3 | — |
+| 10 | `lib/github.ts` — generalise `request` to take a path suffix. **Refactor only, no new behaviour.** | M-2 | none — existing suite stays green | 3 | `done` | 1/3 | `pending` |
 | 11 | `lib/github.ts` — `getBranchHead`, `createBranch`, `createPullRequest`; a `branch` option on `writeFile`; narrow the write functions' `repo` parameter | 10 | none — see design.md → Seams | 3 | `pending` | 0/3 | — |
 | 12 | `lib/publish.ts` — `publishedPath`, `branchName`, `publicUrl`, `renderPrBody`. Pure. | — | T-39, T-40 | 3 | `pending` | 0/3 | — |
 | 13 | `services/publish.ts` — the create path end to end | 1, 3, 4, 11, 12 | T-28 … T-38, T-41, T-43 | 3 | `pending` | 0/3 | — |

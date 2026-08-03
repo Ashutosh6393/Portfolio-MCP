@@ -110,15 +110,27 @@ export type Github = {
 // at boot, so it never reaches module scope and a test can build a fake without
 // one (design.md → The reader takes its token at construction).
 export function createGithub(token: string): Github {
-	// One endpoint serves all five methods — GET, PUT and DELETE on
-	// /contents/{path} — so the URL and the status mapping are built once here.
+	// The auth header, the API version and the status mapping are built once
+	// here and shared by every endpoint this file touches.
+	//
+	// `endpoint` is everything after `/repos/{owner}/{repo}/` — `contents/...`
+	// for the five original methods, and `git/refs`, `git/ref/...` or `pulls`
+	// for the publish path. It was hardcoded to `contents/{path}` until spec
+	// 005 needed the three non-contents endpoints to share the same status
+	// mapping and the same auth header.
+	//
+	// `subject` is what an error names, and it is deliberately not the
+	// endpoint: the contents methods report the bare file path, so keeping it
+	// separate is what makes this refactor invisible to their messages and to
+	// the five services that read them.
 	async function request(
 		repo: Repo,
-		path: string,
+		endpoint: string,
 		init: { method: string; accept: string; body?: Record<string, unknown> },
+		subject: string = endpoint,
 	) {
 		const response = await fetch(
-			`https://api.github.com/repos/${owner}/${repoNames[repo]}/contents/${path}`,
+			`https://api.github.com/repos/${owner}/${repoNames[repo]}/${endpoint}`,
 			{
 				method: init.method,
 				headers: {
@@ -134,19 +146,19 @@ export function createGithub(token: string): Github {
 			},
 		);
 		if (response.status === 404) {
-			throw new GithubNotFoundError(repo, path);
+			throw new GithubNotFoundError(repo, subject);
 		}
 		// 409 and 422 are verified, not assumed: M-1 made both rejections happen
 		// against the real repo on 2026-08-02 and the live API returned exactly
 		// these (specs/004-drafts/design.md). If a future GitHub change moves
 		// them, correct them here — never by second-guessing in the service.
 		if (response.status === 409) {
-			throw new GithubConflictError(repo, path);
+			throw new GithubConflictError(repo, subject);
 		}
 		// 422 only means "already exists" on a create — a write that sent no
 		// `sha`. With a `sha` the same status means something else entirely.
 		if (response.status === 422 && init.body && !("sha" in init.body)) {
-			throw new GithubAlreadyExistsError(repo, path);
+			throw new GithubAlreadyExistsError(repo, subject);
 		}
 		if (!response.ok) {
 			throw new Error(
@@ -156,12 +168,23 @@ export function createGithub(token: string): Github {
 		return response;
 	}
 
+	// The contents endpoint — what all five of the pre-spec-005 methods use.
+	// It exists so the `contents/` prefix and the "errors name the bare path"
+	// rule are written once rather than at every call site.
+	function contents(
+		repo: Repo,
+		path: string,
+		init: { method: string; accept: string; body?: Record<string, unknown> },
+	) {
+		return request(repo, `contents/${path}`, init, path);
+	}
+
 	return {
 		// Returns `unknown` on purpose, same as site.fetchContent: the parse
 		// belongs to the service, so a test can hand it garbage without a cast
 		// and still exercise the real schema.
 		async listDirectory(repo, path) {
-			const response = await request(repo, path, {
+			const response = await contents(repo, path, {
 				method: "GET",
 				accept: "application/vnd.github+json",
 			});
@@ -175,7 +198,7 @@ export function createGithub(token: string): Github {
 		// `content` field rather than erroring. No schema — `text()` is already
 		// `string`, so there is nothing to validate.
 		async readFile(repo, path) {
-			const response = await request(repo, path, {
+			const response = await contents(repo, path, {
 				method: "GET",
 				accept: "application/vnd.github.raw",
 			});
@@ -186,7 +209,7 @@ export function createGithub(token: string): Github {
 		// the `sha`, and the sha is what closes the read-modify-write loop. So
 		// this takes the JSON response and pays for it with a decode.
 		async readFileWithSha(repo, path) {
-			const response = await request(repo, path, {
+			const response = await contents(repo, path, {
 				method: "GET",
 				accept: "application/vnd.github+json",
 			});
@@ -205,7 +228,7 @@ export function createGithub(token: string): Github {
 		// GitHub attributes the commit correctly (design.md → Commit authorship).
 		// Omitting `sha` means create; supplying it means update-if-unchanged.
 		async writeFile(repo, path, content, options) {
-			await request(repo, path, {
+			await contents(repo, path, {
 				method: "PUT",
 				accept: "application/vnd.github+json",
 				body: {
@@ -218,7 +241,7 @@ export function createGithub(token: string): Github {
 
 		// `sha` is required: the contents API has no delete-by-path.
 		async deleteFile(repo, path, options) {
-			await request(repo, path, {
+			await contents(repo, path, {
 				method: "DELETE",
 				accept: "application/vnd.github+json",
 				body: { message: options.message, sha: options.sha },
