@@ -25,16 +25,18 @@ const testEnv = {
 // this file can silently fall back to the real site singleton.
 // Test revision, 2026-08-03 — see Test revisions table in
 // specs/005-publish/implementation.md. Task 4 widens `Site` with
-// `fetchSchema`, so every fake must carry it to typecheck. Nothing in this
-// file reaches the publish path, so this throws rather than return a
-// plausible value: an accidental call fails loudly instead of passing
-// silently.
+// `fetchSchema`, so every fake must carry it to typecheck.
+// Test revision, 2026-08-03 (second) — see Test revisions table in
+// specs/005-publish/implementation.md. Task 5 makes `/{secret}/health` call
+// `fetchSchema()` on every request, so this shared default now needs to
+// resolve like a healthy site; T-19 builds its own throwing `Site` inline
+// instead of relying on this one to fail.
 const fakeSite: Site = {
 	async fetchContent() {
 		return [];
 	},
-	async fetchSchema(): Promise<never> {
-		throw new Error("fetchSchema is not part of this test");
+	async fetchSchema() {
+		return { writing: {}, project: {} };
 	},
 };
 
@@ -266,6 +268,54 @@ describe("GET /{secret}/health — the github check", () => {
 
 		const checks = await readChecks(response);
 		expect(checks.github).toBe("unreachable");
+	});
+});
+
+// T-18, T-19 — see specs/005-publish/design.md → Test cases → Slice 1. Task 5
+// adds a third parallel check, `schema`, to the deep health route.
+
+describe("GET /{secret}/health — the schema check", () => {
+	test("T-18: schema reachable — 200, checks.schema is ok", async () => {
+		const siteWithSchema: Site = {
+			...fakeSite,
+			async fetchSchema() {
+				return { writing: {}, project: {} };
+			},
+		};
+		const app = createApp(testEnv, { ...testDeps, site: siteWithSchema });
+
+		const response = await app.handle(
+			new Request(`http://localhost/${secret}/health`),
+		);
+		expect(response.status).toBe(200);
+
+		const checks = await readChecks(response);
+		expect(checks.schema).toBe("ok");
+	});
+
+	test("T-19: schema unreachable — 503, checks.schema fails while site and github stay ok", async () => {
+		// Own site fake, mirroring unreachableSite in T-17: fetchContent stays
+		// on the happy path so checks.site is "ok", only fetchSchema throws, so
+		// a 503 here can only be the schema check's doing.
+		const siteWithBadSchema: Site = {
+			async fetchContent() {
+				return [];
+			},
+			async fetchSchema(): Promise<never> {
+				throw new Error("simulated schema fetch failure");
+			},
+		};
+		const app = createApp(testEnv, { ...testDeps, site: siteWithBadSchema });
+
+		const response = await app.handle(
+			new Request(`http://localhost/${secret}/health`),
+		);
+		expect(response.status).toBe(503);
+
+		const checks = await readChecks(response);
+		expect(checks.schema).toBe("unreachable");
+		expect(checks.site).toBe("ok");
+		expect(checks.github).toBe("ok");
 	});
 });
 
