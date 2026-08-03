@@ -183,6 +183,16 @@ function githubFake(options: {
 				}
 			);
 		},
+		// Test revision, 2026-08-03 — see Test revisions table in
+		// specs/005-publish/implementation.md. Task 15 adds `findPullRequest` to
+		// `Github`, so this fake must carry it to typecheck. `publish` under
+		// test here does not call it yet, so this throws rather than returning
+		// `null` — `null` is a meaningful answer here ("no PR exists for this
+		// branch"), and a stub that returned it could let an idempotency test
+		// pass without publish ever having called it.
+		async findPullRequest(): Promise<never> {
+			throw new Error("findPullRequest is not part of publish");
+		},
 	};
 	return { github, calls };
 }

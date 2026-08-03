@@ -41,6 +41,16 @@ const noWritePath = {
 	async createPullRequest(): Promise<never> {
 		throw new Error("createPullRequest is not part of get_content");
 	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 15 adds `findPullRequest` to
+	// `Github`, so every fake must carry it to typecheck. getContent never
+	// touches the publish path, so this throws rather than returning `null` —
+	// `null` is a meaningful answer here ("no PR exists for this branch"), and
+	// a stub that returned it could let an idempotency test pass without
+	// getContent ever having called it.
+	async findPullRequest(): Promise<never> {
+		throw new Error("findPullRequest is not part of get_content");
+	},
 };
 
 type ReadCall = { repo: string; path: string };
@@ -129,6 +139,16 @@ const noGithubAccess: Github = {
 	},
 	async createPullRequest(): Promise<never> {
 		throw new Error("createPullRequest is not part of a published read");
+	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 15 adds `findPullRequest` to
+	// `Github`, so every fake must carry it to typecheck. A published read
+	// never touches the publish path, so this throws rather than returning
+	// `null` — `null` is a meaningful answer here ("no PR exists for this
+	// branch"), and a stub that returned it could let an idempotency test pass
+	// without a published read ever having called it.
+	async findPullRequest(): Promise<never> {
+		throw new Error("findPullRequest is not part of a published read");
 	},
 };
 

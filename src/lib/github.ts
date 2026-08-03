@@ -55,6 +55,19 @@ export const pullRequestSchema = z.object({
 	html_url: z.string(),
 });
 
+// `GET /pulls?head=...&state=all`. `merged_at` is how a merged PR is told
+// apart from one that was simply closed — `state` is `"closed"` for both, and
+// the two need opposite treatment: a merged post is live and must not be
+// quietly republished, a closed one was abandoned and can be reopened.
+export const pullRequestListSchema = z.array(
+	z.object({
+		number: z.number(),
+		html_url: z.string(),
+		state: z.string(),
+		merged_at: z.string().nullable(),
+	}),
+);
+
 // The domain word and the GitHub name are not the same thing. `portfolio` is
 // CONTEXT.md vocabulary and is what every doc, error message, and health check
 // says; `repoNames` is the single place it becomes a real path. Verified
@@ -110,9 +123,13 @@ export class GithubAlreadyExistsError extends Error {
 export type Github = {
 	listDirectory(repo: Repo, path: string): Promise<unknown>;
 	readFile(repo: Repo, path: string): Promise<string>;
+	// `ref` names a branch to read from. Omitted, GitHub reads the default
+	// branch. `publish` needs it to ask whether the file already exists on the
+	// publish branch, which decides create versus update.
 	readFileWithSha(
 		repo: Repo,
 		path: string,
+		ref?: string,
 	): Promise<{ content: string; sha: string }>;
 	// `branch` is what keeps a publish off `main`. Omitted, GitHub commits to
 	// the repo's default branch — which on `portfolio` is exactly the thing
@@ -160,6 +177,22 @@ export type Github = {
 		repo: "portfolio",
 		options: { title: string; body: string; head: string; base: string },
 	): Promise<{ number: number; url: string }>;
+	// Found by head branch, never by a number recorded anywhere. The branch
+	// name is deterministic — `publish/{kind}/{slug}`, no timestamps — so
+	// GitHub can simply be asked. ADR-005 decision 5 rejected writing the
+	// number back into the draft: it would invalidate the sha the model is
+	// holding, which is a bug, not merely redundant.
+	//
+	// `null` means no pull request has ever been opened for that branch.
+	findPullRequest(
+		repo: "portfolio",
+		branch: string,
+	): Promise<{
+		number: number;
+		url: string;
+		state: string;
+		merged: boolean;
+	} | null>;
 };
 
 // A factory, not a singleton like `site`: the token arrives from the parsed env
@@ -277,11 +310,16 @@ export function createGithub(token: string): Github {
 		// The raw Accept header cannot be used here: it returns the bytes but not
 		// the `sha`, and the sha is what closes the read-modify-write loop. So
 		// this takes the JSON response and pays for it with a decode.
-		async readFileWithSha(repo, path) {
-			const response = await contents(repo, path, {
-				method: "GET",
-				accept: "application/vnd.github+json",
-			});
+		async readFileWithSha(repo, path, ref) {
+			// `request` directly rather than `contents`, so the `?ref=` query
+			// stays out of the error subject — an error should name the file, not
+			// the URL it was fetched with.
+			const response = await request(
+				repo,
+				`contents/${path}${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`,
+				{ method: "GET", accept: "application/vnd.github+json" },
+				path,
+			);
 			const file = fileContentSchema.parse(await response.json());
 			// ADR-002 said no base64 decoder was needed; ADR-004 amends it, and
 			// this is the one line that came back. `Buffer`, never `atob`: GitHub
@@ -363,6 +401,32 @@ export function createGithub(token: string): Github {
 			);
 			const pull = pullRequestSchema.parse(await response.json());
 			return { number: pull.number, url: pull.html_url };
+		},
+
+		// `state=all` matters: the default is `open`, which would report a
+		// merged or closed pull request as "never existed" and silently
+		// republish something that was deliberately abandoned or already live.
+		async findPullRequest(repo, branch) {
+			const response = await request(
+				repo,
+				`pulls?head=${owner}:${branch}&state=all`,
+				{ method: "GET", accept: "application/vnd.github+json" },
+				branch,
+			);
+			const pulls = pullRequestListSchema.parse(await response.json());
+			// GitHub returns newest first. More than one can exist for a branch
+			// that has been merged and reopened, and the latest is the one that
+			// decides what happens next.
+			const latest = pulls[0];
+			if (!latest) return null;
+			return {
+				number: latest.number,
+				url: latest.html_url,
+				state: latest.state,
+				// `state` is "closed" for both merged and abandoned. Only
+				// `merged_at` tells them apart, and they need opposite treatment.
+				merged: latest.merged_at !== null,
+			};
 		},
 
 		// `sha` is required: the contents API has no delete-by-path.

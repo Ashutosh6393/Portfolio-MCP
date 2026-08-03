@@ -36,6 +36,16 @@ const noOtherPath = {
 	async createPullRequest(): Promise<never> {
 		throw new Error("createPullRequest is not part of discard_draft");
 	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 15 adds `findPullRequest` to
+	// `Github`, so every fake must carry it to typecheck. discardDraft never
+	// touches the publish path, so this throws rather than returning `null` —
+	// `null` is a meaningful answer here ("no PR exists for this branch"), and
+	// a stub that returned it could let an idempotency test pass without
+	// discardDraft ever having called it.
+	async findPullRequest(): Promise<never> {
+		throw new Error("findPullRequest is not part of discard_draft");
+	},
 };
 
 type ReadCall = { repo: string; path: string };
