@@ -83,6 +83,21 @@ const fakeGithub: Github = {
 	async deleteFile(): Promise<never> {
 		throw new Error("deleteFile is not part of this test");
 	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 11 widens `Github` with these
+	// three, so every fake must carry them to typecheck. No tool exercised
+	// here reaches the publish path, so these throw rather than return a
+	// plausible value: an accidental call fails loudly instead of passing
+	// silently.
+	async getBranchHead(): Promise<never> {
+		throw new Error("getBranchHead is not part of this test");
+	},
+	async createBranch(): Promise<never> {
+		throw new Error("createBranch is not part of this test");
+	},
+	async createPullRequest(): Promise<never> {
+		throw new Error("createPullRequest is not part of this test");
+	},
 };
 
 async function postJsonRpc(body: unknown) {
@@ -303,6 +318,21 @@ const fakeDraftGithub: Github = {
 	// beforeEach means this mutation never leaks into another test.
 	async deleteFile(_repo, path) {
 		delete draftFiles[path];
+	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 11 widens `Github` with these
+	// three, so every fake must carry them to typecheck. No tool exercised
+	// here reaches the publish path, so these throw rather than return a
+	// plausible value: an accidental call fails loudly instead of passing
+	// silently.
+	async getBranchHead(): Promise<never> {
+		throw new Error("getBranchHead is not part of this test");
+	},
+	async createBranch(): Promise<never> {
+		throw new Error("createBranch is not part of this test");
+	},
+	async createPullRequest(): Promise<never> {
+		throw new Error("createPullRequest is not part of this test");
 	},
 };
 
@@ -600,6 +630,21 @@ const fakeDraftListingGithub: Github = {
 	},
 	async deleteFile(): Promise<never> {
 		throw new Error("deleteFile is not part of this test");
+	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 11 widens `Github` with these
+	// three, so every fake must carry them to typecheck. No tool exercised
+	// here reaches the publish path, so these throw rather than return a
+	// plausible value: an accidental call fails loudly instead of passing
+	// silently.
+	async getBranchHead(): Promise<never> {
+		throw new Error("getBranchHead is not part of this test");
+	},
+	async createBranch(): Promise<never> {
+		throw new Error("createBranch is not part of this test");
+	},
+	async createPullRequest(): Promise<never> {
+		throw new Error("createPullRequest is not part of this test");
 	},
 };
 

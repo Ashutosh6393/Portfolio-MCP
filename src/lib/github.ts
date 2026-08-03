@@ -34,6 +34,18 @@ export const fileContentSchema = z.object({
 	sha: z.string(),
 });
 
+// `GET /git/ref/heads/{branch}` — the commit a branch points at, which is the
+// base a new branch is cut from. Only `object.sha` is declared because only
+// `object.sha` is used.
+export const refSchema = z.object({ object: z.object({ sha: z.string() }) });
+
+// `POST /pulls`. `html_url` is the browser URL, not the API one — it is what
+// gets handed back to a human to click.
+export const pullRequestSchema = z.object({
+	number: z.number(),
+	html_url: z.string(),
+});
+
 // The domain word and the GitHub name are not the same thing. `portfolio` is
 // CONTEXT.md vocabulary and is what every doc, error message, and health check
 // says; `repoNames` is the single place it becomes a real path. Verified
@@ -93,17 +105,38 @@ export type Github = {
 		repo: Repo,
 		path: string,
 	): Promise<{ content: string; sha: string }>;
+	// `branch` is what keeps a publish off `main`. Omitted, GitHub commits to
+	// the repo's default branch — which on `portfolio` is exactly the thing
+	// ADR-005 decision 8 exists to prevent. The ruleset refuses it regardless
+	// (M-2 proved that), but the code must never try.
 	writeFile(
 		repo: Repo,
 		path: string,
 		content: string,
-		options: { message: string; sha?: string },
+		options: { message: string; sha?: string; branch?: string },
 	): Promise<void>;
+	// Narrowed to `workshop`. Nothing deletes from `portfolio` — unpublishing
+	// is by hand, with a redirect (design.md → Out of scope) — and now that the
+	// token can write there, the type is what says so.
 	deleteFile(
-		repo: Repo,
+		repo: "workshop",
 		path: string,
 		options: { message: string; sha: string },
 	): Promise<void>;
+
+	// The three publish endpoints. All pinned to `portfolio`: there is no
+	// branch or pull request on `workshop`, so a `Repo` here would be a
+	// parameter with exactly one legal value and one way to get it wrong.
+	getBranchHead(repo: "portfolio", branch: string): Promise<string>;
+	createBranch(
+		repo: "portfolio",
+		branch: string,
+		fromSha: string,
+	): Promise<void>;
+	createPullRequest(
+		repo: "portfolio",
+		options: { title: string; body: string; head: string; base: string },
+	): Promise<{ number: number; url: string }>;
 };
 
 // A factory, not a singleton like `site`: the token arrives from the parsed env
@@ -126,7 +159,17 @@ export function createGithub(token: string): Github {
 	async function request(
 		repo: Repo,
 		endpoint: string,
-		init: { method: string; accept: string; body?: Record<string, unknown> },
+		init: {
+			method: string;
+			accept: string;
+			body?: Record<string, unknown>;
+			// What a 422 means on this endpoint. The contents API infers it from
+			// the body (a write with no `sha` is a create), but that inference is
+			// wrong for `git/refs`, whose body always carries a `sha` — the commit
+			// to branch from — and which answers 422 when the ref already exists.
+			// So the caller can state it instead of having it guessed.
+			alreadyExistsOn422?: boolean;
+		},
 		subject: string = endpoint,
 	) {
 		const response = await fetch(
@@ -155,9 +198,12 @@ export function createGithub(token: string): Github {
 		if (response.status === 409) {
 			throw new GithubConflictError(repo, subject);
 		}
-		// 422 only means "already exists" on a create — a write that sent no
-		// `sha`. With a `sha` the same status means something else entirely.
-		if (response.status === 422 && init.body && !("sha" in init.body)) {
+		// On the contents API, 422 only means "already exists" on a create — a
+		// write that sent no `sha`. With a `sha` the same status means something
+		// else entirely. Other endpoints say so explicitly instead.
+		const alreadyExists =
+			init.alreadyExistsOn422 ?? (!!init.body && !("sha" in init.body));
+		if (response.status === 422 && alreadyExists) {
 			throw new GithubAlreadyExistsError(repo, subject);
 		}
 		if (!response.ok) {
@@ -235,8 +281,58 @@ export function createGithub(token: string): Github {
 					message: options.message,
 					content: Buffer.from(content, "utf8").toString("base64"),
 					...(options.sha ? { sha: options.sha } : {}),
+					// Omitted for a draft, always present for a publish. Without it
+					// GitHub writes to the default branch.
+					...(options.branch ? { branch: options.branch } : {}),
 				},
 			});
+		},
+
+		async getBranchHead(repo, branch) {
+			const response = await request(
+				repo,
+				`git/ref/heads/${branch}`,
+				{ method: "GET", accept: "application/vnd.github+json" },
+				branch,
+			);
+			return refSchema.parse(await response.json()).object.sha;
+		},
+
+		// A 422 here means the ref already exists, which is a clean refusal
+		// rather than a crash: publishing the same slug twice must not silently
+		// overwrite the branch (T-41). Slice 4 turns that into an update.
+		async createBranch(repo, branch, fromSha) {
+			await request(
+				repo,
+				"git/refs",
+				{
+					method: "POST",
+					accept: "application/vnd.github+json",
+					body: { ref: `refs/heads/${branch}`, sha: fromSha },
+					alreadyExistsOn422: true,
+				},
+				branch,
+			);
+		},
+
+		// `html_url` is returned, not the API url — a human clicks this.
+		async createPullRequest(repo, options) {
+			const response = await request(
+				repo,
+				"pulls",
+				{
+					method: "POST",
+					accept: "application/vnd.github+json",
+					body: options,
+					// A PR for this head already being open is not "already exists"
+					// in the sense the contents API means. Slice 4 finds it by branch
+					// name instead of guessing from a status code.
+					alreadyExistsOn422: false,
+				},
+				options.head,
+			);
+			const pull = pullRequestSchema.parse(await response.json());
+			return { number: pull.number, url: pull.html_url };
 		},
 
 		// `sha` is required: the contents API has no delete-by-path.

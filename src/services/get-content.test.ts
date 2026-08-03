@@ -27,6 +27,20 @@ const noWritePath = {
 	async deleteFile(): Promise<never> {
 		throw new Error("deleteFile is not part of get_content");
 	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 11 widens `Github` with these
+	// three, so every fake must carry them to typecheck. getContent never
+	// touches the publish path, so these throw rather than return a plausible
+	// value: an accidental call fails loudly instead of passing silently.
+	async getBranchHead(): Promise<never> {
+		throw new Error("getBranchHead is not part of get_content");
+	},
+	async createBranch(): Promise<never> {
+		throw new Error("createBranch is not part of get_content");
+	},
+	async createPullRequest(): Promise<never> {
+		throw new Error("createPullRequest is not part of get_content");
+	},
 };
 
 type ReadCall = { repo: string; path: string };
@@ -100,6 +114,21 @@ const noGithubAccess: Github = {
 	},
 	async deleteFile(): Promise<never> {
 		throw new Error("deleteFile is not part of a published read");
+	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 11 widens `Github` with these
+	// three, so every fake must carry them to typecheck. A published read
+	// never touches the publish path, so these throw rather than return a
+	// plausible value: an accidental call fails loudly instead of passing
+	// silently.
+	async getBranchHead(): Promise<never> {
+		throw new Error("getBranchHead is not part of a published read");
+	},
+	async createBranch(): Promise<never> {
+		throw new Error("createBranch is not part of a published read");
+	},
+	async createPullRequest(): Promise<never> {
+		throw new Error("createPullRequest is not part of a published read");
 	},
 };
 
