@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<title>portfolio-mcp — write it anywhere, merge it yourself</title>
+		<meta
+			name="description"
+			content="A remote MCP server for ashutoshverma.dev. Six tools read the site, serve the drafting rules, save drafts, and open a pull request. It never merges."
+		/>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			rel="stylesheet"
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,700&display=swap"
+		/>
+		<link rel="stylesheet" href="style.css" />
+	</head>
+
+	<body>
+		<!-- Nav · N9 edge-aligned minimal. Two destinations, nothing between them. -->
+		<header class="wrap nav">
+			<a class="nav__wordmark" href="#top">portfolio-mcp</a>
+			<a class="nav__cta link" href="https://github.com/Ashutosh6393/Portfolio-MCP">Source →</a>
+		</header>
+
+		<hr class="rule-bleed" />
+
+		<main id="top">
+			<!-- Hero · typographic. Height comes from the words. -->
+			<section class="wrap hero">
+				<h1 class="hero__title">Write it anywhere. Merge it yourself.</h1>
+
+				<p class="lede hero__lede">
+					A remote MCP server for
+					<a class="link-inline" href="https://ashutoshverma.dev">ashutoshverma.dev</a> to read, create, delete drafts posts and publish them.<br><br> Six tools read
+					the site, serve the drafting rules, save drafts, and open a pull request. Publishing
+					stops at the pull request — the merge button is somewhere the model cannot reach.
+				</p>
+
+				<ul class="hero__stages">
+					<li class="u-label">1.0 draft</li>
+					<li class="u-label">2.0 save</li>
+					<li class="u-label">3.0 publish</li>
+					<li class="u-label">4.0 merge</li>
+				</ul>
+			</section>
+
+			<!-- The friction the project exists to remove. -->
+			<section class="wrap section--tight">
+				<h2 class="section__title section__title--wide">
+					The posts that got written were the ones that survived the laptop.
+				</h2>
+				<div class="section__body measure">
+					<p>
+						Publishing meant opening the laptop, finding the repo, copying a template, getting
+						the metadata block exactly right, committing, pushing, waiting for Vercel. Drafting
+						from a phone was not possible at all.
+					</p>
+					<p>
+						So the idea you had on a train did not survive. This server is the shortest path
+						from that idea to a preview URL, and deliberately nothing more.
+					</p>
+				</div>
+			</section>
+
+			<!-- The spine of the page: four stages, in order.
+			     The number sits inside the heading — no eyebrow row, no tag column. -->
+			<section class="wrap section">
+				<h2 class="section__title">How a thought becomes a page</h2>
+
+				<ol class="stages">
+					<li class="stage">
+						<h3 class="stage__title"><span class="stage__num">1.0</span>Draft</h3>
+						<div class="stage__body">
+							<p>
+								In any Claude client — Code, Desktop, the browser, the phone.
+								<span class="mono">get_skill</span> serves the rules for the kind of content
+								you are writing, plus <span class="mono">be-human</span>, the voice. The model
+								does the writing; the server only moves bytes.
+							</p>
+						</div>
+					</li>
+
+					<li class="stage">
+						<h3 class="stage__title"><span class="stage__num">2.0</span>Save</h3>
+						<div class="stage__body">
+							<p>
+								<span class="mono">save_draft</span> writes real MDX into
+								<span class="mono">workshop</span>, a private repo. It commits straight to main,
+								because nothing in there is public yet. A draft can be read back, rewritten, or
+								thrown away.
+							</p>
+						</div>
+					</li>
+
+					<li class="stage">
+						<h3 class="stage__title"><span class="stage__num">3.0</span>Publish</h3>
+						<div class="stage__body">
+							<p>
+								<span class="mono">publish</span> validates the draft against the site’s own
+								live schema, cuts a branch on <span class="mono">portfolio</span>, and opens a
+								pull request. Say “publish it” twice and you still get exactly one.
+							</p>
+						</div>
+					</li>
+
+					<li class="stage">
+						<h3 class="stage__title"><span class="stage__num">4.0</span>Merge</h3>
+						<div class="stage__body">
+							<p>
+								Vercel builds a preview of the pull request. You read the preview, then you
+								press merge. There is no tool for this stage, and that is the point — the model
+								has no path to that button.
+							</p>
+						</div>
+					</li>
+				</ol>
+			</section>
+
+			<!-- Tools · F3 tabular spec sheet. Six rows, hairline rules, no cards. -->
+			<section class="wrap section">
+				<h2 class="section__title">Six tools</h2>
+				<p class="lede lede--spaced">
+					The model is the caller here, not a person. Tool names and error strings are its whole
+					interface, which makes their wording part of the product rather than polish.
+				</p>
+
+				<table class="spec">
+					<thead>
+						<tr>
+							<th class="u-label" scope="col">Tool</th>
+							<th class="u-label" scope="col">What it does</th>
+							<th class="u-label" scope="col">Reach</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<th scope="row">list_content</th>
+							<td data-label="Does">An index of writings, projects and posts</td>
+							<td data-label="Reach">site · read</td>
+						</tr>
+						<tr>
+							<th scope="row">get_content</th>
+							<td data-label="Does">One item, whole, by slug</td>
+							<td data-label="Reach">site · read</td>
+						</tr>
+						<tr>
+							<th scope="row">get_skill</th>
+							<td data-label="Does">The rules for one kind of content, plus the voice</td>
+							<td data-label="Reach">workshop · read</td>
+						</tr>
+						<tr>
+							<th scope="row">save_draft</th>
+							<td data-label="Does">Write or replace a draft</td>
+							<td data-label="Reach">workshop · write</td>
+						</tr>
+						<tr>
+							<th scope="row">publish</th>
+							<td data-label="Does">Open a pull request on the public site</td>
+							<td data-label="Reach">portfolio · PR only</td>
+						</tr>
+						<tr>
+							<th scope="row">discard_draft</th>
+							<td data-label="Does">Delete a draft</td>
+							<td data-label="Reach">workshop · write</td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+
+			<!-- The gate · the single idea the whole design hangs on. -->
+			<section class="wrap gate">
+				<p class="display gate__line">The tool opens the pull request. A person merges it.</p>
+				<div class="gate__body measure">
+					<p>
+						Everything else follows from that. A slug that is already published cannot be
+						touched without an explicit <span class="mono">revise</span> flag. No repo is ever
+						cloned, so there is no stale checkout waiting to surprise anyone. Auth is one
+						unguessable secret in the URL path — there is exactly one user, which is the one
+						case OAuth adds nothing to.
+					</p>
+					<p>
+						The phone is the dangerous client: no diff to read, and a distracted reader. Every
+						refusal in the design exists for that case.
+					</p>
+				</div>
+			</section>
+
+			<!-- Refusals · the non-goals, which are the more useful list. -->
+			<section class="wrap section--loose">
+				<h2 class="section__title">Deliberately not built</h2>
+				<p class="lede lede--spaced">
+					Each of these was argued and rejected. The list is what stops scope creep from looking
+					like initiative.
+				</p>
+
+				<ul class="refusals">
+					<li>
+						<b>The site itself</b>
+						<span
+							><span class="mono">portfolio</span> is a separate repo, and its part is
+							done.</span
+						>
+					</li>
+					<li>
+						<b>Skills, templates, drafts</b>
+						<span>Content. It lives in <span class="mono">workshop</span>.</span>
+					</li>
+					<li>
+						<b>Anything that merges</b>
+						<span>That is the entire safety model.</span>
+					</li>
+					<li>
+						<b>A database, a queue, search</b>
+						<span>Two repos and the GitHub API are the storage.</span>
+					</li>
+					<li>
+						<b>OAuth</b>
+						<span>One user. A secret path is enough, and less to get wrong.</span>
+					</li>
+					<li>
+						<b>Auto-posting to LinkedIn or X</b>
+						<span>A post is archived, never fired off.</span>
+					</li>
+					<li>
+						<b>Image uploads</b>
+						<span>Out of scope, on purpose.</span>
+					</li>
+					<li>
+						<b>A merge webhook</b>
+						<span>Drafts reconcile lazily, on the next read.</span>
+					</li>
+				</ul>
+			</section>
+
+			<!-- Stack and status · plain facts, not a logo wall. -->
+			<section class="wrap section">
+				<h2 class="section__title">What it runs on</h2>
+				<dl class="facts">
+					<div>
+						<dt class="u-label">Runtime</dt>
+						<dd>Bun · TypeScript, strict</dd>
+					</div>
+					<div>
+						<dt class="u-label">Server</dt>
+						<dd>Elysia · the MCP TypeScript SDK</dd>
+					</div>
+					<div>
+						<dt class="u-label">Validation</dt>
+						<dd>Zod, at every boundary</dd>
+					</div>
+					<div>
+						<dt class="u-label">Tooling</dt>
+						<dd>Biome · bun:test</dd>
+					</div>
+					<div>
+						<dt class="u-label">Host</dt>
+						<dd>Fly.io — one small machine that stops itself when idle</dd>
+					</div>
+					<div>
+						<dt class="u-label">Storage</dt>
+						<dd>None. Every read and write goes through the GitHub API</dd>
+					</div>
+					<div>
+						<dt class="u-label">Status</dt>
+						<dd>
+							All six tools built. 
+						</dd>
+					</div>
+				</dl>
+			</section>
+
+			<!-- Close · C3 typographic links. No filled button anywhere on this page. -->
+			<section class="wrap close">
+				<p class="display close__line">
+					An idea on a train now reaches a preview URL with no laptop involved.
+				</p>
+				<div class="close__links">
+					<a class="link" href="https://github.com/Ashutosh6393/Portfolio-MCP">Read the source →</a>
+					<a
+						class="link"
+						href="https://github.com/Ashutosh6393/Portfolio-MCP/blob/main/docs/adr/mcp-design.md"
+						>Read the design →</a
+					>
+					<a class="link" href="https://ashutoshverma.dev">See the site →</a>
+				</div>
+			</section>
+		</main>
+
+		<!-- Footer · Ft4 dense colophon. Credits, not a sitemap. -->
+		<footer class="wrap colophon">
+			<p>
+				portfolio-mcp — a remote MCP server for one writer, running at mcp.ashutoshverma.dev.
+				Three repos are involved: portfolio, the public site; workshop, private, holding drafts,
+				skills and templates; and this one, the server. Built by
+				<a class="link-inline" href="https://ashutoshverma.dev">Ashutosh Verma</a>, 2026.
+				
+			</p>
+		</footer>
+	</body>
+</html>

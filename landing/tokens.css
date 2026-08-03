@@ -1,0 +1,78 @@
+/* Hallmark · theme: Editorial
+ * axes: light paper · roman-serif display · warm accent
+ * Portable token export. Every colour, font, size and rhythm value used by
+ * the landing page is named here. style.css references these by name only —
+ * there is no raw colour or font value anywhere else in the build.
+ */
+
+:root {
+	/* ---- Type families · 2 + 1 (display, body, one outlier) ----
+	 * The outlier (mono) carries exactly one role: machine identifiers —
+	 * tool names, repo names, flags, and the wordmark (itself a package name).
+	 * Nothing else on the page is mono. Running prose is always --font-body.
+	 */
+	--font-display: "Newsreader", ui-serif, Georgia, serif;
+	--font-body: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+	--font-outlier: "JetBrains Mono", ui-monospace, monospace;
+
+	/* ---- Weight · one display weight, one body weight, one emphasis ---- */
+	--weight-display: 700;
+	--weight-body: 400;
+	--weight-emphasis: 500;
+
+	/* ---- Tracking · three values for the whole page, no ad-hoc em values ----
+	 * Bold serif display needs less tightening than a light one, hence -0.015em.
+	 */
+	--track-tight: -0.015em; /* display + headings */
+	--track-body: 0; /* running prose */
+	--track-label: 0.08em; /* uppercase micro-labels only */
+
+	/* ---- Colour · anchor hue 75 (warm oat), accent hue 32 (brick) ----
+	 * No pure black, no pure white. Every neutral carries the anchor's tint.
+	 * Contrast on --color-paper: ink 15:1 · muted 5.1:1 · accent 4.7:1.
+	 * --color-neutral is ~3:1 — rules and large text only, never body copy.
+	 */
+	--color-paper: oklch(97.5% 0.008 75);
+	--color-paper-2: oklch(95% 0.01 75);
+	--color-rule: oklch(85% 0.01 75);
+	--color-neutral: oklch(60% 0.01 70);
+	--color-muted: oklch(45% 0.012 65);
+	--color-ink: oklch(21% 0.014 60);
+	--color-accent: oklch(47% 0.155 32);
+	--color-focus: oklch(47% 0.155 32);
+
+	/* ---- Scale · major third (1.25) from a 16px body ---- */
+	--text-sm: 0.8rem;
+	--text-base: 1rem;
+	--text-md: 1.25rem;
+	--text-lg: 1.5625rem;
+	--text-xl: 1.9531rem;
+	--text-2xl: 2.4414rem;
+	--text-display: clamp(2.75rem, 5vw + 1rem, 5.25rem);
+
+	/* ---- Space · 4pt base, named by role ---- */
+	--space-3xs: 0.125rem;
+	--space-2xs: 0.25rem;
+	--space-xs: 0.5rem;
+	--space-sm: 0.75rem;
+	--space-md: 1rem;
+	--space-lg: 1.5rem;
+	--space-xl: 2.5rem;
+	--space-2xl: 4rem;
+	--space-3xl: 6rem;
+	--space-4xl: 9rem;
+
+	/* ---- Page ---- */
+	--page-gutter: clamp(1.25rem, 5vw, 5.5rem);
+	--measure: 34rem; /* ~62ch at body size */
+	--measure-fine: 66ch; /* colophon */
+	--touch-target: 44px;
+
+	/* ---- Rules · this page draws lines, never shadows ---- */
+	--rule-hair: 1px;
+	--rule-thick: 2px;
+
+	/* ---- Motion · one duration, one easing. Nothing here moves much. ---- */
+	--dur-short: 90ms;
+	--ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}

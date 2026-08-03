@@ -1,0 +1,576 @@
+/* Hallmark · genre: editorial · macrostructure: Narrative Workflow · theme: Editorial
+ * enrichment: none (typography only) · nav: N9 edge-aligned minimal · footer: Ft4 dense colophon
+ * tone: editorial / technical · anchor hue: 75 warm · accent: brick oklch(47% 0.155 32)
+ * axes: light paper · roman-serif display · warm accent
+ * pre-emit critique: P5 H5 E5 S5 R5 V4
+ * contrast: pass (40–41) · honest: pass (46) · chrome: pass (47) · tokens: pass (48)
+ * responsive: pass (49) · icons: pass (30) · mobile: pass (34, 49, 50–57) · slop: pass (42–45)
+ * Flat by instruction: no box-shadow, no gradient, no border-radius, no JS.
+ */
+
+@import url("tokens.css");
+
+/* ---------------------------------------------------------------
+   Reset — only what this page actually needs
+   --------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	overflow-x: clip; /* clip, not hidden — hidden would kill sticky/fixed */
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	overflow-x: clip;
+	margin: 0;
+	background: var(--color-paper);
+	color: var(--color-ink);
+	font-family: var(--font-body);
+	font-size: var(--text-base);
+	font-weight: var(--weight-body);
+	line-height: 1.6;
+	letter-spacing: var(--track-body);
+	font-synthesis: none; /* never fake a weight or an italic */
+	-webkit-font-smoothing: antialiased;
+	padding-inline: max(0px, env(safe-area-inset-left));
+}
+
+h1,
+h2,
+h3,
+p,
+figure,
+table {
+	margin: 0;
+}
+
+/* Headings are roman. Always. Emphasis comes from weight, colour, and size —
+   never from an italicised word inside an upright headline.
+   One display face at one weight, everywhere. */
+h1,
+h2,
+h3,
+.display {
+	font-family: var(--font-display);
+	font-style: normal;
+	font-weight: var(--weight-display);
+	letter-spacing: var(--track-tight);
+	overflow-wrap: anywhere; /* long compound words break rather than overflow */
+	min-width: 0;
+}
+
+/* Uppercase micro-label. The ONE small-label treatment on the page.
+   Not small-caps: the web builds of these faces ship no small-cap glyphs, so
+   `font-variant-caps` silently degraded to wide-tracked lowercase — which read
+   as a fourth font. Real uppercase renders identically everywhere. */
+.u-label {
+	font-family: var(--font-body);
+	font-size: var(--text-sm);
+	font-weight: var(--weight-emphasis);
+	text-transform: uppercase;
+	letter-spacing: var(--track-label);
+	line-height: 1.3;
+	color: var(--color-muted);
+}
+
+a {
+	color: inherit;
+}
+
+/* Focus appears instantly. Never transitioned, never faded in. */
+:focus-visible {
+	outline: var(--rule-thick) solid var(--color-focus);
+	outline-offset: 3px;
+}
+
+::selection {
+	background: var(--color-accent);
+	color: var(--color-paper);
+}
+
+/* ---------------------------------------------------------------
+   Page frame — left-biased, not centred
+   --------------------------------------------------------------- */
+
+.wrap {
+	max-width: 76rem;
+	margin-inline: auto;
+	padding-inline: var(--page-gutter);
+}
+
+/* Prose sits at reading measure and stays left-flush.
+   The empty right margin is the composition, not an accident. */
+.measure {
+	max-width: var(--measure);
+}
+
+.lede {
+	max-width: var(--measure);
+	font-size: var(--text-md);
+	line-height: 1.5;
+	color: var(--color-muted);
+}
+
+.lede--spaced {
+	margin-bottom: var(--space-xl);
+}
+
+/* Machine identifiers: tool names, repo names, flags. Outlier role one of two. */
+.mono {
+	font-family: var(--font-outlier);
+	font-size: 0.95em;
+	color: var(--color-ink);
+}
+
+.accent {
+	color: var(--color-accent);
+}
+
+/* Full-bleed hairline under the masthead — the one line that crosses the grid. */
+.rule-bleed {
+	border: 0;
+	border-top: var(--rule-hair) solid var(--color-rule);
+	margin: 0;
+}
+
+/* ---------------------------------------------------------------
+   Nav · N9 edge-aligned minimal
+   Wordmark hard-left, one destination hard-right, nothing between.
+   The emptiness is the design; filling it makes this N1 with extra steps.
+   --------------------------------------------------------------- */
+
+.nav {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-lg);
+	padding-block: var(--space-lg);
+}
+
+/* The wordmark is itself a package identifier, so it shares the mono role. */
+.nav__wordmark {
+	font-family: var(--font-outlier);
+	font-size: var(--text-sm);
+	font-weight: var(--weight-emphasis);
+	letter-spacing: var(--track-body);
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+/* C3 typographic link — STANDALONE only (nav, close row). A word, an arrow,
+   a hairline. It sets its own size because it stands on its own line. */
+.link {
+	font-size: var(--text-sm);
+	color: var(--color-accent);
+	text-decoration: none;
+	white-space: nowrap;
+	border-bottom: var(--rule-hair) solid var(--color-rule);
+	padding-bottom: var(--space-3xs);
+	transition: border-color var(--dur-short) var(--ease-out);
+}
+
+.link:hover {
+	border-bottom-color: var(--color-accent);
+}
+
+.link:active {
+	color: var(--color-ink);
+	border-bottom-color: var(--color-ink);
+}
+
+/* Links INSIDE running prose. These must inherit the paragraph's size and
+   rhythm — a link that sets its own font-size mid-sentence is the tell.
+   Underline comes from text-decoration so it tracks the baseline and the
+   descenders instead of sitting in a box of its own. */
+.link-inline {
+	color: var(--color-accent);
+	font-size: inherit;
+	line-height: inherit;
+	letter-spacing: inherit;
+	white-space: nowrap;
+	text-decoration: underline;
+	text-decoration-color: var(--color-rule);
+	text-decoration-thickness: var(--rule-hair);
+	text-underline-offset: 0.18em;
+	transition: text-decoration-color var(--dur-short) var(--ease-out);
+}
+
+.link-inline:hover {
+	text-decoration-color: var(--color-accent);
+}
+
+.link-inline:active {
+	color: var(--color-ink);
+	text-decoration-color: var(--color-ink);
+}
+
+/* ---------------------------------------------------------------
+   Hero · typographic. No image, no fill, no viewport-height trap.
+   Height comes from the words. Bottom padding is heavier than top so the
+   hero settles into the page rather than floating above it.
+   --------------------------------------------------------------- */
+
+.hero {
+	padding-block: clamp(var(--space-2xl), 7vw, var(--space-3xl)) var(--space-4xl);
+}
+
+.hero__title {
+	font-size: var(--text-display);
+	line-height: 1.06;
+	max-width: 16ch; /* holds the break between the two sentences */
+	margin-bottom: var(--space-lg);
+}
+
+.hero__lede {
+	margin-bottom: var(--space-xl);
+}
+
+/* The pipeline, stated once in the fold. The last stage is the human's,
+   so it is the one thing in the fold wearing the accent. */
+.hero__stages {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-sm) var(--space-xl);
+	margin: 0;
+	padding: var(--space-lg) 0 0;
+	border-top: var(--rule-hair) solid var(--color-rule);
+	list-style: none;
+	font-variant-numeric: tabular-nums;
+}
+
+.hero__stages li:last-child {
+	color: var(--color-accent);
+}
+
+/* ---------------------------------------------------------------
+   Sections · deliberately uneven vertical rhythm
+   --------------------------------------------------------------- */
+
+.section {
+	padding-block: var(--space-3xl);
+}
+
+.section--tight {
+	padding-block: var(--space-2xl) var(--space-3xl);
+}
+
+.section--loose {
+	padding-block: var(--space-4xl) var(--space-3xl);
+}
+
+/* Section heads are a single stacked column, always.
+   No label in a left column with the title beside it. */
+.section__title {
+	font-size: var(--text-2xl);
+	line-height: 1.15;
+	max-width: 24ch;
+	margin-bottom: var(--space-lg);
+}
+
+.section__title--wide {
+	max-width: 30ch;
+}
+
+.section__body p + p {
+	margin-top: var(--space-md);
+}
+
+/* ---------------------------------------------------------------
+   Stages · the spine of the page
+   The number lives inside the heading, so there is no eyebrow row and no
+   tag column. Sequence is carried by a thick rule top and bottom.
+   --------------------------------------------------------------- */
+
+.stages {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	border-top: var(--rule-thick) solid var(--color-ink);
+}
+
+.stage {
+	display: grid;
+	gap: var(--space-sm);
+	padding-block: var(--space-xl);
+	border-bottom: var(--rule-hair) solid var(--color-rule);
+}
+
+.stage:last-child {
+	border-bottom: var(--rule-thick) solid var(--color-ink);
+}
+
+.stage__title {
+	font-size: var(--text-lg);
+	line-height: 1.2;
+}
+
+.stage__num {
+	font-variant-numeric: tabular-nums;
+	color: var(--color-accent);
+	margin-inline-end: var(--space-sm);
+}
+
+.stage__body {
+	max-width: var(--measure);
+	color: var(--color-muted);
+}
+
+/* Wide viewports: title left, prose right. Heading and body — not a label
+   and a heading, which is the pattern that reads as templated. */
+@media (min-width: 60rem) {
+	.stage {
+		grid-template-columns: minmax(0, 18rem) minmax(0, 1fr);
+		gap: var(--space-2xl);
+		align-items: baseline;
+	}
+}
+
+/* ---------------------------------------------------------------
+   Tools · F3 tabular spec sheet
+   Hairline rules between rows, tabular numerics, not a card in sight.
+   --------------------------------------------------------------- */
+
+.spec {
+	width: 100%;
+	border-collapse: collapse;
+	font-variant-numeric: tabular-nums;
+	text-align: left;
+}
+
+.spec th,
+.spec td {
+	padding: var(--space-md) var(--space-md) var(--space-md) 0;
+	vertical-align: baseline;
+	border-bottom: var(--rule-hair) solid var(--color-rule);
+}
+
+.spec thead th {
+	border-bottom: var(--rule-thick) solid var(--color-ink);
+}
+
+/* Tool names are machine identifiers, so they carry the mono role — but at the
+   same size as the cells beside them. A smaller font AND a different family in
+   one row reads as two designs; family alone reads as one deliberate register. */
+.spec tbody th {
+	font-family: var(--font-outlier);
+	font-size: var(--text-base);
+	font-weight: var(--weight-emphasis);
+	letter-spacing: var(--track-body);
+	color: var(--color-ink);
+	white-space: nowrap;
+}
+
+.spec td {
+	color: var(--color-muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.spec tbody tr {
+		transition: background-color var(--dur-short) var(--ease-out);
+	}
+	.spec tbody tr:hover {
+		background-color: var(--color-paper-2);
+	}
+}
+
+/* Under ~48rem a three-column table stops being a table.
+   Rows become blocks; the column name is carried by data-label. */
+@media (max-width: 48rem) {
+	.spec thead {
+		display: none;
+	}
+	.spec,
+	.spec tbody,
+	.spec tbody tr,
+	.spec tbody th,
+	.spec tbody td {
+		display: block;
+		width: 100%;
+	}
+	.spec tbody tr {
+		padding-block: var(--space-lg);
+		border-bottom: var(--rule-hair) solid var(--color-rule);
+	}
+	.spec tbody th,
+	.spec tbody td {
+		padding: 0;
+		border-bottom: 0;
+	}
+	.spec tbody th {
+		font-size: var(--text-base);
+		margin-bottom: var(--space-2xs);
+		white-space: normal;
+	}
+	.spec td[data-label]::before {
+		content: attr(data-label) " — ";
+		text-transform: uppercase;
+		letter-spacing: var(--track-label);
+		color: var(--color-neutral);
+	}
+}
+
+/* ---------------------------------------------------------------
+   The gate · one statement, set large, no box around it
+   --------------------------------------------------------------- */
+
+.gate {
+	padding-block: var(--space-3xl);
+	border-block: var(--rule-hair) solid var(--color-rule);
+}
+
+.gate__line {
+	font-size: var(--text-2xl);
+	line-height: 1.15;
+	max-width: 20ch;
+	margin-bottom: var(--space-lg);
+}
+
+.gate__body p + p {
+	margin-top: var(--space-md);
+}
+
+/* ---------------------------------------------------------------
+   Refusals · what the project deliberately does not do
+   Two uneven columns, hairline separated. Not a three-up card grid.
+   --------------------------------------------------------------- */
+
+.refusals {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: 0 var(--space-2xl);
+	border-top: var(--rule-hair) solid var(--color-rule);
+}
+
+.refusals li {
+	padding-block: var(--space-md);
+	border-bottom: var(--rule-hair) solid var(--color-rule);
+	color: var(--color-muted);
+}
+
+.refusals b {
+	display: block;
+	font-weight: var(--weight-emphasis);
+	color: var(--color-ink);
+}
+
+@media (min-width: 48rem) {
+	.refusals {
+		grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+	}
+}
+
+/* ---------------------------------------------------------------
+   Stack · a plain description list, not a logo wall
+   --------------------------------------------------------------- */
+
+.facts {
+	margin: 0;
+	border-top: var(--rule-hair) solid var(--color-rule);
+}
+
+.facts > div {
+	display: grid;
+	gap: var(--space-2xs) var(--space-xl);
+	padding-block: var(--space-md);
+	border-bottom: var(--rule-hair) solid var(--color-rule);
+}
+
+.facts dt {
+	line-height: 1.4;
+}
+
+.facts dd {
+	margin: 0;
+	max-width: var(--measure);
+}
+
+@media (min-width: 48rem) {
+	.facts > div {
+		grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+		align-items: baseline;
+	}
+}
+
+/* ---------------------------------------------------------------
+   Close · typographic links (C3). There is no filled button on this page.
+   --------------------------------------------------------------- */
+
+.close {
+	padding-block: var(--space-4xl) var(--space-3xl);
+}
+
+.close__line {
+	font-size: var(--text-2xl);
+	line-height: 1.2;
+	max-width: 22ch;
+	margin-bottom: var(--space-lg);
+}
+
+.close__links {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-lg);
+}
+
+.close__links .link {
+	font-size: var(--text-base);
+}
+
+/* ---------------------------------------------------------------
+   Footer · Ft4 dense typographic colophon
+   Set in the body face, not mono. A whole section in the outlier family was
+   the single biggest source of the page feeling like several designs.
+   Density comes from the measure and the leading, not from a third font.
+   --------------------------------------------------------------- */
+
+.colophon {
+	border-top: var(--rule-thick) solid var(--color-ink);
+	padding-block: var(--space-xl) var(--space-2xl);
+	padding-bottom: max(var(--space-2xl), env(safe-area-inset-bottom));
+}
+
+.colophon p {
+	max-width: var(--measure-fine);
+	line-height: 1.7;
+	color: var(--color-muted);
+}
+
+/* ---------------------------------------------------------------
+   Touch + reduced motion
+   Only standalone affordances get the 44px target — inline prose links
+   keep their line rhythm.
+   --------------------------------------------------------------- */
+
+@media (pointer: coarse) {
+	.nav__wordmark,
+	.nav__cta,
+	.close__links .link {
+		display: inline-flex;
+		align-items: center;
+		min-height: var(--touch-target);
+	}
+}
+
+/* A reduced-motion opt-out has to beat every other declaration on the page.
+   That is the one place !important is the correct tool. */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		/* biome-ignore lint/complexity/noImportantStyles: must override all motion */
+		animation-duration: 0.01ms !important;
+		/* biome-ignore lint/complexity/noImportantStyles: must override all motion */
+		animation-iteration-count: 1 !important;
+		/* biome-ignore lint/complexity/noImportantStyles: must override all motion */
+		transition-duration: 0.01ms !important;
+	}
+}

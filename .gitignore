@@ -9,3 +9,7 @@ build/
 .claude/.test-count-baseline
 .claude/agent-memory-local/
 .claude/settings.local.json
+.agents/
+.claude/skills/hallmark
+skills-lock.json
+.hallmark
