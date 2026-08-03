@@ -277,7 +277,10 @@ a {
 	max-width: 30ch;
 }
 
-.section__body p + p {
+.section__body p  {
+	font-size: var(--text-md);
+	line-height: 1.5;
+	color: var(--color-muted);
 	margin-top: var(--space-md);
 }
 
@@ -431,41 +434,14 @@ a {
 	margin-bottom: var(--space-lg);
 }
 
-.gate__body p + p {
+.gate__body p  {
+	font-size: var(--text-md);
+	line-height: 1.5;
+	color: var(--color-muted);
 	margin-top: var(--space-md);
 }
 
-/* ---------------------------------------------------------------
-   Refusals · what the project deliberately does not do
-   Two uneven columns, hairline separated. Not a three-up card grid.
-   --------------------------------------------------------------- */
 
-.refusals {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-	display: grid;
-	gap: 0 var(--space-2xl);
-	border-top: var(--rule-hair) solid var(--color-rule);
-}
-
-.refusals li {
-	padding-block: var(--space-md);
-	border-bottom: var(--rule-hair) solid var(--color-rule);
-	color: var(--color-muted);
-}
-
-.refusals b {
-	display: block;
-	font-weight: var(--weight-emphasis);
-	color: var(--color-ink);
-}
-
-@media (min-width: 48rem) {
-	.refusals {
-		grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-	}
-}
 
 /* ---------------------------------------------------------------
    Stack · a plain description list, not a logo wall

@@ -1,0 +1,96 @@
+<!doctype html>
+<!-- Source for og.png, the social share card. Not linked from the site.
+     Regenerate after editing:
+
+       chrome --headless --screenshot=landing/og.png --window-size=1200,630 \
+              --hide-scrollbars --virtual-time-budget=6000 landing/og.html
+
+     Kept as HTML rather than a hand-made image so the card can't drift from the
+     page's own type and colour — it reuses tokens.css. -->
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>portfolio-mcp — share card</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			rel="stylesheet"
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,700&display=swap"
+		/>
+		<link rel="stylesheet" href="tokens.css" />
+		<style>
+			/* Fixed 1200×630 — the size every platform crops from. Nothing here is
+			   responsive on purpose; it is rendered once at exactly one size. */
+			* {
+				margin: 0;
+				box-sizing: border-box;
+			}
+
+			body {
+				width: 1200px;
+				height: 630px;
+				display: flex;
+				flex-direction: column;
+				justify-content: space-between;
+				padding: 72px;
+				background: var(--color-paper);
+				color: var(--color-ink);
+				font-family: var(--font-body);
+			}
+
+			.label {
+				font-family: var(--font-outlier);
+				font-size: 20px;
+				font-weight: var(--weight-emphasis);
+				letter-spacing: var(--track-label);
+				text-transform: uppercase;
+				color: var(--color-accent);
+			}
+
+			.title {
+				font-family: var(--font-display);
+				font-weight: var(--weight-display);
+				font-size: 96px;
+				line-height: 1.05;
+				letter-spacing: var(--track-tight);
+			}
+
+			.foot {
+				display: flex;
+				justify-content: space-between;
+				align-items: baseline;
+				gap: 48px;
+				padding-top: 28px;
+				border-top: var(--rule-hair) solid var(--color-rule);
+			}
+
+			.foot p {
+				font-size: 24px;
+				line-height: 1.4;
+				color: var(--color-muted);
+				max-width: 660px;
+			}
+
+			.host {
+				font-family: var(--font-outlier);
+				font-size: 22px;
+				color: var(--color-neutral);
+				white-space: nowrap;
+			}
+		</style>
+	</head>
+
+	<body>
+		<span class="label">portfolio-mcp</span>
+
+		<h1 class="title">Write it anywhere.<br />Merge it yourself.</h1>
+
+		<div class="foot">
+			<p>
+				A remote MCP server for one writer. Six tools draft, save and open a pull request — the
+				merge button stays out of reach.
+			</p>
+			<span class="host">mcp.ashutoshverma.dev</span>
+		</div>
+	</body>
+</html>

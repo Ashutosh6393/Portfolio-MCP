@@ -8,6 +8,32 @@
 			name="description"
 			content="A remote MCP server for ashutoshverma.dev. Six tools read the site, serve the drafting rules, save drafts, and open a pull request. It never merges."
 		/>
+		<!-- Favicon · inline SVG, so it costs no request and no file. A tab strip is
+		     16px wide — the wordmark is unreadable there, one letter is not. -->
+		<link
+			rel="icon"
+			href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='black'/%3E%3Ctext x='16' y='24' fill='white' font-family='Georgia,serif' font-size='24' font-weight='700' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E"
+		/>
+
+		<!-- Share card · og.png is generated from og.html, not drawn by hand. The
+		     URL must be absolute: a crawler resolves it without a page context. -->
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content="https://mcp.ashutoshverma.dev/" />
+		<meta property="og:site_name" content="portfolio-mcp" />
+		<meta property="og:title" content="Write it anywhere. Merge it yourself." />
+		<meta
+			property="og:description"
+			content="A remote MCP server for ashutoshverma.dev. Six tools read the site, serve the drafting rules, save drafts, and open a pull request. It never merges."
+		/>
+		<meta property="og:image" content="https://mcp.ashutoshverma.dev/og.png" />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta
+			property="og:image:alt"
+			content="portfolio-mcp — Write it anywhere. Merge it yourself."
+		/>
+		<meta name="twitter:card" content="summary_large_image" />
+
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link
@@ -187,52 +213,7 @@
 				</div>
 			</section>
 
-			<!-- Refusals · the non-goals, which are the more useful list. -->
-			<section class="wrap section--loose">
-				<h2 class="section__title">Deliberately not built</h2>
-				<p class="lede lede--spaced">
-					Each of these was argued and rejected. The list is what stops scope creep from looking
-					like initiative.
-				</p>
-
-				<ul class="refusals">
-					<li>
-						<b>The site itself</b>
-						<span
-							><span class="mono">portfolio</span> is a separate repo, and its part is
-							done.</span
-						>
-					</li>
-					<li>
-						<b>Skills, templates, drafts</b>
-						<span>Content. It lives in <span class="mono">workshop</span>.</span>
-					</li>
-					<li>
-						<b>Anything that merges</b>
-						<span>That is the entire safety model.</span>
-					</li>
-					<li>
-						<b>A database, a queue, search</b>
-						<span>Two repos and the GitHub API are the storage.</span>
-					</li>
-					<li>
-						<b>OAuth</b>
-						<span>One user. A secret path is enough, and less to get wrong.</span>
-					</li>
-					<li>
-						<b>Auto-posting to LinkedIn or X</b>
-						<span>A post is archived, never fired off.</span>
-					</li>
-					<li>
-						<b>Image uploads</b>
-						<span>Out of scope, on purpose.</span>
-					</li>
-					<li>
-						<b>A merge webhook</b>
-						<span>Drafts reconcile lazily, on the next read.</span>
-					</li>
-				</ul>
-			</section>
+			
 
 			<!-- Stack and status · plain facts, not a logo wall. -->
 			<section class="wrap section">
