@@ -7,9 +7,10 @@ Six tools that move bytes. The model does the writing; the server reads content,
 skills, saves drafts, and opens a pull request. **It never merges.** The merge button is
 the gate, and it is somewhere the model cannot reach.
 
-**Status: deployed, and five of the six tools are live.** `list_content`, `get_skill`,
-`save_draft`, `get_content` and `discard_draft` all work from Claude Code, claude.ai and the
-phone. `publish` is next, and it is the one that opens the pull request.
+**Status: all six tools are built.** `list_content`, `get_skill`, `save_draft`,
+`get_content` and `discard_draft` are deployed and work from Claude Code, claude.ai and the
+phone. `publish` — the one that opens the pull request — is written and green, and is
+waiting on its first run against the real repo before it can be called live.
 
 ---
 
@@ -47,8 +48,11 @@ It is cheaper to read than to re-argue.
 ## Stack
 
 Bun · TypeScript strict · Elysia · Zod · Biome · `bun:test` · the MCP TypeScript SDK.
-Reasoning in [ADR-001](docs/adr/001-server-runtime-and-shape.md); the short version is
-that `publish` has to parse MDX, and MDX only parses in JavaScript.
+Reasoning in [ADR-001](docs/adr/001-server-runtime-and-shape.md). Its original short
+version — that `publish` has to parse MDX, and MDX only parses in JavaScript — no longer
+holds: [ADR-005](docs/adr/005-publish-opens-a-pull-request.md) drops the MDX parse and
+leaves the Vercel preview build as the check. The runtime choice stands on the rest of
+ADR-001's reasoning.
 
 No database, no accounts, no queue. Auth is an unguessable secret in the URL path — there
 is exactly one user, which is the one case OAuth adds nothing to.

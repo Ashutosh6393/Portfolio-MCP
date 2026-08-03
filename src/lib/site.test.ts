@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { projectListSchema, writingListSchema } from "./site";
+import {
+	projectListSchema,
+	schemaEnvelopeSchema,
+	writingListSchema,
+} from "./site";
 
 // T-14 — see specs/001-server-skeleton/design.md → Test cases.
 // testing.md: lib/site.ts's fetch is not unit-tested against a mock of the
@@ -75,5 +79,38 @@ describe("projectListSchema", () => {
 
 	test("T-14: rejects an entry with an unexpected shape", () => {
 		expect(() => projectListSchema.parse([{ nope: 1 }])).toThrow();
+	});
+});
+
+// T-16, T-17 — see specs/005-publish/design.md → Test cases → Slice 1.
+// Same precedent as above: the envelope's Zod parse is ours and is tested
+// directly against schemaEnvelopeSchema — no fetch, no network. The
+// envelope's only job is proving both keys arrived; a consumer selects
+// schema[kind] and hands that document to lib/validate.ts, which is what
+// actually understands JSON Schema keywords.
+describe("schemaEnvelopeSchema", () => {
+	test("T-16: parses the live two-key shape, both keys present", () => {
+		const envelope = {
+			writing: {
+				type: "object",
+				properties: { title: { type: "string" } },
+				required: ["title"],
+			},
+			project: {
+				type: "object",
+				properties: { title: { type: "string" } },
+				required: ["title"],
+			},
+		};
+
+		const parsed = schemaEnvelopeSchema.parse(envelope);
+
+		expect(parsed.writing).toEqual(envelope.writing);
+		expect(parsed.project).toEqual(envelope.project);
+	});
+
+	test("T-17: rejects a malformed schema response, naming the missing keys", () => {
+		expect(() => schemaEnvelopeSchema.parse({})).toThrow(/writing/);
+		expect(() => schemaEnvelopeSchema.parse({})).toThrow(/project/);
 	});
 });

@@ -1,15 +1,24 @@
-// The GitHub reader and writer. `site.ts` with a token and five methods — if it
-// starts looking like anything else, stop (specs/002-github-access/CLAUDE.md).
+// The GitHub reader and writer. `site.ts` with a token and eight methods — if
+// it starts looking like anything else, stop (specs/002-github-access/CLAUDE.md).
 //
 // Purpose:            read files and directory listings out of the two repos
-//                     this server touches, and write to one of them.
-// Constraints:        the token is read **and write** on `workshop`, and stays
-//                     **read-only on `portfolio`** (ADR-004). Nothing here may
-//                     widen that: a write aimed at `portfolio` is a bug, not a
-//                     feature waiting for a scope change.
+//                     this server touches, and write to both.
+// Constraints:        **This changed in ADR-005 decision 8.** The token used to
+//                     be read-only on `portfolio`, and this header used to say
+//                     a write aimed there was a bug. It is now `contents: write`
+//                     on both repos, because GitHub grants committing to `main`
+//                     and opening a pull request through the same permission and
+//                     a fine-grained PAT cannot be scoped to a branch.
+//
+//                     So the guarantee moved out of the token and into two
+//                     places: a ruleset on `portfolio`'s `main` that requires a
+//                     pull request (proven to refuse this token by M-2,
+//                     2026-08-03), and the rule that **every `portfolio` write
+//                     names a branch**. Nothing here may target `main`. The
+//                     ruleset would refuse it, but the code must never try.
 // Non-responsibilities: no parsing (the service owns that), no caching, no
 //                     retry, no rate limiting — ~15 calls a week against 5,000
-//                     an hour.
+//                     an hour. No merging, ever.
 
 import { z } from "zod";
 
@@ -33,6 +42,31 @@ export const fileContentSchema = z.object({
 	content: z.string(),
 	sha: z.string(),
 });
+
+// `GET /git/ref/heads/{branch}` — the commit a branch points at, which is the
+// base a new branch is cut from. Only `object.sha` is declared because only
+// `object.sha` is used.
+export const refSchema = z.object({ object: z.object({ sha: z.string() }) });
+
+// `POST /pulls`. `html_url` is the browser URL, not the API one — it is what
+// gets handed back to a human to click.
+export const pullRequestSchema = z.object({
+	number: z.number(),
+	html_url: z.string(),
+});
+
+// `GET /pulls?head=...&state=all`. `merged_at` is how a merged PR is told
+// apart from one that was simply closed — `state` is `"closed"` for both, and
+// the two need opposite treatment: a merged post is live and must not be
+// quietly republished, a closed one was abandoned and can be reopened.
+export const pullRequestListSchema = z.array(
+	z.object({
+		number: z.number(),
+		html_url: z.string(),
+		state: z.string(),
+		merged_at: z.string().nullable(),
+	}),
+);
 
 // The domain word and the GitHub name are not the same thing. `portfolio` is
 // CONTEXT.md vocabulary and is what every doc, error message, and health check
@@ -75,6 +109,26 @@ export class GithubConflictError extends Error {
 	}
 }
 
+// The token is missing a permission. GitHub answers 404 for most things a
+// token cannot see — which is why no message here claims a path is absent —
+// but it answers a plain 403 for an endpoint the token's *scopes* exclude,
+// and that distinction is worth keeping.
+//
+// Verified live 2026-08-03 during M-1: `POST /pulls` with a token holding
+// `Contents: write` but not `Pull requests: write` returns
+// 403 "Resource not accessible by personal access token". They are separate
+// fine-grained permissions, and ADR-005 decision 8 was wrong to say opening a
+// pull request came through the same one as committing.
+export class GithubForbiddenError extends Error {
+	constructor(
+		readonly repo: Repo,
+		readonly subject: string,
+	) {
+		super(`The token is not permitted to do that on the ${repo} repo.`);
+		this.name = "GithubForbiddenError";
+	}
+}
+
 // A create — a write with no `sha` — aimed at a path that already holds a file.
 export class GithubAlreadyExistsError extends Error {
 	constructor(
@@ -89,36 +143,113 @@ export class GithubAlreadyExistsError extends Error {
 export type Github = {
 	listDirectory(repo: Repo, path: string): Promise<unknown>;
 	readFile(repo: Repo, path: string): Promise<string>;
+	// `ref` names a branch to read from. Omitted, GitHub reads the default
+	// branch. `publish` needs it to ask whether the file already exists on the
+	// publish branch, which decides create versus update.
 	readFileWithSha(
 		repo: Repo,
 		path: string,
+		ref?: string,
 	): Promise<{ content: string; sha: string }>;
+	// `branch` is what keeps a publish off `main`. Omitted, GitHub commits to
+	// the repo's default branch — which on `portfolio` is exactly the thing
+	// ADR-005 decision 8 exists to prevent.
+	//
+	// So it is not optional there. The overload makes `branch` **required** for
+	// a `portfolio` write and absent from a `workshop` one, which turns "the
+	// code must never try" from a convention somebody has to remember into a
+	// compile error. The ruleset is the real guarantee; this is the guard that
+	// stops a future caller ever reaching it by accident.
 	writeFile(
-		repo: Repo,
-		path: string,
-		content: string,
-		options: { message: string; sha?: string },
+		...args:
+			| [
+					repo: "workshop",
+					path: string,
+					content: string,
+					options: { message: string; sha?: string },
+			  ]
+			| [
+					repo: "portfolio",
+					path: string,
+					content: string,
+					options: { message: string; sha?: string; branch: string },
+			  ]
 	): Promise<void>;
+	// Narrowed to `workshop`. Nothing deletes from `portfolio` — unpublishing
+	// is by hand, with a redirect (design.md → Out of scope) — and now that the
+	// token can write there, the type is what says so.
 	deleteFile(
-		repo: Repo,
+		repo: "workshop",
 		path: string,
 		options: { message: string; sha: string },
 	): Promise<void>;
+
+	// The three publish endpoints. All pinned to `portfolio`: there is no
+	// branch or pull request on `workshop`, so a `Repo` here would be a
+	// parameter with exactly one legal value and one way to get it wrong.
+	getBranchHead(repo: "portfolio", branch: string): Promise<string>;
+	createBranch(
+		repo: "portfolio",
+		branch: string,
+		fromSha: string,
+	): Promise<void>;
+	createPullRequest(
+		repo: "portfolio",
+		options: { title: string; body: string; head: string; base: string },
+	): Promise<{ number: number; url: string }>;
+	// Found by head branch, never by a number recorded anywhere. The branch
+	// name is deterministic — `publish/{kind}/{slug}`, no timestamps — so
+	// GitHub can simply be asked. ADR-005 decision 5 rejected writing the
+	// number back into the draft: it would invalidate the sha the model is
+	// holding, which is a bug, not merely redundant.
+	//
+	// `null` means no pull request has ever been opened for that branch.
+	findPullRequest(
+		repo: "portfolio",
+		branch: string,
+	): Promise<{
+		number: number;
+		url: string;
+		state: string;
+		merged: boolean;
+	} | null>;
 };
 
 // A factory, not a singleton like `site`: the token arrives from the parsed env
 // at boot, so it never reaches module scope and a test can build a fake without
 // one (design.md → The reader takes its token at construction).
 export function createGithub(token: string): Github {
-	// One endpoint serves all five methods — GET, PUT and DELETE on
-	// /contents/{path} — so the URL and the status mapping are built once here.
+	// The auth header, the API version and the status mapping are built once
+	// here and shared by every endpoint this file touches.
+	//
+	// `endpoint` is everything after `/repos/{owner}/{repo}/` — `contents/...`
+	// for the five original methods, and `git/refs`, `git/ref/...` or `pulls`
+	// for the publish path. It was hardcoded to `contents/{path}` until spec
+	// 005 needed the three non-contents endpoints to share the same status
+	// mapping and the same auth header.
+	//
+	// `subject` is what an error names, and it is deliberately not the
+	// endpoint: the contents methods report the bare file path, so keeping it
+	// separate is what makes this refactor invisible to their messages and to
+	// the five services that read them.
 	async function request(
 		repo: Repo,
-		path: string,
-		init: { method: string; accept: string; body?: Record<string, unknown> },
+		endpoint: string,
+		init: {
+			method: string;
+			accept: string;
+			body?: Record<string, unknown>;
+			// What a 422 means on this endpoint. The contents API infers it from
+			// the body (a write with no `sha` is a create), but that inference is
+			// wrong for `git/refs`, whose body always carries a `sha` — the commit
+			// to branch from — and which answers 422 when the ref already exists.
+			// So the caller can state it instead of having it guessed.
+			alreadyExistsOn422?: boolean;
+		},
+		subject: string = endpoint,
 	) {
 		const response = await fetch(
-			`https://api.github.com/repos/${owner}/${repoNames[repo]}/contents/${path}`,
+			`https://api.github.com/repos/${owner}/${repoNames[repo]}/${endpoint}`,
 			{
 				method: init.method,
 				headers: {
@@ -134,19 +265,28 @@ export function createGithub(token: string): Github {
 			},
 		);
 		if (response.status === 404) {
-			throw new GithubNotFoundError(repo, path);
+			throw new GithubNotFoundError(repo, subject);
+		}
+		// Checked before the rest: a missing scope is a setup problem, and it
+		// looks nothing like the states below. Saying so by name is what turns
+		// "GitHub did not complete the request" into an actionable sentence.
+		if (response.status === 403) {
+			throw new GithubForbiddenError(repo, subject);
 		}
 		// 409 and 422 are verified, not assumed: M-1 made both rejections happen
 		// against the real repo on 2026-08-02 and the live API returned exactly
 		// these (specs/004-drafts/design.md). If a future GitHub change moves
 		// them, correct them here — never by second-guessing in the service.
 		if (response.status === 409) {
-			throw new GithubConflictError(repo, path);
+			throw new GithubConflictError(repo, subject);
 		}
-		// 422 only means "already exists" on a create — a write that sent no
-		// `sha`. With a `sha` the same status means something else entirely.
-		if (response.status === 422 && init.body && !("sha" in init.body)) {
-			throw new GithubAlreadyExistsError(repo, path);
+		// On the contents API, 422 only means "already exists" on a create — a
+		// write that sent no `sha`. With a `sha` the same status means something
+		// else entirely. Other endpoints say so explicitly instead.
+		const alreadyExists =
+			init.alreadyExistsOn422 ?? (!!init.body && !("sha" in init.body));
+		if (response.status === 422 && alreadyExists) {
+			throw new GithubAlreadyExistsError(repo, subject);
 		}
 		if (!response.ok) {
 			throw new Error(
@@ -156,12 +296,23 @@ export function createGithub(token: string): Github {
 		return response;
 	}
 
+	// The contents endpoint — what all five of the pre-spec-005 methods use.
+	// It exists so the `contents/` prefix and the "errors name the bare path"
+	// rule are written once rather than at every call site.
+	function contents(
+		repo: Repo,
+		path: string,
+		init: { method: string; accept: string; body?: Record<string, unknown> },
+	) {
+		return request(repo, `contents/${path}`, init, path);
+	}
+
 	return {
 		// Returns `unknown` on purpose, same as site.fetchContent: the parse
 		// belongs to the service, so a test can hand it garbage without a cast
 		// and still exercise the real schema.
 		async listDirectory(repo, path) {
-			const response = await request(repo, path, {
+			const response = await contents(repo, path, {
 				method: "GET",
 				accept: "application/vnd.github+json",
 			});
@@ -175,7 +326,7 @@ export function createGithub(token: string): Github {
 		// `content` field rather than erroring. No schema — `text()` is already
 		// `string`, so there is nothing to validate.
 		async readFile(repo, path) {
-			const response = await request(repo, path, {
+			const response = await contents(repo, path, {
 				method: "GET",
 				accept: "application/vnd.github.raw",
 			});
@@ -185,11 +336,16 @@ export function createGithub(token: string): Github {
 		// The raw Accept header cannot be used here: it returns the bytes but not
 		// the `sha`, and the sha is what closes the read-modify-write loop. So
 		// this takes the JSON response and pays for it with a decode.
-		async readFileWithSha(repo, path) {
-			const response = await request(repo, path, {
-				method: "GET",
-				accept: "application/vnd.github+json",
-			});
+		async readFileWithSha(repo, path, ref) {
+			// `request` directly rather than `contents`, so the `?ref=` query
+			// stays out of the error subject — an error should name the file, not
+			// the URL it was fetched with.
+			const response = await request(
+				repo,
+				`contents/${path}${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`,
+				{ method: "GET", accept: "application/vnd.github+json" },
+				path,
+			);
 			const file = fileContentSchema.parse(await response.json());
 			// ADR-002 said no base64 decoder was needed; ADR-004 amends it, and
 			// this is the one line that came back. `Buffer`, never `atob`: GitHub
@@ -205,20 +361,111 @@ export function createGithub(token: string): Github {
 		// GitHub attributes the commit correctly (design.md → Commit authorship).
 		// Omitting `sha` means create; supplying it means update-if-unchanged.
 		async writeFile(repo, path, content, options) {
-			await request(repo, path, {
+			await contents(repo, path, {
 				method: "PUT",
 				accept: "application/vnd.github+json",
 				body: {
 					message: options.message,
 					content: Buffer.from(content, "utf8").toString("base64"),
 					...(options.sha ? { sha: options.sha } : {}),
+					// Absent for a `workshop` draft, required for a `portfolio`
+					// publish — the overload above is what enforces that. Without it
+					// GitHub writes to the default branch.
+					...("branch" in options ? { branch: options.branch } : {}),
 				},
 			});
 		},
 
+		async getBranchHead(repo, branch) {
+			const response = await request(
+				repo,
+				`git/ref/heads/${branch}`,
+				{ method: "GET", accept: "application/vnd.github+json" },
+				branch,
+			);
+			return refSchema.parse(await response.json()).object.sha;
+		},
+
+		// A 422 here means the ref already exists, which is a clean refusal
+		// rather than a crash: publishing the same slug twice must not silently
+		// overwrite the branch (T-41). Slice 4 turns that into an update.
+		//
+		// `POST /git/refs` also answers 422 for a bad base sha and an invalid
+		// ref name, which would both be reported as "already exists". Neither is
+		// reachable from here — `fromSha` comes from `getBranchHead` and the
+		// branch name is built from an `isSlug`-guarded slug — so the trade is
+		// deliberate rather than overlooked.
+		async createBranch(repo, branch, fromSha) {
+			await request(
+				repo,
+				"git/refs",
+				{
+					method: "POST",
+					accept: "application/vnd.github+json",
+					body: { ref: `refs/heads/${branch}`, sha: fromSha },
+					alreadyExistsOn422: true,
+				},
+				branch,
+			);
+		},
+
+		// `html_url` is returned, not the API url — a human clicks this.
+		async createPullRequest(repo, options) {
+			const response = await request(
+				repo,
+				"pulls",
+				{
+					method: "POST",
+					accept: "application/vnd.github+json",
+					body: options,
+					// A PR for this head already being open is not "already exists"
+					// in the sense the contents API means. Slice 4 finds it by branch
+					// name instead of guessing from a status code.
+					alreadyExistsOn422: false,
+				},
+				options.head,
+			);
+			const pull = pullRequestSchema.parse(await response.json());
+			return { number: pull.number, url: pull.html_url };
+		},
+
+		// `state=all` matters: the default is `open`, which would report a
+		// merged or closed pull request as "never existed" and silently
+		// republish something that was deliberately abandoned or already live.
+		async findPullRequest(repo, branch) {
+			const response = await request(
+				repo,
+				// `sort` and `direction` are stated rather than relied on. They
+				// happen to be the endpoint's defaults, but a default is not a
+				// contract, and which pull request is "latest" decides whether a
+				// live post can be amended without `revise`.
+				`pulls?head=${owner}:${branch}&state=all&sort=created&direction=desc`,
+				{ method: "GET", accept: "application/vnd.github+json" },
+				branch,
+			);
+			const pulls = pullRequestListSchema.parse(await response.json());
+			const latest = pulls[0];
+			if (!latest) return null;
+			return {
+				number: latest.number,
+				url: latest.html_url,
+				state: latest.state,
+				// **Any** merge in this branch's history, not just the latest pull
+				// request's. The question the caller is really asking is "has this
+				// post ever gone live", and the answer has to survive a later
+				// abandoned pull request on the same branch: merge #42, open and
+				// close #57, and reading only #57 would say "never merged" and let
+				// a live post be amended without `revise`.
+				//
+				// `state` is "closed" for a merged and an abandoned one alike, so
+				// `merged_at` is the only field that can answer this.
+				merged: pulls.some((pull) => pull.merged_at !== null),
+			};
+		},
+
 		// `sha` is required: the contents API has no delete-by-path.
 		async deleteFile(repo, path, options) {
-			await request(repo, path, {
+			await contents(repo, path, {
 				method: "DELETE",
 				accept: "application/vnd.github+json",
 				body: { message: options.message, sha: options.sha },

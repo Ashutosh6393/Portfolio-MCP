@@ -38,9 +38,23 @@ describe("listContent", () => {
 				summary: "Another post.",
 			},
 		];
+		// Test revision, 2026-08-03 — see Test revisions table in
+		// specs/005-publish/implementation.md. Task 4 widens `Site` with
+		// `fetchSchema`, so every fake must carry it to typecheck. listContent
+		// only reads, so this throws rather than return a plausible value: an
+		// accidental call fails loudly instead of passing silently.
+		// Test revision, 2026-08-03 (second) — see Test revisions table in
+		// specs/005-publish/implementation.md. Task 6 widens `Site` with
+		// `fetchDocument`, so every fake below carries it too; same reasoning.
 		const site: Site = {
 			async fetchContent() {
 				return writings;
+			},
+			async fetchSchema(): Promise<never> {
+				throw new Error("fetchSchema is not part of this test");
+			},
+			async fetchDocument(): Promise<never> {
+				throw new Error("fetchDocument is not part of this test");
 			},
 		};
 
@@ -82,6 +96,12 @@ describe("listContent", () => {
 			async fetchContent() {
 				return projects;
 			},
+			async fetchSchema(): Promise<never> {
+				throw new Error("fetchSchema is not part of this test");
+			},
+			async fetchDocument(): Promise<never> {
+				throw new Error("fetchDocument is not part of this test");
+			},
 		};
 
 		const result = await listContent({ site }, { kind: "project" });
@@ -112,6 +132,12 @@ describe("listContent", () => {
 					"Failed to fetch writing content from ashutoshverma.dev",
 				);
 			},
+			async fetchSchema(): Promise<never> {
+				throw new Error("fetchSchema is not part of this test");
+			},
+			async fetchDocument(): Promise<never> {
+				throw new Error("fetchDocument is not part of this test");
+			},
 		};
 
 		let thrown: unknown;
@@ -132,6 +158,12 @@ describe("listContent", () => {
 		const site: Site = {
 			async fetchContent() {
 				return [{ nope: 1 }];
+			},
+			async fetchSchema(): Promise<never> {
+				throw new Error("fetchSchema is not part of this test");
+			},
+			async fetchDocument(): Promise<never> {
+				throw new Error("fetchDocument is not part of this test");
 			},
 		};
 
@@ -156,6 +188,12 @@ describe("listContent", () => {
 		const site: Site = {
 			async fetchContent() {
 				return [];
+			},
+			async fetchSchema(): Promise<never> {
+				throw new Error("fetchSchema is not part of this test");
+			},
+			async fetchDocument(): Promise<never> {
+				throw new Error("fetchDocument is not part of this test");
 			},
 		};
 

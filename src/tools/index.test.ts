@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { renderDraft } from "../lib/draft";
 import { type Github, GithubNotFoundError } from "../lib/github";
-import type { Site } from "../lib/site";
+import type { SchemaEnvelope, Site } from "../lib/site";
 import { createHandler } from "./index";
 
 // T-10, T-15 — see specs/001-server-skeleton/design.md → Test cases, and →
@@ -20,9 +21,25 @@ import { createHandler } from "./index";
 // result (`isError: true`, a `content` array), not a JSON-RPC error object
 // and not an HTTP error.
 
+// Test revision, 2026-08-03 — see Test revisions table in
+// specs/005-publish/implementation.md. Task 4 widens `Site` with
+// `fetchSchema`, so every fake must carry it to typecheck. No tool
+// exercised here reaches the publish path, so this throws rather than
+// return a plausible value: an accidental call fails loudly instead of
+// passing silently.
+// Test revision, 2026-08-03 (second) — see Test revisions table in
+// specs/005-publish/implementation.md. Task 6 widens `Site` with
+// `fetchDocument`, so every fake must carry it to typecheck. Same reasoning:
+// throws rather than returning a plausible value.
 const fakeSite: Site = {
 	async fetchContent() {
 		return [];
+	},
+	async fetchSchema(): Promise<never> {
+		throw new Error("fetchSchema is not part of this test");
+	},
+	async fetchDocument(): Promise<never> {
+		throw new Error("fetchDocument is not part of this test");
 	},
 };
 
@@ -66,6 +83,31 @@ const fakeGithub: Github = {
 	},
 	async deleteFile(): Promise<never> {
 		throw new Error("deleteFile is not part of this test");
+	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 11 widens `Github` with these
+	// three, so every fake must carry them to typecheck. No tool exercised
+	// here reaches the publish path, so these throw rather than return a
+	// plausible value: an accidental call fails loudly instead of passing
+	// silently.
+	async getBranchHead(): Promise<never> {
+		throw new Error("getBranchHead is not part of this test");
+	},
+	async createBranch(): Promise<never> {
+		throw new Error("createBranch is not part of this test");
+	},
+	async createPullRequest(): Promise<never> {
+		throw new Error("createPullRequest is not part of this test");
+	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 15 adds `findPullRequest` to
+	// `Github`, so every fake must carry it to typecheck. No tool exercised
+	// here reaches the publish path, so this throws rather than returning
+	// `null` — `null` is a meaningful answer here ("no PR exists for this
+	// branch"), and a stub that returned it could let an idempotency test pass
+	// without this code ever having called it.
+	async findPullRequest(): Promise<never> {
+		throw new Error("findPullRequest is not part of this test");
 	},
 };
 
@@ -279,7 +321,7 @@ const fakeDraftGithub: Github = {
 		if (!file) throw new GithubNotFoundError("workshop", path);
 		return file;
 	},
-	async writeFile(_repo, path, content) {
+	async writeFile(_repo, path, content, _options) {
 		draftFiles[path] = { content, sha: "draft-sha-2" };
 	},
 	// Task 9 needs this to actually delete: discard_draft reads the sha via
@@ -287,6 +329,31 @@ const fakeDraftGithub: Github = {
 	// beforeEach means this mutation never leaks into another test.
 	async deleteFile(_repo, path) {
 		delete draftFiles[path];
+	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 11 widens `Github` with these
+	// three, so every fake must carry them to typecheck. No tool exercised
+	// here reaches the publish path, so these throw rather than return a
+	// plausible value: an accidental call fails loudly instead of passing
+	// silently.
+	async getBranchHead(): Promise<never> {
+		throw new Error("getBranchHead is not part of this test");
+	},
+	async createBranch(): Promise<never> {
+		throw new Error("createBranch is not part of this test");
+	},
+	async createPullRequest(): Promise<never> {
+		throw new Error("createPullRequest is not part of this test");
+	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 15 adds `findPullRequest` to
+	// `Github`, so every fake must carry it to typecheck. No tool exercised
+	// here reaches the publish path, so this throws rather than returning
+	// `null` — `null` is a meaningful answer here ("no PR exists for this
+	// branch"), and a stub that returned it could let an idempotency test pass
+	// without this code ever having called it.
+	async findPullRequest(): Promise<never> {
+		throw new Error("findPullRequest is not part of this test");
 	},
 };
 
@@ -305,6 +372,12 @@ const fakeSiteWithPublishedPost: Site = {
 				summary: "already live",
 			},
 		];
+	},
+	async fetchSchema(): Promise<never> {
+		throw new Error("fetchSchema is not part of this test");
+	},
+	async fetchDocument(): Promise<never> {
+		throw new Error("fetchDocument is not part of this test");
 	},
 };
 
@@ -446,7 +519,7 @@ describe("tools/call get_content", () => {
 				method: "tools/call",
 				params: {
 					name: "get_content",
-					arguments: { kind: "writing", slug: "a-post" },
+					arguments: { kind: "writing", slug: "a-post", state: "draft" },
 				},
 			},
 			{ site: fakeSite, github: fakeDraftGithub },
@@ -579,6 +652,31 @@ const fakeDraftListingGithub: Github = {
 	async deleteFile(): Promise<never> {
 		throw new Error("deleteFile is not part of this test");
 	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 11 widens `Github` with these
+	// three, so every fake must carry them to typecheck. No tool exercised
+	// here reaches the publish path, so these throw rather than return a
+	// plausible value: an accidental call fails loudly instead of passing
+	// silently.
+	async getBranchHead(): Promise<never> {
+		throw new Error("getBranchHead is not part of this test");
+	},
+	async createBranch(): Promise<never> {
+		throw new Error("createBranch is not part of this test");
+	},
+	async createPullRequest(): Promise<never> {
+		throw new Error("createPullRequest is not part of this test");
+	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 15 adds `findPullRequest` to
+	// `Github`, so every fake must carry it to typecheck. No tool exercised
+	// here reaches the publish path, so this throws rather than returning
+	// `null` — `null` is a meaningful answer here ("no PR exists for this
+	// branch"), and a stub that returned it could let an idempotency test pass
+	// without this code ever having called it.
+	async findPullRequest(): Promise<never> {
+		throw new Error("findPullRequest is not part of this test");
+	},
 };
 
 describe("tools/list — list_content state", () => {
@@ -599,6 +697,77 @@ describe("tools/list — list_content state", () => {
 
 		const stateEnum = listContentTool.inputSchema.properties.state?.enum;
 		expect(stateEnum).toEqual(["published", "draft"]);
+	});
+});
+
+// T-26, T-27 — specs/005-publish/design.md → Test cases, Slice 2. `get_content`
+// gains a required `state`, mirroring `list_content` exactly (design.md →
+// `get_content` gains `state`).
+
+// A site returning a fixed document for a published read. New fake, not a
+// revision of `fakeSite` or `fakeSiteWithPublishedPost` above: neither of
+// those has a resolving `fetchDocument`, and T-26 needs one that does.
+const fakeSiteWithPublishedDocument: Site = {
+	async fetchContent(): Promise<never> {
+		throw new Error("fetchContent is not part of this test");
+	},
+	async fetchSchema(): Promise<never> {
+		throw new Error("fetchSchema is not part of this test");
+	},
+	async fetchDocument(_kind, slug) {
+		return {
+			metadata: { title: "Published Title" },
+			body: `... published body for ${slug} ...`,
+		};
+	},
+};
+
+describe("tools/call get_content — state", () => {
+	test('T-26: state "published" returns the body through the handler, isError unset', async () => {
+		const { status, payload } = await postJsonRpcWithDeps(
+			{
+				jsonrpc: "2.0",
+				id: 20,
+				method: "tools/call",
+				params: {
+					name: "get_content",
+					arguments: { kind: "writing", slug: "a-post", state: "published" },
+				},
+			},
+			{ site: fakeSiteWithPublishedDocument, github: fakeGithub },
+		);
+
+		expect(status).toBe(200);
+		expect(payload.error).toBeUndefined();
+		expect(payload.result.isError).toBeFalsy();
+
+		const text = textOf(payload);
+		expect(text).toContain("Published Title");
+		expect(text).toContain("... published body for a-post ...");
+	});
+
+	// design.md → `get_content` gains `state`: "Mirrors `list_content` exactly,
+	// including that `state` is required, not defaulted." Follows T-36's
+	// pattern above for list_content — the SDK folds a failed Zod parse into a
+	// normal `tools/call` result (`isError: true`), not a JSON-RPC error, and
+	// HTTP status stays 200.
+	test("T-27: a get_content call with no state is refused, HTTP status still 200", async () => {
+		const { status, payload } = await postJsonRpcWithDeps(
+			{
+				jsonrpc: "2.0",
+				id: 21,
+				method: "tools/call",
+				params: {
+					name: "get_content",
+					arguments: { kind: "writing", slug: "a-post" },
+				},
+			},
+			{ site: fakeSite, github: fakeDraftGithub },
+		);
+
+		expect(status).toBe(200);
+		expect(payload.error).toBeUndefined();
+		expect(payload.result.isError).toBe(true);
 	});
 });
 
@@ -660,6 +829,196 @@ describe("tools/call list_content — state", () => {
 			params: { name: "list_content", arguments: { kind: "writing" } },
 		});
 
+		expect(status).toBe(200);
+		expect(payload.error).toBeUndefined();
+		expect(payload.result.isError).toBe(true);
+	});
+});
+
+// T-42, T-60 — specs/005-publish/design.md → Test cases, Slice 3, Task 14.
+// `publish` is exercised through the MCP handler, never by calling the tool
+// function directly.
+
+// The live writing schema, mirrored from src/services/publish.test.ts — only
+// the fields a writing publish actually needs.
+const publishWritingSchema: SchemaEnvelope = {
+	writing: {
+		$schema: "https://json-schema.org/draft/2020-12/schema",
+		type: "object",
+		properties: {
+			title: { type: "string", minLength: 1 },
+			date: { type: "string", format: "date" },
+			readingTime: { type: "string", minLength: 1 },
+			summary: { type: "string", minLength: 1 },
+		},
+		required: ["title", "date", "readingTime", "summary"],
+		additionalProperties: false,
+	},
+	project: {
+		$schema: "https://json-schema.org/draft/2020-12/schema",
+		type: "object",
+		properties: {},
+		required: [],
+		additionalProperties: false,
+	},
+};
+
+// A draft that already exists in workshop, saved without readingTime (as
+// save_draft always leaves it) — exactly what publish reads before validating.
+const publishDraftFile = renderDraft(
+	{
+		title: "What CRDTs taught me",
+		date: "2026-08-03",
+		summary: "A short summary.",
+	},
+	"Hello world. This is the body of the post.",
+);
+
+// A site that has never published "crdts" and answers the writing schema
+// above. New fake, not a revision of `fakeSite`: neither `fakeSite` nor
+// `fakeSiteWithPublishedPost` has a resolving `fetchSchema`, and a real
+// publish needs one.
+const fakeSiteForPublish: Site = {
+	async fetchContent() {
+		return [];
+	},
+	async fetchSchema() {
+		return publishWritingSchema;
+	},
+	async fetchDocument(): Promise<never> {
+		throw new Error("fetchDocument is not part of this test");
+	},
+};
+
+// A Github fake that actually completes a publish: reads the draft, writes
+// the published file, cuts the branch and opens the PR. New fake, not a
+// revision of the shared `fakeGithub`: that one throws on every publish
+// method on purpose, and this test needs the opposite.
+const fakeGithubForPublish: Github = {
+	async listDirectory(): Promise<never> {
+		throw new Error("listDirectory is not part of this test");
+	},
+	async readFile(): Promise<never> {
+		throw new Error("readFile is not part of this test");
+	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. `publish` calls `readFileWithSha`
+	// twice: once for the workshop draft, once for the create-vs-update read
+	// against `portfolio`. This used to answer both with the draft, which
+	// made T-42's real publish look like an update (carrying `draft-sha`)
+	// when a genuine first publish carries no sha at all. `portfolio` now
+	// truthfully answers "no file here yet" — this fixture's slug has never
+	// been published before.
+	async readFileWithSha(repo, path) {
+		if (repo === "workshop") {
+			return { content: publishDraftFile, sha: "draft-sha" };
+		}
+		throw new GithubNotFoundError(repo, path);
+	},
+	async writeFile() {},
+	async deleteFile(): Promise<never> {
+		throw new Error("deleteFile is not part of this test");
+	},
+	async getBranchHead() {
+		return "main-head-sha";
+	},
+	async createBranch() {},
+	async createPullRequest() {
+		return {
+			number: 7,
+			url: "https://github.com/example/portfolio/pull/7",
+		};
+	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 16 makes `publish` call
+	// `findPullRequest` on every run, which expired the throwing stub this
+	// comment used to describe (same situation as the Task 5 row in that
+	// table): T-42 drives an actual successful publish through this fake, and
+	// a throw here now fails that publish before it completes. `null` is the
+	// truthful answer — this fixture's slug has never been published before.
+	async findPullRequest() {
+		return null;
+	},
+};
+
+describe("tools/list — publish", () => {
+	test("T-60: advertises publish with a non-empty description and the kind enum exactly writing, project, and the earlier tools stay listed", async () => {
+		const { status, payload } = await postJsonRpc({
+			jsonrpc: "2.0",
+			id: 22,
+			method: "tools/list",
+		});
+
+		expect(status).toBe(200);
+
+		const tools = payload.result.tools;
+
+		const publishTool = tools.find(
+			(tool: { name: string }) => tool.name === "publish",
+		);
+		expect(publishTool).toBeDefined();
+		expect(typeof publishTool.description).toBe("string");
+		expect(publishTool.description.length).toBeGreaterThan(0);
+		expect(publishTool.inputSchema.properties.kind.enum).toEqual([
+			"writing",
+			"project",
+		]);
+
+		// Registering a sixth tool must not drop any of the earlier five.
+		for (const name of [
+			"list_content",
+			"get_skill",
+			"save_draft",
+			"get_content",
+			"discard_draft",
+		]) {
+			expect(
+				tools.find((tool: { name: string }) => tool.name === name),
+			).toBeDefined();
+		}
+	});
+});
+
+describe("tools/call publish", () => {
+	test("T-42: a successful publish returns the PR URL through the handler, isError unset", async () => {
+		const { status, payload } = await postJsonRpcWithDeps(
+			{
+				jsonrpc: "2.0",
+				id: 23,
+				method: "tools/call",
+				params: {
+					name: "publish",
+					arguments: { kind: "writing", slug: "crdts" },
+				},
+			},
+			{ site: fakeSiteForPublish, github: fakeGithubForPublish },
+		);
+
+		expect(status).toBe(200);
+		expect(payload.error).toBeUndefined();
+		expect(payload.result.isError).toBeFalsy();
+
+		const text = textOf(payload);
+		expect(text).toContain("https://github.com/example/portfolio/pull/7");
+	});
+
+	test("T-42: a refusal comes back as isError true, HTTP status still 200", async () => {
+		// A traversal slug is refused before anything is touched (design.md →
+		// Test cases T-38), so the shared throwing fakes are safe to reuse here.
+		const { status, payload } = await postJsonRpcWithDeps(
+			{
+				jsonrpc: "2.0",
+				id: 24,
+				method: "tools/call",
+				params: {
+					name: "publish",
+					arguments: { kind: "writing", slug: "../../../etc/passwd" },
+				},
+			},
+			{ site: fakeSite, github: fakeGithub },
+		);
+
+		// design.md → Approach → Errors: a tool that failed still answers 200.
 		expect(status).toBe(200);
 		expect(payload.error).toBeUndefined();
 		expect(payload.result.isError).toBe(true);

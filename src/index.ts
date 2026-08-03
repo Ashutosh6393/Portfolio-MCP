@@ -28,7 +28,13 @@ export function createApp(env: Env, deps: { site: Site; github: Github }) {
 					// portfolio is checked even though no tool reads it yet — a token
 					// scoped to only one repo is the likeliest setup mistake, and this
 					// is the only thing that would ever catch it.
-					const [siteCheck, githubCheck] = await Promise.all([
+					//
+					// `schema` is its own entry rather than folded into `site` because
+					// it fails for a different reason and wants a different fix. `site`
+					// down means the host is down; `schema` down with `site` up means
+					// the api/schema.json route broke or changed shape — and publish
+					// refuses to validate anything until it is back.
+					const [siteCheck, githubCheck, schemaCheck] = await Promise.all([
 						deps.site
 							.fetchContent("writing")
 							.then(() => "ok" as const)
@@ -39,8 +45,16 @@ export function createApp(env: Env, deps: { site: Site; github: Github }) {
 						])
 							.then(() => "ok" as const)
 							.catch(() => "unreachable" as const),
+						deps.site
+							.fetchSchema()
+							.then(() => "ok" as const)
+							.catch(() => "unreachable" as const),
 					]);
-					const checks = { site: siteCheck, github: githubCheck };
+					const checks = {
+						site: siteCheck,
+						github: githubCheck,
+						schema: schemaCheck,
+					};
 					const allPass = Object.values(checks).every(
 						(check) => check === "ok",
 					);

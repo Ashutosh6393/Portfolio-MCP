@@ -1,0 +1,352 @@
+import { draftPath, isSlug, readDraft, renderDraft } from "../lib/draft";
+import {
+	type Github,
+	GithubAlreadyExistsError,
+	GithubConflictError,
+	GithubForbiddenError,
+	GithubNotFoundError,
+} from "../lib/github";
+import {
+	branchName,
+	branchUrl,
+	publishedPath,
+	pullRequestTitle,
+	renderPrBody,
+} from "../lib/publish";
+import { readingTime } from "../lib/reading-time";
+import type { Site } from "../lib/site";
+import { validate } from "../lib/validate";
+import { listContent } from "./list-content";
+
+// The sixth tool's service, and the only one that writes to the public repo.
+//
+// Purpose:            take a draft out of `workshop`, check it against the
+//                     site's own live schema, and offer it as a pull request.
+// Non-responsibilities: no merging, ever (no tool in this repo touches the
+//                     merge button), no MDX parse (ADR-005 decision 2 — the
+//                     Vercel preview build is the check), no second
+//                     serializer, no writing to `main`.
+//
+// Four steps and no branching until the last one. Every step returns a refusal
+// rather than throwing, in the union every service here uses.
+// `status` says which of the three things happened, because "published" is
+// three different outcomes and a human on a phone needs to know which:
+//   created    — a fresh pull request
+//   updated    — the branch already had an open PR; the file was amended and
+//                the same PR carries it. Publishing twice leaves ONE PR.
+//   recreated  — a PR existed but had been closed without merging, so a new
+//                one was opened over the same branch.
+export type PublishResult =
+	| {
+			ok: true;
+			url: string;
+			number: number;
+			status: "created" | "updated" | "recreated";
+	  }
+	| { ok: false; error: string };
+
+export async function publish(
+	deps: { github: Github; site: Site },
+	args: {
+		kind: "writing" | "project";
+		slug: string;
+		show?: boolean;
+		order?: number;
+		revise?: boolean;
+	},
+): Promise<PublishResult> {
+	// First, before anything names the site or GitHub. The slug becomes a path
+	// in the public repo and a branch name, so a traversal slug has to fail
+	// here and nowhere later (T-38).
+	if (!isSlug(args.slug)) {
+		return {
+			ok: false,
+			error: `"${args.slug}" is not a valid slug. Use lowercase letters, numbers and hyphens only, e.g. "a-post".`,
+		};
+	}
+
+	// `show` and `order` are curation the site owns and the writing schema has
+	// neither key, so `additionalProperties: false` would reject them anyway.
+	// Refusing here says why, instead of surfacing a schema error about a field
+	// the caller was never allowed to send.
+	if (
+		args.kind === "writing" &&
+		(args.show !== undefined || args.order !== undefined)
+	) {
+		return {
+			ok: false,
+			error:
+				"show and order apply to projects only. A writing has neither — remove them and publish again.",
+		};
+	}
+
+	// Narrowed once, here, rather than cast at each use. TypeScript cannot see
+	// that the guard above makes the two defined, and a cast is exactly the
+	// construct that would survive somebody reordering this.
+	let homepage: { show: boolean; order: number } | undefined;
+	if (args.kind === "project") {
+		if (args.show === undefined || args.order === undefined) {
+			return {
+				ok: false,
+				error: `Publishing a project needs show and order. They are not computed — ask which the project should have, then pass both. The current values are in list_content.`,
+			};
+		}
+		homepage = { show: args.show, order: args.order };
+	}
+
+	const published = await listContent(deps, { kind: args.kind });
+	if (!published.ok) return published;
+
+	// `revise` is the escape. Republishing a live post is a deliberate act, so
+	// it has to be asked for — but it is not forbidden, because revising a post
+	// from a phone is the whole point of the feature.
+	if (published.items.some((item) => item.slug === args.slug) && !args.revise) {
+		return {
+			ok: false,
+			error: `${args.kind}/${args.slug} is already published. Pass revise: true to publish changes to it.`,
+		};
+	}
+
+	const source = draftPath(args.kind, args.slug);
+	let draftText: string;
+	try {
+		({ content: draftText } = await deps.github.readFileWithSha(
+			"workshop",
+			source,
+		));
+	} catch (error) {
+		if (error instanceof GithubNotFoundError) {
+			return {
+				ok: false,
+				error: `There is no draft at ${args.kind}/${args.slug}, or the token cannot see it. Check the slug with list_content.`,
+			};
+		}
+		return { ok: false, error: describeGithubFailure(error) };
+	}
+
+	const draft = readDraft(draftText);
+	if (!draft) {
+		return {
+			ok: false,
+			error: `The metadata block in ${source} is not in a shape this server can read. Fix it in GitHub and save the draft again.`,
+		};
+	}
+
+	let schema: Record<string, unknown>;
+	try {
+		schema = (await deps.site.fetchSchema())[args.kind];
+	} catch {
+		// No detail carried: the message is a Zod dump or a network error and
+		// neither helps on a phone. What matters is that publish refuses rather
+		// than guessing at what valid means (CLAUDE.md → Don't).
+		return {
+			ok: false,
+			error:
+				"The site's schema could not be fetched, so this draft cannot be validated. Nothing was written. Try again when ashutoshverma.dev is reachable.",
+		};
+	}
+
+	// `readingTime` is computed, never taken from the draft — `save_draft`
+	// strips it, so a draft carrying one is a bug elsewhere. It goes in BEFORE
+	// validation because the schema requires it.
+	const validated: Record<string, unknown> = {
+		...draft.metadata,
+		...(args.kind === "writing"
+			? { readingTime: readingTime(draft.body) }
+			: {}),
+	};
+
+	const errors = validate(schema, validated);
+	if (errors.length > 0) {
+		// Every error at once. One field per turn costs four round trips on a
+		// new writing.
+		return {
+			ok: false,
+			error: `This draft is not ready to publish:\n${errors.map((error) => `- ${error}`).join("\n")}`,
+		};
+	}
+
+	// **After validation, never before.** The write schema is
+	// `additionalProperties: false` and omits both keys, so attaching first
+	// fails every project publish; skipping the attach drops a featured project
+	// off the homepage. T-31 asserts the ordering, not just the result.
+	const metadata: Record<string, unknown> = homepage
+		? { ...validated, ...homepage }
+		: validated;
+
+	const branch = branchName(args.kind, args.slug);
+	const destination = publishedPath(args.kind, args.slug);
+
+	// What already happened to this slug. Found by branch name, never by a
+	// number recorded anywhere — the branch name is deterministic, so GitHub
+	// can just be asked (ADR-005 decision 5).
+	let existing: Awaited<ReturnType<Github["findPullRequest"]>>;
+	try {
+		existing = await deps.github.findPullRequest("portfolio", branch);
+	} catch (error) {
+		return { ok: false, error: describeGithubFailure(error) };
+	}
+
+	// A merged pull request means this post is live. Amending it silently is
+	// the one accident the publish gate exists to prevent, so it takes an
+	// explicit `revise` — and `merged` is what decides, never `state`, which
+	// reads "closed" for a merged and an abandoned PR alike.
+	if (existing?.merged && !args.revise) {
+		return {
+			ok: false,
+			error: `${args.kind}/${args.slug} was already published and merged (pull request #${existing.number}). Pass revise: true to publish changes to it.`,
+		};
+	}
+
+	let base: string;
+	try {
+		base = await deps.github.getBranchHead("portfolio", "main");
+	} catch (error) {
+		return { ok: false, error: describeGithubFailure(error) };
+	}
+
+	try {
+		await deps.github.createBranch("portfolio", branch, base);
+	} catch (error) {
+		// The branch surviving from a previous publish is now the expected case,
+		// not a refusal: the file on it gets updated below and the existing pull
+		// request picks the change up. This is what makes publishing twice leave
+		// one PR rather than two (T-45).
+		//
+		// `POST /git/refs` also answers 422 for a base sha that does not exist,
+		// which arrives here wearing the same error. That one is not reachable —
+		// `base` came from `getBranchHead` moments ago — and if it ever is, the
+		// write below fails and says so rather than this line hiding it.
+		if (!(error instanceof GithubAlreadyExistsError)) {
+			return { ok: false, error: describeGithubFailure(error) };
+		}
+	}
+
+	// Create or update? The branch may already carry this file from an earlier
+	// publish, and GitHub needs its `sha` to replace it. Asking is one call and
+	// removes the guess.
+	let existingFileSha: string | undefined;
+	try {
+		({ sha: existingFileSha } = await deps.github.readFileWithSha(
+			"portfolio",
+			destination,
+			branch,
+		));
+	} catch (error) {
+		// Not there yet — a create, with no `sha`. Any other failure is real.
+		if (!(error instanceof GithubNotFoundError)) {
+			return { ok: false, error: describeGithubFailure(error) };
+		}
+	}
+
+	try {
+		// `renderDraft` is reused unchanged — no second serializer, no
+		// hand-rolled JS string escaping (design.md → The published file format).
+		await deps.github.writeFile(
+			"portfolio",
+			destination,
+			renderDraft(metadata, draft.body),
+			{
+				message: `publish ${args.kind}: ${args.slug}`,
+				// Never omitted. Without it GitHub commits to the default branch,
+				// which is the one thing this whole design exists to prevent.
+				branch,
+				// Present only when the branch already carried the file. Sending
+				// none is a create, and GitHub refuses a create over something
+				// that exists rather than replacing it.
+				sha: existingFileSha,
+			},
+		);
+
+		// An open pull request already carries this branch, so the commit above
+		// is already in it. Opening a second would be the duplicate M-3 exists
+		// to rule out.
+		if (existing && !existing.merged && existing.state === "open") {
+			return {
+				ok: true,
+				url: existing.url,
+				number: existing.number,
+				status: "updated",
+			};
+		}
+
+		const pull = await deps.github.createPullRequest("portfolio", {
+			title: pullRequestTitle(args.kind, args.slug),
+			body:
+				args.kind === "writing"
+					? renderPrBody({
+							kind: "writing",
+							slug: args.slug,
+							readingTime: String(validated.readingTime),
+						})
+					: renderPrBody({
+							kind: "project",
+							slug: args.slug,
+							// `homepage` is defined whenever kind is "project" — the
+							// guard above returns otherwise.
+							show: homepage?.show ?? false,
+							order: homepage?.order ?? 0,
+						}),
+			head: branch,
+			base: "main",
+		});
+
+		return {
+			ok: true,
+			url: pull.url,
+			number: pull.number,
+			// A closed-but-unmerged PR was abandoned, and reopening the work
+			// deserves saying so — the previous one was closed for a reason
+			// somebody may want to remember. A merged one revised under
+			// `revise` is a fresh publish, not a recreation of that PR.
+			status: existing && !existing.merged ? "recreated" : "created",
+		};
+	} catch (error) {
+		// The branch survives a failure here on purpose. Deleting it would throw
+		// away the commit, and the branch name is deterministic, so a retry
+		// finds it rather than duplicating work.
+		//
+		// This is the only path that can leave `portfolio` half-written — a
+		// branch, maybe a commit, and no pull request — so the message has to
+		// say where to look. That is the branch on GitHub, not the live site:
+		// the post is not published, so its public URL is a 404 and knows
+		// nothing about pull requests.
+		return {
+			ok: false,
+			error: `${describeGithubFailure(error)} The branch ${branch} may already exist with the commit on it. Check ${branchUrl(branch)} before retrying.`,
+		};
+	}
+}
+
+// A 404 never claims the path is absent. GitHub answers 404, not 403, for a
+// write the token may not make, so "missing" and "mis-scoped token" are the
+// same response from here.
+//
+// Nothing interpolates an unknown error's `.message`. Two of the calls on this
+// path parse their response with Zod, so the generic branch would otherwise
+// hand the model a multi-line issue dump (CLAUDE.md → Don't). "Unreachable" is
+// also not said unless it is meant: a 409 or a 422 means GitHub answered, and
+// sending the reader to check the network wastes the turn.
+function describeGithubFailure(error: unknown): string {
+	if (error instanceof GithubNotFoundError) {
+		return "GitHub refused the request. Either the path is not there or the token cannot reach it.";
+	}
+	// The one failure a retry can never fix, so it must not read like the
+	// others. Found during M-1: the token had `Contents: write` but not
+	// `Pull requests: write`, and the generic message sent the reader looking
+	// for a network fault.
+	if (error instanceof GithubForbiddenError) {
+		return "The GitHub token is missing a permission. Publishing needs Contents: read and write AND Pull requests: read and write on the portfolio repo. Nothing further was written.";
+	}
+	// Reachable in one real case: a slug merged minutes ago is not yet in
+	// `content.json` (the site prerenders), so the published check passes and
+	// the write lands on a file that already exists. Nothing was overwritten —
+	// no `sha` was sent, which is why GitHub refused rather than replacing it.
+	if (error instanceof GithubAlreadyExistsError) {
+		return "That file already exists in the portfolio repo, so this was probably published already — the site's catalogue can lag a few minutes behind a merge. Nothing was overwritten.";
+	}
+	if (error instanceof GithubConflictError) {
+		return "The file changed in the portfolio repo since it was read. Nothing was written.";
+	}
+	return "GitHub did not complete the request, and nothing further was written.";
+}

@@ -23,9 +23,29 @@ const testEnv = {
 // `createApp`'s `deps` parameter is now required. T-04..T-07 were written when
 // createApp took one argument; they now pass this fake explicitly so no test in
 // this file can silently fall back to the real site singleton.
+// Test revision, 2026-08-03 — see Test revisions table in
+// specs/005-publish/implementation.md. Task 4 widens `Site` with
+// `fetchSchema`, so every fake must carry it to typecheck.
+// Test revision, 2026-08-03 (second) — see Test revisions table in
+// specs/005-publish/implementation.md. Task 5 makes `/{secret}/health` call
+// `fetchSchema()` on every request, so this shared default now needs to
+// resolve like a healthy site; T-19 builds its own throwing `Site` inline
+// instead of relying on this one to fail.
+// Test revision, 2026-08-03 (third) — see Test revisions table in
+// specs/005-publish/implementation.md. Task 6 widens `Site` with
+// `fetchDocument`, so every fake must carry it to typecheck. Nothing in this
+// file reaches the publish path, so this throws rather than returning a
+// plausible value: an accidental call fails loudly instead of passing
+// silently.
 const fakeSite: Site = {
 	async fetchContent() {
 		return [];
+	},
+	async fetchSchema() {
+		return { writing: {}, project: {} };
+	},
+	async fetchDocument(): Promise<never> {
+		throw new Error("fetchDocument is not part of this test");
 	},
 };
 
@@ -49,6 +69,30 @@ const noWritePath = {
 	},
 	async deleteFile(): Promise<never> {
 		throw new Error("deleteFile is not part of this test");
+	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 11 widens `Github` with these
+	// three, so every fake must carry them to typecheck. Nothing in this file
+	// reaches the publish path, so these throw rather than return a plausible
+	// value: an accidental call fails loudly instead of passing silently.
+	async getBranchHead(): Promise<never> {
+		throw new Error("getBranchHead is not part of this test");
+	},
+	async createBranch(): Promise<never> {
+		throw new Error("createBranch is not part of this test");
+	},
+	async createPullRequest(): Promise<never> {
+		throw new Error("createPullRequest is not part of this test");
+	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 15 adds `findPullRequest` to
+	// `Github`, so every fake must carry it to typecheck. Nothing in this file
+	// reaches the publish path, so this throws rather than returning `null` —
+	// `null` is a meaningful answer here ("no PR exists for this branch"), and
+	// a stub that returned it could let an idempotency test pass without this
+	// code ever having called it.
+	async findPullRequest(): Promise<never> {
+		throw new Error("findPullRequest is not part of this test");
 	},
 };
 
@@ -146,6 +190,12 @@ describe("GET /{secret}/health", () => {
 		const unreachableSite: Site = {
 			async fetchContent() {
 				throw new Error("simulated site outage");
+			},
+			async fetchSchema(): Promise<never> {
+				throw new Error("fetchSchema is not part of this test");
+			},
+			async fetchDocument(): Promise<never> {
+				throw new Error("fetchDocument is not part of this test");
 			},
 		};
 		const app = createApp(testEnv, { ...testDeps, site: unreachableSite });
@@ -254,6 +304,57 @@ describe("GET /{secret}/health — the github check", () => {
 
 		const checks = await readChecks(response);
 		expect(checks.github).toBe("unreachable");
+	});
+});
+
+// T-18, T-19 — see specs/005-publish/design.md → Test cases → Slice 1. Task 5
+// adds a third parallel check, `schema`, to the deep health route.
+
+describe("GET /{secret}/health — the schema check", () => {
+	test("T-18: schema reachable — 200, checks.schema is ok", async () => {
+		const siteWithSchema: Site = {
+			...fakeSite,
+			async fetchSchema() {
+				return { writing: {}, project: {} };
+			},
+		};
+		const app = createApp(testEnv, { ...testDeps, site: siteWithSchema });
+
+		const response = await app.handle(
+			new Request(`http://localhost/${secret}/health`),
+		);
+		expect(response.status).toBe(200);
+
+		const checks = await readChecks(response);
+		expect(checks.schema).toBe("ok");
+	});
+
+	test("T-19: schema unreachable — 503, checks.schema fails while site and github stay ok", async () => {
+		// Own site fake, mirroring unreachableSite in T-17: fetchContent stays
+		// on the happy path so checks.site is "ok", only fetchSchema throws, so
+		// a 503 here can only be the schema check's doing.
+		const siteWithBadSchema: Site = {
+			async fetchContent() {
+				return [];
+			},
+			async fetchSchema(): Promise<never> {
+				throw new Error("simulated schema fetch failure");
+			},
+			async fetchDocument(): Promise<never> {
+				throw new Error("fetchDocument is not part of this test");
+			},
+		};
+		const app = createApp(testEnv, { ...testDeps, site: siteWithBadSchema });
+
+		const response = await app.handle(
+			new Request(`http://localhost/${secret}/health`),
+		);
+		expect(response.status).toBe(503);
+
+		const checks = await readChecks(response);
+		expect(checks.schema).toBe("unreachable");
+		expect(checks.site).toBe("ok");
+		expect(checks.github).toBe("ok");
 	});
 });
 

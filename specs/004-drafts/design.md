@@ -358,6 +358,13 @@ writes the file. **Verbatim. Do not reword.**
 The rule from spec 001 holds and it constrains the slice order: **a description may only
 mention tools that are registered.** See Open questions → G-2.
 
+> **Superseded for `save_draft` and `get_content` by
+> [spec 005](../005-publish/design.md) → Tool descriptions (2026-08-03).** Spec 005 added
+> the slug instruction to `save_draft`'s slug paragraph and rewrote `get_content` wholesale
+> for the `state` argument. The blocks below are spec 004's originals, kept because ADRs
+> and specs are append-only — they are no longer what ships. `discard_draft` and
+> `list_content` below are unchanged and still authoritative.
+
 #### `save_draft`
 
 ```

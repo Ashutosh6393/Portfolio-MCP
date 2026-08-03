@@ -36,6 +36,30 @@ const noReadPath = {
 	async deleteFile(): Promise<never> {
 		throw new Error("deleteFile is not part of save_draft");
 	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 11 widens `Github` with these
+	// three, so every fake must carry them to typecheck. saveDraft never
+	// touches the publish path, so these throw rather than return a plausible
+	// value: an accidental call fails loudly instead of passing silently.
+	async getBranchHead(): Promise<never> {
+		throw new Error("getBranchHead is not part of save_draft");
+	},
+	async createBranch(): Promise<never> {
+		throw new Error("createBranch is not part of save_draft");
+	},
+	async createPullRequest(): Promise<never> {
+		throw new Error("createPullRequest is not part of save_draft");
+	},
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. Task 15 adds `findPullRequest` to
+	// `Github`, so every fake must carry it to typecheck. saveDraft never
+	// touches the publish path, so this throws rather than returning `null` —
+	// `null` is a meaningful answer here ("no PR exists for this branch"), and
+	// a stub that returned it could let an idempotency test pass without
+	// saveDraft ever having called it.
+	async findPullRequest(): Promise<never> {
+		throw new Error("findPullRequest is not part of save_draft");
+	},
 };
 
 type WriteCall = {
@@ -66,6 +90,23 @@ const writingItem = (slug: string): Writing => ({
 	summary: "Already published.",
 });
 
+// Test revision, 2026-08-03 — see Test revisions table in
+// specs/005-publish/implementation.md. Task 4 widens `Site` with
+// `fetchSchema`, so every fake must carry it to typecheck. saveDraft never
+// reaches the publish path, so this throws rather than return a plausible
+// value: an accidental call fails loudly instead of passing silently.
+async function fetchSchemaNotPartOfThisTest(): Promise<never> {
+	throw new Error("fetchSchema is not part of this test");
+}
+
+// Test revision, 2026-08-03 (second) — see Test revisions table in
+// specs/005-publish/implementation.md. Task 6 widens `Site` with
+// `fetchDocument`, so every fake must carry it to typecheck too. Same
+// reasoning as fetchSchemaNotPartOfThisTest above.
+async function fetchDocumentNotPartOfThisTest(): Promise<never> {
+	throw new Error("fetchDocument is not part of this test");
+}
+
 // A site whose fetchContent returns whatever items are handed to it,
 // regardless of kind — the tests only ever exercise one kind at a time.
 function siteReturning(items: Writing[] | Project[]): Site {
@@ -73,6 +114,8 @@ function siteReturning(items: Writing[] | Project[]): Site {
 		async fetchContent() {
 			return items;
 		},
+		fetchSchema: fetchSchemaNotPartOfThisTest,
+		fetchDocument: fetchDocumentNotPartOfThisTest,
 	};
 }
 
@@ -83,6 +126,8 @@ function siteThatThrows(): Site {
 		async fetchContent() {
 			throw new Error("ashutoshverma.dev did not respond");
 		},
+		fetchSchema: fetchSchemaNotPartOfThisTest,
+		fetchDocument: fetchDocumentNotPartOfThisTest,
 	};
 }
 
