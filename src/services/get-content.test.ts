@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { renderDraft } from "../lib/draft";
 import { type Github, GithubNotFoundError } from "../lib/github";
-import { type Site, SiteNotFoundError } from "../lib/site";
+import { type Site, SiteNotFoundError, SiteShapeError } from "../lib/site";
 import { getContent } from "./get-content";
 
 // T-19…T-21 — see specs/004-drafts/design.md → Test cases → get_content /
@@ -433,5 +433,41 @@ describe("getContent — reading published content", () => {
 		);
 
 		expect(result.ok).toBe(true);
+	});
+
+	// T-55 — added by review (not in design.md's original list). The reviewer
+	// found `fetchDocument`'s `documentSchema.parse` failure falling to the
+	// generic branch in `describePublishedReadFailure`, which dumped the raw
+	// ZodError into the message AND claimed the site was "unreachable" — false,
+	// the site answered, just in an unrecognised shape (specs/005-publish/
+	// CLAUDE.md → Don't: never surface a raw JSON.parse/ZodError message).
+	test("T-55: a shape error from the site is refused without the raw Zod dump or an 'unreachable' claim", async () => {
+		const { site, calls } = siteThrowingOnFetchDocument(
+			new SiteShapeError("writing", "a-post"),
+		);
+
+		const result = await getContent(
+			{ github: noGithubAccess, site },
+			{ kind: "writing", slug: "a-post", state: "published" },
+		);
+
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("expected an error result");
+
+		// No raw Zod dump — a ZodError's message is a multi-line list of
+		// issues, each naming "invalid_type" and "expected" internals a phone
+		// reader cannot act on.
+		expect(result.error).not.toContain("invalid_type");
+		expect(result.error).not.toContain("expected");
+
+		// The site answered — it is not unreachable. Sending the reader to
+		// check DNS when the API route changed shape is the wrong direction.
+		expect(result.error.toLowerCase()).not.toContain("unreachable");
+
+		// Names the route or the shape, so a human knows where to look.
+		expect(result.error).toContain("writing");
+		expect(result.error).toContain("a-post");
+
+		expect(calls).toHaveLength(1);
 	});
 });

@@ -82,9 +82,17 @@ Checked live on 2026-08-03. Re-checking costs a call and risks writing a guess i
 - `readingTime` on live posts is formatted `{n} min` — `"16 min"`, `"14 min"`.
 - `api/schema.json` returns `{ writing: {...}, project: {...} }` — two complete
   draft-2020-12 documents. Select `schema[kind]`; never hand the envelope to a validator.
-- The schema uses exactly ten keywords: `type`, `properties`, `required`,
+- The schema uses **eleven** keywords: `$schema`, `type`, `properties`, `required`,
   `additionalProperties`, `minLength`, `minItems`, `items`, `enum`, `format`, `pattern`.
-  No `$ref`, no `allOf`/`anyOf`, no nesting past one array of strings.
+  No `$ref`, no `allOf`/`anyOf`.
+  - **`$schema` is on both documents** and names the dialect. It is an annotation, not a
+    constraint, so recognising it satisfies nothing.
+  - **`items` carries a constraint, not just a type**: `stack.items` is
+    `{ "type": "string", "minLength": 1 }`. The scalar constraints are implemented inside
+    `items`; `items.items` and `items.minItems` are still refused.
+  - This bullet said "exactly ten" and "no nesting past one array of strings" until
+    2026-08-03. Both were wrong, and the interpreter written to them refused every real
+    post. Corrected against the live route.
 - Both live projects are featured: `scaffold-ai` (`show: true, order: 1`) and `yapper`
   (`show: true, order: 2`). Live writings carry neither key.
 - Published files in `portfolio` are hand-written **JS object literals** with unquoted keys.

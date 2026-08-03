@@ -90,10 +90,21 @@ Verified against the real site and the real repo on 2026-08-03.
 | Published project path | `content/projects/{slug}.mdx` — **plural**, unlike the domain word `project` |
 | Default branch | `main` |
 | `readingTime` format on live posts | `"16 min"`, `"14 min"` — `{n} min` |
-| Schema keywords in use | `type`, `properties`, `required`, `additionalProperties`, `minLength`, `minItems`, `items`, `enum`, `format`, `pattern` |
+| Schema keywords in use | `$schema`, `type`, `properties`, `required`, `additionalProperties`, `minLength`, `minItems`, `items`, `enum`, `format`, `pattern` — **eleven, not ten** |
+| `$schema` | Both documents carry `"$schema": "https://json-schema.org/draft/2020-12/schema"` as a top-level key. Zod's `toJSONSchema` always emits it. It names the dialect and constrains nothing. |
+| `stack.items` | `{ "type": "string", "minLength": 1 }` — `items` carries a **constraint**, not just a `type` |
 | `format` values in use | `date` (on `writing.date`, alongside a `pattern`), `uri` (on `repo`, `demo`) |
 | Live projects | `scaffold-ai` (`show: true, order: 1`), `yapper` (`show: true, order: 2`) |
 | Live writings | six, none carrying `show` or `order` |
+
+> **Corrected 2026-08-03, after slice 2's review.** The two rows above marked
+> `$schema` and `stack.items` were originally recorded wrongly: this table said "exactly
+> ten keywords" and "no nesting past one array of strings". Both were false, and the
+> interpreter built to that description refused every real document. The values above were
+> re-fetched from the live route rather than re-derived. The lesson is recorded rather than
+> quietly patched: a "do not re-derive this" fact is only as good as the one check behind
+> it, and nothing in the suite compared the interpreter against the actual response until
+> the review did.
 
 The plural `projects` directory is the single most likely thing to get wrong. The site's own
 API routes have the same asymmetry — `/api/writing` and `/api/projects` — and
@@ -226,6 +237,55 @@ Publishing project/{slug} from the workshop draft.
 ```
 
 The PR **title** is `Publish {kind}: {slug}`.
+
+### Tool descriptions
+
+Added 2026-08-03, after slice 2's review. `CLAUDE.md` says descriptions are "specified in
+`design.md`, not authored here", and this section did not exist — so the instruction to
+"check it by eye against `design.md`" had nothing to check against. These are now the
+authoritative texts. They supersede the `save_draft` and `get_content` blocks in
+[spec 004's design](../004-drafts/design.md).
+
+Nothing asserts these in a test, by long-standing choice. Change the file and this section
+in the same commit or they drift silently.
+
+**`get_content`** — rewritten, not patched. `state` changes what the tool is:
+
+```
+Read one item back: a draft from the private workshop repo, or a post
+already live on the site.
+
+state:
+  "published"  live on ashutoshverma.dev. Returns its metadata and body.
+               No sha — there is no draft to overwrite.
+  "draft"      unpublished, in the private workshop repo. Returns its
+               metadata, body and sha.
+
+kind:
+  "writing"  a blog entry
+  "project"  a portfolio project page
+
+Call this before changing a draft. Editing is read, change, save: get the
+draft here, edit the metadata or the body, then call save_draft with the
+same kind and slug and the sha this returned. Pass the sha back unchanged
+— it is how the server knows the draft has not moved underneath you.
+
+To revise something already published, read it with state "published",
+then call save_draft with no sha at all — that is a create. If a draft
+already exists at that slug the create is refused, and you should read
+that draft instead.
+
+For the catalogue rather than one item, use list_content.
+```
+
+**`save_draft`** — the slug paragraph only. Everything else is spec 004's, unchanged:
+
+```
+slug is the kebab-case URL segment the draft is filed under. It must not
+already be published. It becomes the permanent public URL once the post
+is merged, so if the human has not named one, ask — do not derive it
+from the title.
+```
 
 ### `get_content` gains `state`
 

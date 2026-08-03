@@ -47,8 +47,11 @@ It is cheaper to read than to re-argue.
 ## Stack
 
 Bun · TypeScript strict · Elysia · Zod · Biome · `bun:test` · the MCP TypeScript SDK.
-Reasoning in [ADR-001](docs/adr/001-server-runtime-and-shape.md); the short version is
-that `publish` has to parse MDX, and MDX only parses in JavaScript.
+Reasoning in [ADR-001](docs/adr/001-server-runtime-and-shape.md). Its original short
+version — that `publish` has to parse MDX, and MDX only parses in JavaScript — no longer
+holds: [ADR-005](docs/adr/005-publish-opens-a-pull-request.md) drops the MDX parse and
+leaves the Vercel preview build as the check. The runtime choice stands on the rest of
+ADR-001's reasoning.
 
 No database, no accounts, no queue. Auth is an unguessable secret in the URL path — there
 is exactly one user, which is the one case OAuth adds nothing to.

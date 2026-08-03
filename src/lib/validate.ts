@@ -26,6 +26,12 @@
 // Keywords this interpreter implements, and therefore the ones it will not
 // refuse. Anything outside these sets is an error by the rule above.
 const documentKeywords = new Set([
+	// `$schema` names the dialect. It is an annotation, not a constraint, so
+	// recognising it satisfies nothing and hides nothing — the distinction
+	// matters, because every other entry in this set is a rule that gets
+	// checked below. Both live documents carry it (Zod's `toJSONSchema` always
+	// emits it), and refusing it made the interpreter reject every real post.
+	"$schema",
 	"type",
 	"properties",
 	"required",
@@ -42,9 +48,18 @@ const propertyKeywords = new Set([
 	"items",
 ]);
 
-// `items` in the live schema is a single subschema carrying nothing but a
-// `type`. Nesting past that is refused by the same rule as everything else.
-const itemsKeywords = new Set(["type"]);
+// `items` in the live schema is a single subschema describing a scalar —
+// `{ type: "string", minLength: 1 }`. The scalar constraints are allowed
+// inside it; the collection ones are not, so `items.items` and
+// `items.minItems` are still refused. That is what "no nesting past one
+// array of strings" means in practice.
+const itemsKeywords = new Set([
+	"type",
+	"minLength",
+	"enum",
+	"pattern",
+	"format",
+]);
 
 // The `type` values in use across both live documents.
 const typeCheckers: Record<string, (value: unknown) => boolean> = {
@@ -87,6 +102,36 @@ function checkFormat(field: string, format: string, value: string): string[] {
 	return [
 		`The schema wants \`${field}\` to be format \`${format}\`, which this validator does not implement.`,
 	];
+}
+
+// Which keywords a subschema uses, checked against what this file implements.
+// Runs on the schema alone — it never looks at the metadata, which is the
+// point: recognition cannot depend on whether a draft filled the field in.
+function checkSchemaKeywords(
+	field: string,
+	subschema: Record<string, unknown>,
+): string[] {
+	const errors: string[] = [];
+
+	for (const keyword of Object.keys(subschema)) {
+		if (!propertyKeywords.has(keyword)) {
+			errors.push(
+				`The schema constrains \`${field}\` with \`${keyword}\`, which this validator does not implement. It cannot confirm \`${field}\` is valid.`,
+			);
+		}
+	}
+
+	if (isObject(subschema.items)) {
+		for (const keyword of Object.keys(subschema.items)) {
+			if (!itemsKeywords.has(keyword)) {
+				errors.push(
+					`The schema constrains the items of \`${field}\` with \`${keyword}\`, which this validator does not implement.`,
+				);
+			}
+		}
+	}
+
+	return errors;
 }
 
 // The constraint keywords, for one field whose `type` already matched.
@@ -135,15 +180,9 @@ function checkConstraints(
 			);
 		}
 
+		// Keyword recognition for `items` is NOT done here — it lives in
+		// checkSchemaKeywords, which runs whether or not the array is present.
 		if (isObject(subschema.items)) {
-			for (const keyword of Object.keys(subschema.items)) {
-				if (!itemsKeywords.has(keyword)) {
-					errors.push(
-						`The schema constrains the items of \`${field}\` with \`${keyword}\`, which this validator does not implement.`,
-					);
-				}
-			}
-
 			const expected = subschema.items.type;
 			if (typeof expected === "string") {
 				const checker = typeCheckers[expected];
@@ -153,6 +192,22 @@ function checkConstraints(
 					);
 				} else if (!value.every(checker)) {
 					errors.push(`Every item in \`${field}\` must be ${expected}.`);
+				} else {
+					// The elements are the right type, so the scalar constraints on
+					// them are worth checking. Deduped: one message per violated
+					// constraint, not one per offending element — a ten-item stack
+					// with ten empty strings is one problem, not ten.
+					const perItem = new Set<string>();
+					for (const element of value) {
+						for (const error of checkConstraints(
+							`each item in ${field}`,
+							subschema.items,
+							element,
+						)) {
+							perItem.add(error);
+						}
+					}
+					errors.push(...perItem);
 				}
 			}
 		}
@@ -206,13 +261,13 @@ export function validate(
 			continue;
 		}
 
-		for (const keyword of Object.keys(subschema)) {
-			if (!propertyKeywords.has(keyword)) {
-				errors.push(
-					`The schema constrains \`${field}\` with \`${keyword}\`, which this validator does not implement. It cannot confirm \`${field}\` is valid.`,
-				);
-			}
-		}
+		// Keyword recognition first, and unconditionally. What this validator
+		// understands is a property of the schema, not of what the draft
+		// happens to contain — an unimplemented keyword on an optional field
+		// nobody filled in is still a keyword this file cannot honour, and
+		// staying quiet about it would be the silent pass the whole design
+		// refuses.
+		errors.push(...checkSchemaKeywords(field, subschema));
 
 		// An absent optional field is not a type error. Whether it is allowed to
 		// be absent was already settled by `required` above.
@@ -220,7 +275,16 @@ export function validate(
 		if (value === undefined) continue;
 
 		const expected = subschema.type;
-		if (typeof expected !== "string") continue;
+		if (typeof expected !== "string") {
+			// A known keyword in a shape this file cannot act on. Skipping here
+			// would silently drop every constraint on the field — a bare
+			// `{ enum: [...] }` would be checked against nothing — which is the
+			// same failure as ignoring an unknown keyword, wearing a different hat.
+			errors.push(
+				`The schema does not give \`${field}\` a type this validator can check, so its other constraints cannot be applied.`,
+			);
+			continue;
+		}
 
 		const checker = typeCheckers[expected];
 		if (!checker) {

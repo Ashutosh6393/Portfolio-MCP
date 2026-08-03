@@ -73,6 +73,23 @@ export class SiteNotFoundError extends Error {
 	}
 }
 
+// The site answered, but not in a shape this server recognises. Distinct
+// again from both of the above: the host is up and the slug is right, so the
+// thing to go and look at is the API route.
+//
+// It exists so the raw `ZodError` never leaves `lib`. A Zod v4 message is a
+// multi-line issue dump, and a character offset is useless to someone on a
+// phone (CLAUDE.md → Don't).
+export class SiteShapeError extends Error {
+	constructor(
+		readonly kind: "writing" | "project",
+		readonly slug: string,
+	) {
+		super(`Unexpected shape from the ${kind}/${slug} route`);
+		this.name = "SiteShapeError";
+	}
+}
+
 const contentUrl = {
 	writing: "https://ashutoshverma.dev/api/writing/content.json",
 	project: "https://ashutoshverma.dev/api/projects/content.json",
@@ -139,6 +156,10 @@ export const site: Site = {
 		if (!response.ok) {
 			throw new Error(`Failed to fetch ${kind}/${slug} from ashutoshverma.dev`);
 		}
-		return documentSchema.parse(await response.json());
+		const parsed = documentSchema.safeParse(await response.json());
+		if (!parsed.success) {
+			throw new SiteShapeError(kind, slug);
+		}
+		return parsed.data;
 	},
 };

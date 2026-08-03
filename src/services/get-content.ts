@@ -1,6 +1,6 @@
 import { draftPath, isSlug, readDraft } from "../lib/draft";
 import { type Github, GithubNotFoundError } from "../lib/github";
-import { type Site, SiteNotFoundError } from "../lib/site";
+import { type Site, SiteNotFoundError, SiteShapeError } from "../lib/site";
 
 // design.md → Approach → `get_content` (lines 312–319), extended by
 // specs/005-publish/design.md → `get_content` gains `state`.
@@ -83,6 +83,11 @@ function describePublishedReadFailure(
 ): string {
 	if (error instanceof SiteNotFoundError) {
 		return `There is no published ${args.kind} at "${args.slug}". Check the slug with list_content.`;
+	}
+	// The site answered — saying "unreachable" here would send the reader to
+	// check DNS when the thing to look at is the API route.
+	if (error instanceof SiteShapeError) {
+		return `The ${args.kind}/${args.slug} route on ashutoshverma.dev returned something this server does not recognise. It should return metadata and body.`;
 	}
 	const message = error instanceof Error ? error.message : "unknown error";
 	return `ashutoshverma.dev is unreachable: ${message}`;

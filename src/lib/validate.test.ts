@@ -37,23 +37,27 @@ const structureOnlyProjectSchema = {
 	additionalProperties: false,
 };
 
-// T-05 .. T-10 — see specs/005-publish/design.md -> Test cases -> Slice 1.
+// T-05 .. T-10, plus the review-added happy-path and hole coverage below —
+// see specs/005-publish/design.md -> Test cases -> Slice 1.
 //
-// These fixtures carry the live schema shape, constraint keywords and all,
-// per specs/005-publish/design.md -> Live facts. They stand alongside the
-// Task 2 structure-only fixtures above rather than replacing them, so T-11's
-// "unknown keyword refuses" behaviour is still exercised against a schema
-// that genuinely has none of these six keywords implemented yet.
+// REVISION (2026-08-03, review-driven, see specs/005-publish/implementation.md
+// -> Test revisions): these two fixtures used to be hand-written and did not
+// match the real site. They are now the ACTUAL documents captured from
+// `GET https://ashutoshverma.dev/api/schema.json`, verbatim — including the
+// `$schema` key and `stack.items.minLength`, both of which the hand-written
+// versions omitted. That omission is exactly why the suite passed while the
+// shipped `validate()` refused every real document: the fixtures asserted a
+// shape the live site does not serve.
 const liveWritingSchema = {
+	$schema: "https://json-schema.org/draft/2020-12/schema",
 	type: "object",
 	properties: {
 		title: { type: "string", minLength: 1 },
 		date: {
 			type: "string",
 			format: "date",
-			// A real date-range pattern, not just digit-shape, so T-07 can prove
-			// the pattern is doing the work and not the (no-op) format keyword.
-			pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$",
+			pattern:
+				"^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
 		},
 		readingTime: { type: "string", minLength: 1 },
 		summary: { type: "string", minLength: 1 },
@@ -63,11 +67,16 @@ const liveWritingSchema = {
 };
 
 const liveProjectSchema = {
+	$schema: "https://json-schema.org/draft/2020-12/schema",
 	type: "object",
 	properties: {
 		title: { type: "string", minLength: 1 },
 		summary: { type: "string", minLength: 1 },
-		stack: { type: "array", minItems: 1, items: { type: "string" } },
+		stack: {
+			minItems: 1,
+			type: "array",
+			items: { type: "string", minLength: 1 },
+		},
 		status: { type: "string", enum: ["shipped", "wip"] },
 		repo: { type: "string", format: "uri" },
 		demo: { type: "string", format: "uri" },
@@ -86,6 +95,22 @@ describe("validate", () => {
 		};
 
 		expect(validate(structureOnlyWritingSchema, metadata)).toEqual([]);
+	});
+
+	// REVISION (2026-08-03, review-driven): design.md's T-01 says "the live
+	// writing schema" — the actual document, constraint keywords and all, not
+	// the structure-only fixture above. This assertion was missing entirely,
+	// which is how the shipped validator shipped refusing every real writing
+	// while T-01 stayed green.
+	test("T-01 (full live schema): valid writing metadata passes against the real document, $schema and all", () => {
+		const metadata = {
+			title: "What CRDTs taught me",
+			date: "2026-08-03",
+			readingTime: "3 min",
+			summary: "A short summary.",
+		};
+
+		expect(validate(liveWritingSchema, metadata)).toEqual([]);
 	});
 
 	test("T-02: a missing required field is named", () => {
@@ -160,7 +185,27 @@ describe("validate", () => {
 		expect(validate(structureOnlyProjectSchema, metadata)).toEqual([]);
 	});
 
-	test("T-05: minLength is enforced", () => {
+	// REVISION (2026-08-03, review-driven): same gap as T-01 above, for the
+	// project schema — the missing happy-path assertion against the real
+	// document, which is what would have caught `stack.items.minLength` being
+	// unimplemented on day one.
+	test("T-12 (full live schema): valid project metadata passes against the real document, including a stack of strings", () => {
+		const metadata = {
+			title: "scaffold-ai",
+			summary: "A short summary.",
+			stack: ["typescript", "bun"],
+		};
+
+		expect(validate(liveProjectSchema, metadata)).toEqual([]);
+	});
+
+	// REVISION (2026-08-03, review-driven): T-05 .. T-10 used to assert only
+	// `errors.some(...)` — that a matching error exists among however many
+	// come back, never that it is the ONLY error. A validator that returns a
+	// spurious error on every field (exactly what shipped, via the unrecognised
+	// `$schema` key and the unrecognised `items.minLength`) passed all six
+	// unchanged. Each now asserts the exact error set the spec describes.
+	test("T-05: minLength is enforced, and nothing else is wrong", () => {
 		const metadata = {
 			title: "",
 			date: "2026-08-03",
@@ -170,19 +215,10 @@ describe("validate", () => {
 
 		const errors = validate(liveWritingSchema, metadata);
 
-		// Naming the field alone isn't enough: the "unknown keyword" refusal
-		// also names the field. This must be a real constraint violation, not
-		// that refusal — otherwise the test passes before minLength is ever
-		// checked.
-		expect(
-			errors.some(
-				(error) =>
-					error.includes("title") && !error.includes("does not implement"),
-			),
-		).toBe(true);
+		expect(errors).toEqual(["`title` must be at least 1 character long."]);
 	});
 
-	test("T-06: an enum is enforced and lists the allowed values", () => {
+	test("T-06: an enum is enforced and lists the allowed values, and nothing else is wrong", () => {
 		const metadata = {
 			title: "scaffold-ai",
 			summary: "A short summary.",
@@ -192,12 +228,10 @@ describe("validate", () => {
 
 		const errors = validate(liveProjectSchema, metadata);
 
-		expect(errors.some((error) => error.includes("status"))).toBe(true);
-		expect(errors.some((error) => error.includes("shipped"))).toBe(true);
-		expect(errors.some((error) => error.includes("wip"))).toBe(true);
+		expect(errors).toEqual(["`status` must be one of: shipped, wip."]);
 	});
 
-	test("T-07: pattern is enforced", () => {
+	test("T-07: pattern is enforced, and nothing else is wrong", () => {
 		const metadata = {
 			title: "What CRDTs taught me",
 			date: "2026-13-45",
@@ -207,15 +241,10 @@ describe("validate", () => {
 
 		const errors = validate(liveWritingSchema, metadata);
 
-		expect(
-			errors.some(
-				(error) =>
-					error.includes("date") && !error.includes("does not implement"),
-			),
-		).toBe(true);
+		expect(errors).toEqual(["`date` is not in the format the site expects."]);
 	});
 
-	test("T-08: format: uri is enforced", () => {
+	test("T-08: format: uri is enforced, and nothing else is wrong", () => {
 		const metadata = {
 			title: "scaffold-ai",
 			summary: "A short summary.",
@@ -225,15 +254,10 @@ describe("validate", () => {
 
 		const errors = validate(liveProjectSchema, metadata);
 
-		expect(
-			errors.some(
-				(error) =>
-					error.includes("repo") && !error.includes("does not implement"),
-			),
-		).toBe(true);
+		expect(errors).toEqual(["`repo` must be a URL."]);
 	});
 
-	test("T-09: minItems is enforced", () => {
+	test("T-09: minItems is enforced, and nothing else is wrong", () => {
 		const metadata = {
 			title: "scaffold-ai",
 			summary: "A short summary.",
@@ -242,15 +266,10 @@ describe("validate", () => {
 
 		const errors = validate(liveProjectSchema, metadata);
 
-		expect(
-			errors.some(
-				(error) =>
-					error.includes("stack") && !error.includes("does not implement"),
-			),
-		).toBe(true);
+		expect(errors).toEqual(["`stack` must have at least 1 item."]);
 	});
 
-	test("T-10: items type is enforced", () => {
+	test("T-10: items type is enforced, and nothing else is wrong", () => {
 		const metadata = {
 			title: "scaffold-ai",
 			summary: "A short summary.",
@@ -259,11 +278,73 @@ describe("validate", () => {
 
 		const errors = validate(liveProjectSchema, metadata);
 
-		expect(
-			errors.some(
-				(error) =>
-					error.includes("stack") && !error.includes("does not implement"),
-			),
-		).toBe(true);
+		expect(errors).toEqual(["Every item in `stack` must be string."]);
+	});
+
+	// T-52, T-53, T-54 — added by review, not part of design.md's original
+	// Slice 1 list. They cover a resolved Open question and two structural
+	// holes the reviewer found: the suite could not have caught either.
+
+	test("T-52 (added by review): format: date with no pattern beside it is accepted as satisfied", () => {
+		// design.md -> Open questions settles this: format: "date" is a
+		// deliberate no-op because the live schema's `pattern` does the real
+		// work. This schema carries no `pattern`, so it isolates that no-op —
+		// today, deleting the `if (format === "date") return [];` line in
+		// checkFormat would turn this test red without touching any other test.
+		const schema = {
+			type: "object",
+			properties: {
+				date: { type: "string", format: "date" },
+			},
+			required: ["date"],
+			additionalProperties: false,
+		};
+
+		expect(validate(schema, { date: "2026-08-03" })).toEqual([]);
+	});
+
+	test("T-53 (added by review): an unimplemented items keyword is refused even when the array property is absent from the metadata", () => {
+		// Keyword recognition is a property of the schema, not of what the
+		// draft happens to contain. Today the `items` keyword walk lives inside
+		// checkConstraints, which only runs when the array value is present —
+		// so an absent optional array silently skips past an unimplemented
+		// `items` constraint instead of refusing it.
+		const schema = {
+			type: "object",
+			properties: {
+				stack: {
+					type: "array",
+					items: { type: "string", maxLength: 10 },
+				},
+			},
+			required: [],
+			additionalProperties: false,
+		};
+
+		const errors = validate(schema, {});
+
+		expect(errors).toEqual([
+			"The schema constrains the items of `stack` with `maxLength`, which this validator does not implement.",
+		]);
+	});
+
+	test("T-54 (added by review): a property schema with no type is refused, not silently skipped", () => {
+		// A subschema missing `type` (or carrying a non-string one) hits
+		// `typeof expected !== "string"` today and `continue`s past every
+		// constraint on that field, including the one that would have caught
+		// the bad value below.
+		const schema = {
+			type: "object",
+			properties: {
+				status: { enum: ["shipped", "wip"] },
+			},
+			required: [],
+			additionalProperties: false,
+		};
+
+		const errors = validate(schema, { status: "invalid" });
+
+		expect(errors).not.toEqual([]);
+		expect(errors.some((error) => error.includes("status"))).toBe(true);
 	});
 });
