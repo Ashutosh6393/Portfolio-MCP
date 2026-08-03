@@ -468,7 +468,7 @@ describe("tools/call get_content", () => {
 				method: "tools/call",
 				params: {
 					name: "get_content",
-					arguments: { kind: "writing", slug: "a-post" },
+					arguments: { kind: "writing", slug: "a-post", state: "draft" },
 				},
 			},
 			{ site: fakeSite, github: fakeDraftGithub },
@@ -621,6 +621,77 @@ describe("tools/list — list_content state", () => {
 
 		const stateEnum = listContentTool.inputSchema.properties.state?.enum;
 		expect(stateEnum).toEqual(["published", "draft"]);
+	});
+});
+
+// T-26, T-27 — specs/005-publish/design.md → Test cases, Slice 2. `get_content`
+// gains a required `state`, mirroring `list_content` exactly (design.md →
+// `get_content` gains `state`).
+
+// A site returning a fixed document for a published read. New fake, not a
+// revision of `fakeSite` or `fakeSiteWithPublishedPost` above: neither of
+// those has a resolving `fetchDocument`, and T-26 needs one that does.
+const fakeSiteWithPublishedDocument: Site = {
+	async fetchContent(): Promise<never> {
+		throw new Error("fetchContent is not part of this test");
+	},
+	async fetchSchema(): Promise<never> {
+		throw new Error("fetchSchema is not part of this test");
+	},
+	async fetchDocument(_kind, slug) {
+		return {
+			metadata: { title: "Published Title" },
+			body: `... published body for ${slug} ...`,
+		};
+	},
+};
+
+describe("tools/call get_content — state", () => {
+	test('T-26: state "published" returns the body through the handler, isError unset', async () => {
+		const { status, payload } = await postJsonRpcWithDeps(
+			{
+				jsonrpc: "2.0",
+				id: 20,
+				method: "tools/call",
+				params: {
+					name: "get_content",
+					arguments: { kind: "writing", slug: "a-post", state: "published" },
+				},
+			},
+			{ site: fakeSiteWithPublishedDocument, github: fakeGithub },
+		);
+
+		expect(status).toBe(200);
+		expect(payload.error).toBeUndefined();
+		expect(payload.result.isError).toBeFalsy();
+
+		const text = textOf(payload);
+		expect(text).toContain("Published Title");
+		expect(text).toContain("... published body for a-post ...");
+	});
+
+	// design.md → `get_content` gains `state`: "Mirrors `list_content` exactly,
+	// including that `state` is required, not defaulted." Follows T-36's
+	// pattern above for list_content — the SDK folds a failed Zod parse into a
+	// normal `tools/call` result (`isError: true`), not a JSON-RPC error, and
+	// HTTP status stays 200.
+	test("T-27: a get_content call with no state is refused, HTTP status still 200", async () => {
+		const { status, payload } = await postJsonRpcWithDeps(
+			{
+				jsonrpc: "2.0",
+				id: 21,
+				method: "tools/call",
+				params: {
+					name: "get_content",
+					arguments: { kind: "writing", slug: "a-post" },
+				},
+			},
+			{ site: fakeSite, github: fakeDraftGithub },
+		);
+
+		expect(status).toBe(200);
+		expect(payload.error).toBeUndefined();
+		expect(payload.result.isError).toBe(true);
 	});
 });
 
