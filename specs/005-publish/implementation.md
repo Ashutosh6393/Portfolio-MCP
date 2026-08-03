@@ -102,8 +102,8 @@ Max 5–7 files (excluding tests) and 500 lines per slice.
 |---|---|---|---|---|
 | 1 | Tasks 1–5 — the schema arrives, health reports it | 4 | `awaiting review` | — |
 | 2 | Tasks 6–9 — `get_content` reads published content | 4 | `awaiting review` | — |
-| 3 | M-2, Tasks 10–14, M-1 — the PR path | 5 | `code done, M-1 outstanding` | — |
-| 4 | Tasks 15–18, M-3 — idempotency and `revise` | 2 | `code done, M-3 outstanding` | — |
+| 3 | M-2, Tasks 10–14, M-1 — the PR path | 5 | `code done, reviewed, M-1 outstanding` | — |
+| 4 | Tasks 15–18, M-3 — idempotency and `revise` | 2 | `code done, reviewed, M-3 outstanding` | — |
 
 ---
 

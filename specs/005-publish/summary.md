@@ -1,201 +1,228 @@
 # Publish — Summary
 
-Written for a **human**, at the point a PR slice is complete — before the PR is raised and
-before any automated review has run. It must stand on its own.
+Written for a **human**, at the point the whole feature is complete — before any PR is
+raised and before any automated review has run. It must stand on its own.
 
-Read this, then the diff, then approve the PR.
+Read this, then the diff, then approve.
 
-- **Slices:** 1 and 2 of 4, combined · **Branch:** `feat/publish`
+- **Slices:** 4 of 4, all done · **Branch:** `feat/publish`
 - **Spec:** `specs/005-publish/design.md` · **ADR:** `docs/adr/005-publish-opens-a-pull-request.md`
-- **Tasks:** 1–9 · **Tests:** 90 → 124, 0 fail (verified by running the suite before and
-  after — see Verify it yourself)
-- **Size:** slice 1 — 4 files, 316/2 lines. Slice 2 — 4 files, 150/25 lines. Combined,
-  excluding tests: 7 files, 466/27 lines (`src/lib/site.ts` is touched by both slices,
-  hence 7 not 8). Within the 5–7 file / 500 line PR limit for each slice individually.
+- **Tasks:** all 18 in `implementation.md` are `done`. Two manual checks remain open — see
+  Deferred work, it matters more than usual here.
+- **Tests:** 90 → 171, 0 fail. Verified by running the suite at the commit before this
+  feature started (`8310d5f`, confirmed `90 pass`) and at the tip (`171 pass`) — see Verify
+  it yourself.
+- **Size:** 32 files touched overall (5,026 insertions, 720 deletions), across four slices
+  that were each raised and sized independently. Source only, excluding tests and docs:
+  `src/lib/github.ts`, `src/lib/publish.ts`, `src/services/publish.ts`, `src/tools/publish.ts`,
+  `src/tools/index.ts` carry the PR path — 794 lines net across slices 3 and 4 combined,
+  because `publish.ts` and `github.ts` both grew again in slice 4. Each slice individually
+  stayed inside the project's 5–7 file / 500 line PR limit; the four together do not, and
+  were never meant to — this document exists precisely so the four can be reviewed as one
+  story even though they ship as separate PRs.
 
-This summary was rewritten because the version written after slice 1 alone had gone stale
-in three places once slice 2 and the review landed on top of it: it still said "1 of 4",
-still said "109 pass" (it's 124), and still said "no tool was touched" and "nothing
-user-facing changed" — both false as of slice 2. See **The review and the fixes** below
-for the one change in this pair of slices that actually matters.
+This replaces the version that covered slices 1–2 only. That version is now three slices
+out of date: `publish` did not exist when it was written, and it has since been built,
+reviewed twice more, and fixed twice more.
 
 ---
 
 ## TL;DR
 
-`publish` — the sixth and last tool — still does not exist. These two slices build what
-it needs and, on the way, change something a user can feel today: **`get_content` can now
-read a post that is already live on the site**, not just an unpublished draft. Ask for a
-published writing or project by slug and you get its metadata and body back — useful on
-its own, for revising something already on `ashutoshverma.dev` from a phone before
-`publish` exists to save the edit anywhere.
+`publish` — the sixth and last tool — now exists. Ask for a draft to go live and it opens a
+real pull request against the public site, on a branch, with a Vercel preview build.
+Nothing in this feature can merge that PR. A human still clicks the button.
 
-That came at a cost: `get_content` now **requires** a new argument, `state`. Every caller
-that used to omit it is rejected. See Breaking change.
+Four slices got there:
 
-Underneath that, slice 1 built a schema checker that reads the site's live publishing
-rules and reports every problem with a draft's metadata at once, and a reading-time
-estimate computed from a post's body — both still unused by any tool, waiting for
-`publish` in slice 3. `/{secret}/health` gained a third check so the server notices, on
-its own, if the site's schema ever becomes unreachable or changes shape.
+1. **The schema arrives** — a hand-written interpreter reads the site's live publishing
+   rules (`lib/validate.ts`), a reading-time estimate is computed from the body, and
+   `/{secret}/health` gained a third check so the server notices on its own if the site's
+   schema becomes unreachable or changes shape.
+2. **Read a published post** — `get_content` can now read something already live on the
+   site, not just a draft. This is what makes revising a post from a phone possible before
+   `publish` exists to save the edit anywhere. It also made `get_content` **require** a new
+   argument, `state` — a breaking change, still in effect (see Breaking change).
+3. **Open the PR** — the actual write path. `publish` reads a draft, validates it against
+   the schema, renders it into the public repo (`portfolio`) on a branch named
+   `publish/{kind}/{slug}`, and opens a pull request. The token that does this was widened
+   from read-only to `contents: write` on `portfolio`; the only thing standing between that
+   and a bug pushing straight to the live site is a GitHub ruleset on `main`.
+4. **Idempotency and revise** — publishing the same slug twice updates the one existing
+   pull request instead of opening a second. Touching something already live, or already
+   merged, is refused unless the caller explicitly passes `revise: true`.
 
-A review between the two slices found that the schema checker was wrong in a way that
-would have made `publish` refuse every real post, permanently, once slice 3 shipped on
-top of it. That's fixed. See below.
+**Before you approve this, know what's actually proven.** Slices 1 and 2 are proven
+against the real site and a real schema fetch. Slices 3 and 4 — everything that writes to
+`portfolio` — have been run only against fakes and one manual test of the
+branch-protection rule. **No real pull request has ever been opened by this code.** See
+Deferred work.
 
 ---
 
 ## What changed
 
-| File | Slice | Change | Why |
-|---|---|---|---|
-| `src/lib/reading-time.ts` | 1 | new | Turns a draft's body into the `"{n} min"` string the site's schema requires. Floors at `"1 min"` — the schema demands a non-empty string, so `"0 min"` would validate cleanly and still be nonsense. |
-| `src/lib/validate.ts` | 1 | new | Interprets the site's JSON Schema documents by hand (ADR-005 rejected a library — few keywords in use, no `$ref`, no composition). Checks `type`, `properties`, `required`, `additionalProperties`, `minLength`, `enum`, `pattern`, `format`, `minItems`, `items`, `$schema`. Returns every error found, not just the first. Corrected after review — see below. |
-| `src/lib/site.ts` | 1 & 2 | modified — `fetchSchema` (slice 1), `fetchDocument` + `SiteNotFoundError` (slice 2), `SiteShapeError` (review fix) | Slice 1: fetches `api/schema.json`, the two-key envelope (`{ writing, project }`), parsed with Zod but deliberately not describing what's inside each key — that would be a second, driftable definition of the rules `lib/validate.ts` already interprets. Slice 2: fetches one published document by kind and slug. Review: a malformed response from that route no longer throws a raw Zod error or gets mislabelled "unreachable". |
-| `src/index.ts` | 1 | modified — `schema` health check | `/{secret}/health` now runs three checks in parallel: `site`, `github`, `schema`, as its own entry because it can fail for a different reason than the site being down. |
-| `src/services/get-content.ts` | 2 | modified — `state` required, published branch | `state: "draft"` keeps the existing GitHub read unchanged. `state: "published"` reads through `site.fetchDocument` instead — never GitHub, since a `portfolio` file is a hand-written JS object literal and reading it as a draft would return `null` or a plausible-looking wrong value. |
-| `src/tools/get-content.ts` | 2 | modified — `state` in the input schema, description rewritten | The tool now requires `state` the same way `list_content` has since spec 004 — no default, because a default on one but not the other costs a turn every time a model has to guess which behaviour it's getting. |
-| `src/tools/save-draft.ts` | 2 | modified — description text only | Adds the instruction to ask the human for a slug rather than deriving one from the title. No behaviour changed. |
+### Slice 1 — the schema arrives
 
-### How it works now
+| File | Change | Why |
+|---|---|---|
+| `src/lib/reading-time.ts` | new | Turns a draft's body into the `"{n} min"` string the site's schema requires. Floors at `"1 min"` — the schema demands a non-empty string, so `"0 min"` would validate cleanly and still be nonsense. |
+| `src/lib/validate.ts` | new | Interprets the site's JSON Schema documents by hand (ADR-005 rejected a library). Checks every keyword the live schema actually uses and refuses any keyword it doesn't recognize, rather than silently skipping it. Returns every error found, not just the first. |
+| `src/lib/site.ts` | modified — `fetchSchema` | Fetches `api/schema.json`, the two-key envelope (`{ writing, project }`), parsed with Zod but deliberately not describing what's inside each key — that would be a second, driftable definition of the rules `lib/validate.ts` already interprets. |
+| `src/index.ts` | modified — `schema` health check | `/{secret}/health` now runs three checks in parallel: `site`, `github`, `schema`. |
 
-A request to `get_content` with `state: "draft"` works exactly as before: read from
-`workshop`, return `{ metadata, body, sha }`. A request with `state: "published"` is new:
-it calls `site.fetchDocument(kind, slug)` against `ashutoshverma.dev`'s API and returns
-`{ metadata, body }` — no `sha`, because there's no draft to overwrite. To edit something
-read this way, the model calls `save_draft` with no `sha` at all, which creates a new
-draft; if one already exists at that slug, that create is refused and the model is told
-to read the draft instead. That's existing `save_draft` behaviour, unchanged here.
+### Slice 2 — read a published post
 
-`/{secret}/health` still runs `site`, `github`, and `schema` in parallel; any one failing
-is a 503.
+| File | Change | Why |
+|---|---|---|
+| `src/lib/site.ts` | modified — `fetchDocument`, `SiteNotFoundError` | Fetches one published document by kind and slug. |
+| `src/services/get-content.ts` | modified — `state` required | `"draft"` keeps the existing GitHub read unchanged. `"published"` reads through `site.fetchDocument` instead — never GitHub, since a `portfolio` file is a hand-written JS object literal and reading it as a draft would return `null` or a plausible-looking wrong value. |
+| `src/tools/get-content.ts` | modified — `state` in the input schema | Mirrors `list_content`, which has required `state` since spec 004. No default — a default on one tool but not the other costs a turn every time a model has to guess which behaviour it's getting. |
+| `src/tools/save-draft.ts` | modified — description text only | Adds the instruction to ask the human for a slug rather than deriving one from the title. No behaviour changed. |
 
-`lib/validate.ts` and `lib/reading-time.ts` are still not called by any tool — they exist
-for `publish` in slice 3.
+### Slice 3 — open the PR
+
+| File | Change | Why |
+|---|---|---|
+| `src/lib/github.ts` | generalised `request`, four new methods (`getBranchHead`, `createBranch`, `createPullRequest`, later `findPullRequest`), `writeFile` narrowed into an overload | `request` used to hardcode `/contents/{path}`; it now takes a path suffix so the new endpoints share the same auth header and status mapping. The `writeFile` overload makes `branch` a **compile error to omit** on a `portfolio` write — the ruleset on `main` is the real guarantee, this is the guard that stops a future caller reaching it by accident. |
+| `src/lib/publish.ts` | new | Pure helpers: the published file path (`content/projects/` is **plural**, unlike the domain word), the branch name, the PR title, and the PR body text — specified in `design.md`, not left to the coder to word. |
+| `src/services/publish.ts` | new | The service: read the draft, validate, attach `show`/`order` (projects only, after validation — the schema forbids the keys), render, branch, commit, open the PR. Every step returns a refusal rather than throwing. |
+| `src/tools/publish.ts` | new | The MCP tool. Turns a refusal into `isError: true`, HTTP still 200. |
+| `src/tools/index.ts` | modified — registration | Wires `publish` in alongside the other five tools. |
+
+### Slice 4 — idempotency and revise
+
+| File | Change | Why |
+|---|---|---|
+| `src/lib/github.ts` | modified — `findPullRequest` | Finds an open, closed, or merged pull request by branch name — never by a number recorded anywhere, because recording it would invalidate the draft's `sha`. |
+| `src/services/publish.ts` | modified — the four branch/PR states, `revise` | A leftover branch with no PR proceeds rather than refusing (writes fresh, opens a PR). A branch with an open PR updates it. A merged PR, or an already-published slug, refuses unless `revise: true` is passed. A closed-unmerged PR is reopened as a new one, and the result says so. |
+| `src/tools/publish.ts` | modified — `revise` argument, `status`-aware response | The `revise` argument, and a response that distinguishes "opened", "updated" (same PR, no duplicate), and "recreated". |
 
 ---
 
-## The review and the fixes
+## The three reviews — read this before the rest
 
-**This is the part of the diff that matters most. Read it before the rest.**
+Three review passes ran across this feature, one after each of slices 2, 3, and 4. None
+was a formality. Each found something that would have shipped a real defect had it gone
+unreviewed.
 
-The `reviewer` agent found a **blocking correctness bug** in slice 1's schema checker,
-and I confirmed it independently by fetching the live schema myself
-(`https://ashutoshverma.dev/api/schema.json`):
+### After slice 2 — a bug that would have blocked every publish, permanently
 
-- `design.md` and `specs/005-publish/CLAUDE.md` both claimed the write schema uses
-  "exactly ten keywords" with "no nesting past one array of strings". **Both were false.**
-  The real schema carries `"$schema"` as an eleventh top-level key on both documents
-  (Zod's `toJSONSchema` always emits it), and `stack.items` is
-  `{ "type": "string", "minLength": 1 }` — `items` carries a constraint, not just a type.
-- Because the interpreter correctly refuses any keyword it does not implement, it
-  returned an error for **every valid post**, including the live ones. Had `publish`
-  (slice 3) shipped on top of this, every publish attempt would have failed, permanently,
-  with a message that blamed the site's schema for a bug in this repo's reading of it.
-- The reviewer also found the test suite was **structurally incapable of catching this**:
-  T-01 and T-12 — the only `toEqual([])` happy-path assertions — ran against a
-  four-keyword hand-written fixture, never the real document. T-05 through T-10 all used
-  `errors.some(...)`, so a validator returning a spurious error on every field still
-  passed all six. The `format: "date"` no-op had no test at all.
+`design.md` and `CLAUDE.md` both recorded the site's live schema wrongly: "exactly ten
+keywords", "no nesting past one array of strings." Both were false — the real schema
+carries `$schema` as an eleventh top-level key (Zod's `toJSONSchema` always emits it), and
+`stack.items` carries a `minLength` constraint, not just a bare type.
 
-**Fixes applied to `src/lib/validate.ts` and `src/lib/site.ts`, all re-verified:**
+Because `lib/validate.ts` was built to correctly refuse any keyword it doesn't recognize,
+it refused **every valid post**, including the live ones. Had `publish` (slice 3) shipped
+on top of this unfixed, every publish attempt would have failed forever, blaming the
+site's schema for a bug in this repo's reading of it. The review also found the test suite
+structurally incapable of catching this — the only happy-path assertions ran against a
+four-keyword hand-written fixture, never the real document.
 
-- `$schema` is now recognised as an annotation that constrains nothing — the code
-  comment distinguishes "known and ignored annotation" from "skipped constraint" so the
-  next reader doesn't mistake it for a hole.
-- The scalar constraints (`minLength`, `enum`, `pattern`, `format`) are now checked
-  *inside* `items`. `items.items` and `items.minItems` are still refused — that's what
-  "no nesting past one array of strings" actually means.
-- The unknown-keyword walk now runs unconditionally, not only when the field has a
-  value. Previously an unimplemented keyword on an optional field nobody filled in
-  passed silently.
-- A property whose `type` is missing or not a string is now an error, not a silent skip
-  of every constraint on that field.
-- `SiteShapeError` (new, `src/lib/site.ts`) means a raw Zod issue dump can never reach
-  the model, and a shape change on the site no longer reports as "unreachable" — the
-  site answered; the thing to check is the API route, and the error now says so.
+Fixed before slice 3 started: the interpreter now recognizes `$schema` as an annotation
+that constrains nothing, checks scalar constraints inside `items`, and the fixtures were
+replaced with the real, captured `api/schema.json`. `design.md` and `CLAUDE.md` were
+corrected to match the re-checked live facts.
 
-**Fixtures and tests corrected:**
+### After slice 3 — a stale header and a message pointing at the wrong URL
 
-- The hand-written schema fixtures in `src/lib/validate.test.ts` were replaced with the
-  real, captured `api/schema.json`. Happy-path `toEqual([])` assertions were added for
-  both live documents — these are the tests that would have caught the bug on day one.
-- T-05 through T-10 were tightened from "contains this error somewhere" to "returns
-  exactly this error set."
-- Three tests were added by the review and marked as such in-file: `T-52` pins the
-  `format: "date"` no-op so deleting that line would now be caught; `T-53` proves an
-  unimplemented `items` keyword is refused even when the array field is absent; `T-54`
-  proves a missing/non-string `type` is refused rather than silently skipped.
-- **I found a fourth review-added test while verifying this summary, `T-55` in
-  `src/services/get-content.test.ts`, that pins the `SiteShapeError` fix (no raw Zod
-  dump, no false "unreachable" claim). It carries the same "added by review" comment as
-  T-52–54 but is not listed in `implementation.md`'s Test revisions table.** Not a
-  correctness problem — the test exists and passes — but it's a gap in the paper trail
-  worth closing before this ships.
-- `design.md`, `specs/005-publish/CLAUDE.md`, `specs/004-drafts/design.md`, and
-  `README.md` were corrected to match the re-checked live facts. `design.md` gained a
-  **Tool descriptions** section that didn't exist before — `CLAUDE.md`'s instruction to
-  "check it by eye against `design.md`" had nothing to check against until now.
+`github.ts`'s header comment still said the token was read-only on `portfolio` — the exact
+file that now writes to a public repo, telling the next reader the opposite of the truth.
+And the message shown when a write failed after the branch was already cut pointed at the
+**live site URL**, which is wrong on its face: the post isn't published, so that URL is a
+404 that knows nothing about pull requests. Both fixed. The `writeFile` overload (see
+above) was also introduced at this point, so a `portfolio` write without a `branch` is now
+a compile error, not a convention someone has to remember.
 
-I re-ran the fixed validator against the real live schema by hand: valid writing
-metadata → `[]`; valid project metadata → `[]`; `stack: [""]` → one precise error; a
-malformed date → one precise error.
+### After slice 4 — three findings, all fixed
 
-**One more thing worth flagging plainly: these fixes are not committed yet.** They exist
-as uncommitted changes in the working tree — `git status` shows `src/lib/validate.ts`,
-`src/lib/site.ts`, `src/services/get-content.ts`, their test files, and the four docs
-files above, all modified but unstaged. Everything in this summary was checked against
-that working tree, and the numbers below (124 tests, clean typecheck/lint/docs) include
-it. But it needs its own commit — separate from the two slice commits it corrects —
-before this can be raised as a PR, per this project's own rule that a fix like this
-deserves review on its own, not buried in an unrelated diff.
+1. **Task 18's `status` branching had never actually landed.** A prior edit failed
+   silently and the commit message claimed behaviour the code didn't have. A second
+   publish reported "Pull request #42 opened" — which was simply false; nothing was
+   opened. Fixed: the response now distinguishes created/updated/recreated correctly.
+2. **The PR body goes stale on an update.** GitHub does not rewrite a pull request's body
+   when its branch gains a commit, and `design.md` names that body as the **only**
+   mitigation for a model inventing `show`/`order`. This is mitigated, not fixed: the tool
+   now restates the just-written values in its own response and says the body describes
+   the first publish only. An actual fix needs `PATCH /pulls/{n}`, which needs its own ADR.
+3. **`findPullRequest` read `merged` off only the latest pull request**, which bypassed
+   `revise` on exactly the path it exists to guard: merge PR #42, then open and close #57
+   on the same branch, and the old code reported "never merged" — silently letting a live
+   post be amended without `revise`. Fixed: it now checks whether **any** PR in that
+   branch's history was ever merged.
+
+The review also caught that two fakes were answering both the workshop draft read and the
+new portfolio branch read with the same draft content, which meant every "first publish"
+test actually exercised the overwrite path (a `sha` was always sent) rather than the
+create path. Fixed, and a new test (`T-64`) pins that a first publish sends no `sha`.
 
 ---
 
 ## QA
 
-Questions a reviewer would actually ask, answered before they have to ask them.
-
 **What does this let a user do that they couldn't before?**
-Read a published post back through `get_content` — metadata and body for anything
-already live on the site, by kind and slug. That's the first user-visible change in this
-feature. Everything else (the schema checker, `readingTime`, the health check) is still
-inert, waiting for `publish` in slice 3.
+Publish a draft with one call: `publish({ kind, slug, show?, order? })` opens a real pull
+request on the public repo. Read something already live with `get_content({ state:
+"published" })`. Revise something live or already-merged by passing `revise: true`.
 
 **What happens when it fails?**
-`fetchSchema` throws on a non-2xx response or a body missing `writing`/`project`; the
-health route catches that and reports `checks.schema: "unreachable"`, 503 overall — same
-pattern as the existing `site`/`github` checks. `fetchDocument` now distinguishes three
-cases: a 404 becomes `SiteNotFoundError` ("no published {kind} at this slug"), a
-malformed response becomes `SiteShapeError` (names the route, doesn't claim the site is
-down), and a network failure is the generic "ashutoshverma.dev is unreachable" message.
-`validate()` never throws — an unrecognised keyword becomes a string in the returned
-array. `readingTime()` cannot fail; it's arithmetic with one floor.
+Every failure is a refusal, never a throw reaching the model: `{ ok: false, error: string }`
+from the service, turned into `isError: true` (HTTP still 200) by the tool. Specifically:
+invalid metadata returns every missing/wrong field at once, not one per turn. An
+unreachable site schema refuses rather than guessing at validity. A write that fails after
+the branch was already cut names the branch and points at its GitHub URL, and says the
+branch and any commit on it survive — nothing is deleted, so a retry finds it rather than
+duplicating work. A 404 from GitHub is never reported as "the file doesn't exist" — it
+might be the token's scope, and the message says both are possible.
 
 **Does this touch existing behaviour?**
-Yes, in one place that matters: `get_content` now requires `state`. See Breaking change.
-Everything else is additive — `save_draft`'s behaviour is unchanged (description text
-only), drafts read through `get_content` exactly as before, and `/health` adds a check
-without changing the other two.
+Yes, in one place: `get_content` now requires `state` (carried over from slice 2, still in
+effect — see Breaking change below). `save_draft`'s behaviour is unchanged, only its
+description text changed. `list_content` and `discard_draft` are untouched.
 
 **Any data migration?**
 None. No database in this repo.
 
-**Any performance implications?**
-One new outbound fetch per `/health` call, run in parallel with the two that already
-exist. `get_content` with `state: "published"` adds one fetch to `ashutoshverma.dev`
-per call, in place of the GitHub call a draft read makes — not in addition to it. No
-cache or rate limiter was added, matching the project's stated position that ~15
-calls/week doesn't warrant one.
-
-**Any security or auth implications?**
-None. No new route, no new auth path. Both changed tools stay behind the existing MCP
-auth and the health route stays behind its existing secret path prefix.
+**Any auth implication? This is the one that matters most in this feature.**
+The GitHub token was widened from read-only to `contents: write` on `portfolio`, the
+public repo. That is a real increase in blast radius: a bug here can now write to a
+public, customer-facing repository. The mitigation is a GitHub ruleset on `portfolio`'s
+`main` that requires every change to go through a pull request, and it was **verified to
+refuse this exact token** (M-2, see below) — not merely assumed to exist. On the code
+side, `writeFile` is typed so a `portfolio` write cannot omit a branch; it's a compile
+error, not a rule someone has to remember. No tool in this repo merges, approves, or
+closes a pull request — that action was deliberately left out of scope, permanently.
 
 **What did we deliberately not do?**
-`publish` doesn't exist yet. No dependency was added — the schema interpreter is still
-hand-written per ADR-005. `readDraft` is never pointed at a published file — published
-reads go through the site's API, not GitHub, on purpose (see `CLAUDE.md` → Don't).
+No MDX parse (the Vercel preview build is the check, per ADR-005). No new dependency — the
+schema interpreter is hand-written, same as before. No caching, retry, or rate limiter
+(~15 calls/week against a much higher GitHub limit). No merge capability, ever. See
+Deferred work for what was surfaced but explicitly not built.
+
+---
+
+## M-2 — the one manual check that has run, and why it's the load-bearing one
+
+**M-2 passed, 2026-08-03.** A direct push of an empty commit to `Portfolio-new`'s `main`,
+using the server's actual token (not the repo owner's own git credentials — an admin is
+usually on the ruleset's bypass list, so testing as the admin would have proven nothing
+about the token the server runs as):
+
+```
+remote: error: GH013: Repository rule violations found for refs/heads/main.
+remote: - Changes must be made through a pull request.
+```
+
+This was the prerequisite for all of slice 3 — the feature does not start writing to a
+public repo on the assumption a safety net exists; it checks first that the net catches
+the exact thing that could fall into it.
+
+One thing to flag: **the token used for this check was exposed in the session
+transcript** during the test. `implementation.md`'s session notes say it was rotated
+immediately afterward. That's a self-report inside this repo's own record, not something
+this summary independently confirmed — worth a second look before this ships, given it's
+a credential to a public write-capable token.
 
 ---
 
@@ -203,19 +230,16 @@ reads go through the site's API, not GitHub, on purpose (see `CLAUDE.md` → Don
 
 **`get_content` now requires `state`.** Any existing caller — a saved prompt, a Claude
 Project instruction, a script — that calls it with only `kind` and `slug` is rejected by
-the input schema (Zod), before the service runs. This is deliberate, not an oversight:
-it mirrors `list_content`, which has required `state` since spec 004, and the two tools
-are meant to be learned together. T-27 pins that omitting `state` is rejected.
-
-There's no migration path other than updating the caller to pass `state: "draft"` (the
-old, only behaviour) or `state: "published"` (the new one). If something outside this
-repo calls `get_content` today, it will start failing the moment this ships.
+the input schema before the service runs. Deliberate: it mirrors `list_content`, which has
+required `state` since spec 004. There's no migration path other than updating the caller
+to pass `state: "draft"` (the old behaviour) or `state: "published"` (the new one).
 
 ---
 
 ## Verify it yourself
 
-Steps to check this by hand, in under five minutes.
+Under five minutes, run against the working tree as it stands (all 18 tasks committed,
+nothing staged or pending).
 
 ```bash
 git checkout feat/publish
@@ -223,142 +247,107 @@ bun install
 bun test
 ```
 
-1. Full suite → expect `124 pass, 0 fail`. I confirmed the baseline is `90 pass` by
-   checking out the commit immediately before slice 1 (`98eb726^`) into a separate
-   worktree and running the suite there — the 34-test increase is real, not a guess.
-2. Open `src/lib/validate.test.ts`, find the test with `T-01` and `T-12` in its name that
-   asserts against the real captured schema (not `structureOnly*`) → confirm it uses
-   `toEqual([])` against the live document, not the old hand-written fixture. This is the
-   test that would have caught the review's bug on day one.
-3. Open `src/tools/get-content.ts` and call `get_content` with `{ kind: "writing",
-   slug: "anything" }` and no `state` → confirm the MCP layer rejects it before the
-   service runs (T-27). This is the breaking change, in one call.
-4. Failure case: run `bunx tsc --noEmit` → expect clean, no output. This is what proves
-   the `Site` type widening across two slices didn't leave a fake somewhere
-   half-updated.
+1. Full suite → `171 pass, 0 fail`. I confirmed the baseline independently: checked out
+   `8310d5f` (the commit immediately before this feature starts) into a separate
+   worktree, ran `bun install` there, and got `90 pass, 0 fail`. The 81-test increase is
+   real.
+2. `bunx tsc --noEmit` → clean, no output. This is what proves the `Github`/`Site` type
+   widening across all four slices didn't leave a fake half-updated anywhere.
+3. `bunx biome check .` → clean, no fixes needed.
+4. `bun run docs:check` → "Docs are in sync."
+5. Open `src/services/publish.ts` and find the `writeFile` call inside the try block →
+   confirm `branch` is always passed and never optional for a `portfolio` write. Then open
+   `src/lib/github.ts`'s `writeFile` signature and confirm the type makes that a compile
+   error to get wrong, not a convention.
+6. **Failure case worth trying by hand:** call `get_content` with just `{ kind: "writing",
+   slug: "anything" }`, no `state` → confirm the MCP layer rejects it before the service
+   runs. That's the breaking change from slice 2, still in effect.
 
-I ran all four while preparing this summary, against the working tree including the
-uncommitted review fixes: `124/124` pass (baseline `90` confirmed in a clean worktree at
-`98eb726^`), `tsc --noEmit` clean, `biome check .` clean, `bun run docs:check` reports
-docs in sync.
+I ran all of the above while preparing this summary. All pass as described.
 
----
-
-## Test coverage
-
-| Test | Verifies | File |
-|---|---|---|
-| T-01 … T-04, T-11, T-12 | Structure keywords, unknown-keyword refusal, optional-field-absent | `src/lib/validate.test.ts` |
-| T-05 … T-10 | Constraint keywords — now asserted as exact error sets, not "contains" | `src/lib/validate.test.ts` |
-| T-13 … T-15 | `readingTime` arithmetic and the `"1 min"` floor | `src/lib/reading-time.test.ts` |
-| T-16, T-17 | The schema envelope parses; a malformed response names the missing keys | `src/lib/site.test.ts` |
-| T-18, T-19 | `/health` reports `schema: ok`; 503s with `checks.schema: "unreachable"` on failure | `src/index.test.ts` |
-| T-20, T-21 | A published read returns metadata + body, no `sha`; a draft read is unchanged | `src/services/get-content.test.ts` |
-| T-22 … T-25 | Slug guard applies to published reads; unknown slug and unreachable site refuse distinctly; GitHub is never called for a published read | `src/services/get-content.test.ts` |
-| T-26, T-27 | Through the MCP handler; `state` is required and rejected when absent | `src/tools/index.test.ts` |
-| T-52 (review) | `format: "date"` no-op stays pinned | `src/lib/validate.test.ts` |
-| T-53 (review) | An unimplemented `items` keyword is refused even with the field absent | `src/lib/validate.test.ts` |
-| T-54 (review) | A missing/non-string `type` is refused, not skipped | `src/lib/validate.test.ts` |
-| T-55 (review, undocumented in `implementation.md`) | `SiteShapeError` — no raw Zod dump, no false "unreachable" | `src/services/get-content.test.ts` |
-
-**Covered:** every schema keyword the live site actually uses (now including `$schema`
-and the scalar constraints inside `items`), both live documents end-to-end with
-`toEqual([])`, both branches of the new health check, both `state` branches of
-`get_content`, and the three distinct published-read failure shapes (not found, wrong
-shape, unreachable).
-
-**Not covered:** the health route and `get_content`'s `state: "published"` path are both
-tested against a **fake** `Site`, not the live deployment. The schema interpreter itself
-was checked by hand against the real `api/schema.json` (see The review and the fixes),
-but nobody in this session hit the deployed MCP server. That's a `curl` against the real
-deployment, not a code change, before this ships.
-
-### Test revisions across both slices
-
-Seven revisions, all already recorded in `implementation.md` → Test revisions, falling
-into five categories. Flagging them here rather than burying them — anything other than
-"none" deserves a closer look, and there's more than usual in this pair of slices.
-
-1. **Throwing stubs added to `Site` fakes, twice.** Once when `fetchSchema` was added to
-   the `Site` type (11 fakes), again when `fetchDocument` was added (12 fakes). Every
-   stub throws rather than returning a plausible value, so a test that accidentally
-   reaches the publish-document path fails loudly instead of passing quietly. Additive
-   only — no assertion, name, or fixture value touched.
-2. **A fixture's stated justification expired.** The shared `fakeSite` in
-   `src/index.test.ts` had a throwing `fetchSchema`, justified as "nothing in this file
-   reaches the publish path." Task 5 made `/health` call `fetchSchema()` on every
-   request, which broke that reasoning and started 503-ing three unrelated tests. Fixed
-   by making the shared default resolve a healthy schema and giving the one test that
-   needs a failing schema (T-19) its own inline fake.
-3. **Mechanical migrations when `state` became required.** Six existing `getContent`
-   calls and one existing `get_content` tool call gained `state: "draft"` (plus a
-   throwing `site` fake, for the service-level tests) so they kept typechecking and kept
-   testing exactly what they tested before. No assertion changed.
-4. **The review-driven fixture correction.** Described in full above — real schema
-   fixtures, two new happy-path assertions, six tightened assertions, three new tests.
-5. **A self-correction inside the review's own changes.** T-53 initially used
-   `minLength` as its example of an "unimplemented `items` keyword," which directly
-   contradicted the corrected live fixture — `stack.items.minLength` genuinely is
-   implemented now. Changed to `maxLength`, a keyword the live schema never uses,
-   mirroring T-11's precedent at the property level.
-
-**No assertion was weakened in any of the seven.** Every change either kept an existing
-check working under a wider type/required argument, or made a check stricter. Test count
-only ever grew, from 90 to 124.
+**What this can't verify:** none of these five checks touch the real GitHub API or the
+real site. See Deferred work — that's the gap that actually matters before this goes live.
 
 ---
 
-## Risks and things to watch
+## Test revisions
 
-| Risk | Likelihood | What to watch |
-|---|---|---|
-| The review fixes are uncommitted | certain, right now | Land them as their own commit before raising the PR — see The review and the fixes. |
-| `T-55` isn't recorded in `implementation.md`'s Test revisions table | low impact, but real | The test exists, passes, and is marked in-file as review-added; the paper trail should still be closed so a future reader of `implementation.md` isn't missing one entry. |
-| `format: "date"` is still a deliberate no-op — accepted whenever the schema uses it, because the live schema pairs `writing.date` with a stronger `pattern` that does the real checking. If the site ever drops that `pattern`, dates stop being validated and nothing detects it | low | Now at least covered by T-52, which pins the current behaviour. Still can't detect a future site change. |
-| The health route's and `get_content`'s published-read behaviour against the real deployed site are unverified this session | low | Run `curl https://<host>/{secret}/health` and a real `get_content` call after deploy. |
-| Anything outside this repo still calls `get_content` without `state` | depends on what exists | It will start failing immediately on deploy. See Breaking change. |
+Roughly ten, all recorded with justification in `implementation.md` → Test revisions. No
+assertion was ever weakened to reach green, and the count never dropped — it only grew,
+90 → 171. Grouped:
 
-**Rollback:** revert the nine commits (`98eb726`, `da25fc0`, `8b9b286`, `30008b5`,
-`2215d76`, `4b01a66`, `6b97c8c`, `48cf191`, and the review-fix commit once it lands), or
-revert the two slice PRs independently — they don't depend on each other in either
-direction, since slice 2 doesn't call anything slice 1 built. No migration, no data
-written anywhere.
+- **Throwing stubs added to `Github`/`Site` fakes, several times over**, each time the
+  interpreter for either type widened (new methods on `Github`: `getBranchHead`,
+  `createBranch`, `createPullRequest`, later `findPullRequest`; new methods on `Site`:
+  `fetchSchema`, `fetchDocument`). Every stub throws rather than returning a plausible
+  value, so an accidental call into the publish path fails loudly instead of passing
+  quietly. Purely additive — no assertion, name, or fixture value touched.
+- **A fixture's stated justification expired when a later task made its path live.**
+  Twice: once when `/health` started calling `fetchSchema()` on every request (a shared
+  fake's throwing stub broke three unrelated tests), and once when `publish` started
+  calling `findPullRequest()` on every run (the same throwing-stub pattern, same fix —
+  make the default answer the true one, `null`, and keep a configurable override for the
+  tests that need something else).
+- **Mechanical migrations when an argument became required.** `state` becoming required
+  on `getContent`/`get_content` meant six existing calls plus one MCP-level call needed
+  `state: "draft"` added, so they kept testing exactly what they tested before.
+- **Two genuine judgement calls, not mechanical:**
+  - **T-41 retired, superseded by slice 4.** The old T-41 asserted "an existing branch
+    refuses cleanly" — true only until slice 4 shipped, and `design.md`'s own wording
+    scoped it that way ("until slice 4 ships, a second publish is a clean refusal"). Slice
+    4's whole purpose is to replace that refusal with an update-in-place. Retired with a
+    citation to the `design.md` line that had already named its own expiry, and replaced
+    with a test pinning what still has to hold: no crash, no silent overwrite, a fresh PR
+    if none exists.
+  - **T-43's existing-branch assertion corrected after the coder escalated, not edited by
+    it.** The coder hit a test asserting `createBranch` is called zero times on a branch
+    that (by definition of the scenario) already exists, found that impossible to satisfy
+    without a speculative pre-check nothing in the spec asked for, stopped, and reported it
+    rather than changing the test itself. The test agent then corrected the assertion.
 
 ---
 
 ## Deferred work
 
-Ideas surfaced during the build that were deliberately not done. This replaces a separate
-future-work file — everything deferred lives here.
+This is the section that matters most before approving a PR that writes to a public repo.
 
-| Item | Why deferred | Worth doing? |
-|---|---|---|
-| **M-2 — proving the branch-protection ruleset on `portfolio`'s `main` actually refuses a push with the widened token.** This is by hand, and slice 3 does not start without it. | Out of scope for slices 1–2; the token widening itself is a slice 3 concern | **yes, and it is the next thing, not an optional one** — it's the only enforcement of this feature's central safety claim |
-| Detecting when the site's schema drops the `pattern` next to `format: "date"` | No live signal to detect it with — needs a human reading a future schema diff or a monitor comparing schema versions over time | maybe — only if the site's schema is ever actually changed this way |
-| Recording `T-55` in `implementation.md`'s Test revisions table | Small, mechanical, should happen in the same commit as the review fixes | yes, trivially — do it when committing the fixes |
-
-Anything marked **yes** that is non-trivial needs its own ADR before it becomes a spec.
-The live-facts lesson from this review is worth carrying forward without needing one: a
-"do not re-derive this" fact is only as good as the one check that verified it, and
-nothing compared the interpreter against the real response until a review did it by hand.
+- **M-1 has never run.** A real pull request on `portfolio`, opened by a real client
+  talking to the deployed server, with a real Vercel preview. Everything in slices 3 and 4
+  is proven only against fakes and unit tests. The service logic is well-tested; the
+  actual GitHub API has never been asked to do any of this.
+- **M-3 has never run.** Publishing the same thing twice from a real client, checked
+  against the real repo, to confirm it really does leave one pull request rather than
+  two. Also proven only against fakes.
+- **`delete_branch_on_merge` on `portfolio` is unverified, and one test (T-47) assumes
+  it's on.** That is **not** GitHub's default — it's a per-repo setting, off unless
+  someone switched it on. If it's off: merge a PR, then `revise` the same slug, and the
+  code hits `createBranch` throwing `AlreadyExists` and updates the stale branch in place
+  instead of cutting a fresh one from current `main`. Not destructive — a human still
+  merges — but the diff in that PR would be based on a stale `main`, not today's. Recorded
+  in `design.md` → Known-unverified facts. Check the setting on the real repo before
+  relying on `revise` after a merge.
+- **The PR body goes stale on an `updated` publish**, described above under the slice 4
+  review. Mitigated by the tool restating values in its response; not fixed. A real fix
+  needs `PATCH /pulls/{n}`, which is a new GitHub call and needs its own ADR before it's
+  built.
+- **`format: "date"` is still a deliberate no-op.** It's accepted as satisfied because the
+  live schema pairs it with a stronger `pattern` that does the real checking. If the site
+  ever drops that `pattern` and keeps only `format: "date"`, dates stop being validated
+  and nothing in this repo would notice.
+- **The token used during M-2 was exposed in a session transcript.** Recorded as rotated
+  immediately in `implementation.md`'s own notes — that's a self-report, not something
+  this summary independently confirmed. Worth checking before this ships.
+- **Out of scope throughout, per `design.md`, and not touched anywhere in this feature:**
+  the social post archive, an MDX parse, lazy reconciliation (archiving a draft when its
+  PR merges), merging anything, and renaming or deleting a published post.
 
 ---
 
-## Documentation updated
+## Rollback
 
-Docs are live — updated in the same commit as the change that made them stale, except
-where noted below.
-
-- [x] `specs/005-publish/design.md` — Status flipped to `approved`; live facts corrected
-      after the review (the `$schema` and `items` rows); a new **Tool descriptions**
-      section added, since none existed to check descriptions against.
-- [x] `specs/005-publish/CLAUDE.md` — the same live-facts correction, with the old
-      "exactly ten keywords" wording kept struck through rather than silently replaced.
-- [x] `specs/004-drafts/design.md` — the `save_draft`/`get_content` description blocks
-      marked superseded by spec 005, with a pointer, rather than deleted (ADRs and specs
-      are append-only).
-- [x] `specs/005-publish/implementation.md` — task states, commits, session notes, and
-      the seven test revisions, each updated as its task landed.
-- [ ] `README.md`'s ADR-001 reasoning was corrected (MDX parsing is no longer why Bun/JS
-      was chosen, per ADR-005) — **staged but not yet committed**, part of the same
-      pending commit as the review fixes.
+No data migration, nothing written anywhere by these changes themselves — the risk is
+entirely in what the deployed tool can do going forward, not in what shipping the code
+does. Each slice was raised as its own PR and none depends on a later one for its own
+tests to pass, so any slice can be reverted independently. Reverting slice 3 or 4 removes
+the `publish` tool's write capability entirely; reverting slice 2 alone reintroduces the
+old `get_content` behaviour and removes the breaking change.
