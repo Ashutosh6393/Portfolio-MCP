@@ -409,23 +409,31 @@ export function createGithub(token: string): Github {
 		async findPullRequest(repo, branch) {
 			const response = await request(
 				repo,
-				`pulls?head=${owner}:${branch}&state=all`,
+				// `sort` and `direction` are stated rather than relied on. They
+				// happen to be the endpoint's defaults, but a default is not a
+				// contract, and which pull request is "latest" decides whether a
+				// live post can be amended without `revise`.
+				`pulls?head=${owner}:${branch}&state=all&sort=created&direction=desc`,
 				{ method: "GET", accept: "application/vnd.github+json" },
 				branch,
 			);
 			const pulls = pullRequestListSchema.parse(await response.json());
-			// GitHub returns newest first. More than one can exist for a branch
-			// that has been merged and reopened, and the latest is the one that
-			// decides what happens next.
 			const latest = pulls[0];
 			if (!latest) return null;
 			return {
 				number: latest.number,
 				url: latest.html_url,
 				state: latest.state,
-				// `state` is "closed" for both merged and abandoned. Only
-				// `merged_at` tells them apart, and they need opposite treatment.
-				merged: latest.merged_at !== null,
+				// **Any** merge in this branch's history, not just the latest pull
+				// request's. The question the caller is really asking is "has this
+				// post ever gone live", and the answer has to survive a later
+				// abandoned pull request on the same branch: merge #42, open and
+				// close #57, and reading only #57 would say "never merged" and let
+				// a live post be amended without `revise`.
+				//
+				// `state` is "closed" for a merged and an abandoned one alike, so
+				// `merged_at` is the only field that can answer this.
+				merged: pulls.some((pull) => pull.merged_at !== null),
 			};
 		},
 

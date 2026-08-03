@@ -156,6 +156,15 @@ function githubFake(options: {
 		| { number: number; url: string; state: string; merged: boolean }
 		| null
 		| Error;
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. `publish` also calls
+	// `readFileWithSha("portfolio", destination, branch)` to decide create vs.
+	// update (Task 16). Left unconfigured, `undefined` is the truthful
+	// default for every fixture below: all of them describe a slug that has
+	// never been published, so the destination path does not exist on the
+	// branch yet. Configurable so a scenario can supply the file-already-
+	// present case instead.
+	fileOnBranch?: { content: string; sha: string };
 }): { github: Github; calls: Calls } {
 	const calls = emptyCalls();
 	const github: Github = {
@@ -165,12 +174,18 @@ function githubFake(options: {
 		async readFile(): Promise<never> {
 			throw new Error("readFile is not part of publish");
 		},
-		async readFileWithSha() {
-			if (options.draft instanceof Error) throw options.draft;
-			if (!options.draft) {
-				throw new Error("no draft configured for this fake");
+		async readFileWithSha(repo, path) {
+			if (repo === "workshop") {
+				if (options.draft instanceof Error) throw options.draft;
+				if (!options.draft) {
+					throw new Error("no draft configured for this fake");
+				}
+				return options.draft;
 			}
-			return options.draft;
+			// repo === "portfolio": the create-vs-update read. No file on the
+			// branch yet, for every fixture here, unless a scenario opts in.
+			if (!options.fileOnBranch) throw new GithubNotFoundError(repo, path);
+			return options.fileOnBranch;
 		},
 		async writeFile(repo, path, content, writeOptions) {
 			calls.writeFile.push({ repo, path, content, options: writeOptions });
@@ -621,6 +636,34 @@ describe("publish — nothing is ever written to portfolio on a refusal (T-43)",
 // specs/005-publish/implementation.md. T-32 already covers a writing
 // carrying show/order; design.md → "show and order" states the rule in both
 // directions and only one had a test.
+// T-64, added by slice-4 review, 2026-08-03 — see Test revisions table in
+// specs/005-publish/implementation.md and design.md → Test cases → Slice 4.
+// `githubFake`'s `readFileWithSha` used to answer the create-vs-update read
+// with the draft too, so every "first publish" test above asserted a world
+// where the destination already carried the file. This is the assertion
+// that was impossible while that lied: a fresh branch, no file on it yet,
+// writeFile carries no sha at all.
+describe("publish — a first publish sends no sha (T-64)", () => {
+	test("T-64: a first publish — no file on the destination branch yet — writes with no sha", async () => {
+		const { github, calls } = githubFake({
+			draft: draftFile(validWritingDraftMetadata(), shortBody),
+			// fileOnBranch intentionally omitted — the destination does not
+			// exist on this fresh branch yet.
+		});
+		const site = siteFake({});
+
+		const result = await publish(
+			{ github, site },
+			{ kind: "writing", slug: "crdts" },
+		);
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error("expected ok result");
+		expect(calls.writeFile).toHaveLength(1);
+		expect(calls.writeFile[0]?.options.sha).toBeUndefined();
+	});
+});
+
 describe("publish — a project without show/order (T-61)", () => {
 	test("T-61: a project published without show/order refuses, naming both, before any write", async () => {
 		const { github, calls } = githubFake({

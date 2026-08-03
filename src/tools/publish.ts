@@ -74,8 +74,37 @@ export function registerPublish(
 			// The URL leads. It is the thing to click, and the PR body behind it
 			// is where the permanent URL and the supplied show/order are stated
 			// for a human to check before merging.
+			//
+			// Which of the three happened has to be said. "Opened" after a second
+			// publish is simply false — nothing was opened — and it hides the one
+			// fact slice 4 exists to deliver: that there is still only one pull
+			// request.
+			const opening = {
+				created: `Pull request #${result.number} opened: ${result.url}`,
+				updated: `Pull request #${result.number} updated: ${result.url}\nThe same pull request now carries this change — publishing again does not open a second one.`,
+				recreated: `Pull request #${result.number} opened: ${result.url}\nThe previous pull request for this branch had been closed without merging.`,
+			}[result.status];
+
+			// On an update the PR body still describes the FIRST publish, because
+			// GitHub does not rewrite it when a branch gains a commit. That body
+			// is the only mitigation the design has for a wrong `show`/`order`
+			// (design.md → Risks), so the current values are restated here rather
+			// than left to a human reading a stale paragraph.
+			const supersededBody =
+				result.status === "updated"
+					? [
+							"",
+							"The pull request description still describes the first publish. These are the values just written:",
+							...(show !== undefined || order !== undefined
+								? [`  show: ${show}, order: ${order}`]
+								: []),
+							"  Check them in the diff before merging.",
+						]
+					: [];
+
 			const text = [
-				`Pull request #${result.number} opened: ${result.url}`,
+				opening,
+				...supersededBody,
 				"",
 				"Nothing is live until you merge it. The preview build on the PR is where to check it renders.",
 			].join("\n");

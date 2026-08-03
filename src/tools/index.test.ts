@@ -901,8 +901,19 @@ const fakeGithubForPublish: Github = {
 	async readFile(): Promise<never> {
 		throw new Error("readFile is not part of this test");
 	},
-	async readFileWithSha() {
-		return { content: publishDraftFile, sha: "draft-sha" };
+	// Test revision, 2026-08-03 — see Test revisions table in
+	// specs/005-publish/implementation.md. `publish` calls `readFileWithSha`
+	// twice: once for the workshop draft, once for the create-vs-update read
+	// against `portfolio`. This used to answer both with the draft, which
+	// made T-42's real publish look like an update (carrying `draft-sha`)
+	// when a genuine first publish carries no sha at all. `portfolio` now
+	// truthfully answers "no file here yet" — this fixture's slug has never
+	// been published before.
+	async readFileWithSha(repo, path) {
+		if (repo === "workshop") {
+			return { content: publishDraftFile, sha: "draft-sha" };
+		}
+		throw new GithubNotFoundError(repo, path);
 	},
 	async writeFile() {},
 	async deleteFile(): Promise<never> {

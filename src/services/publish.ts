@@ -211,6 +211,11 @@ export async function publish(
 		// not a refusal: the file on it gets updated below and the existing pull
 		// request picks the change up. This is what makes publishing twice leave
 		// one PR rather than two (T-45).
+		//
+		// `POST /git/refs` also answers 422 for a base sha that does not exist,
+		// which arrives here wearing the same error. That one is not reachable —
+		// `base` came from `getBranchHead` moments ago — and if it ever is, the
+		// write below fails and says so rather than this line hiding it.
 		if (!(error instanceof GithubAlreadyExistsError)) {
 			return { ok: false, error: describeGithubFailure(error) };
 		}

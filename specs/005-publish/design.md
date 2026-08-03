@@ -278,6 +278,40 @@ that draft instead.
 For the catalogue rather than one item, use list_content.
 ```
 
+**`publish`** — new in this spec. Added 2026-08-03 after slice 4's review, which found
+this section covered `get_content` and `save_draft` but not the tool the spec is named
+after, so the "check it by eye against `design.md`" instruction had nothing to check:
+
+```
+Publish a draft: open a pull request that adds it to the live site.
+
+This does not make anything live. It opens a PR you merge yourself, and
+the Vercel preview build on that PR is where you check the post renders.
+Nothing here can merge.
+
+kind:
+  "writing"  a blog entry, live at /writing/{slug}
+  "project"  a portfolio project page, live at /projects/{slug}
+
+show and order are required for a project and refused for a writing.
+They control the homepage and they are not computed — ask which the
+project should have and pass the answer. list_content shows what the
+live projects use today.
+
+The draft's metadata is checked against the site's own schema first. If
+a field is missing or wrong the whole list comes back at once and
+nothing is written. readingTime is computed from the body — do not
+supply it.
+
+revise: pass true to publish changes to something already live, or to
+a post whose pull request has already been merged. Without it those
+are refused, because changing a live post is deliberate. It is not
+needed for an open pull request — publishing the same slug again just
+updates it, and leaves one PR rather than two.
+
+The slug becomes the permanent public URL after merge.
+```
+
 **`save_draft`** — the slug paragraph only. Everything else is spec 004's, unchanged:
 
 ```
@@ -454,6 +488,17 @@ listed here, there is no test for it, and it does not get built.
 | T-49 | A published slug + `revise: true` proceeds | unit | the slug is in `content.json`, `revise` passed → publish continues |
 | T-50 | `revise` updates an existing file rather than creating | unit | the file exists on the branch → the commit carries its `sha` |
 | T-51 | `revise` on a featured project keeps it featured | unit | `yapper` + `show: true, order: 2` → the written file carries both |
+| T-64 | **Added, slice 4 review, 2026-08-03.** A first publish sends no `sha` | unit | a fresh branch, no file on the destination yet → `writeFile`'s `options.sha` is `undefined` |
+
+### Known-unverified facts
+
+Recorded rather than assumed. Both were surfaced by slice 4's review and neither could be
+closed from inside this repo.
+
+| Fact | Why it matters | Status |
+|---|---|---|
+| **`delete_branch_on_merge` on `portfolio`.** T-47 (merged PR + `revise`) is written assuming GitHub deletes the branch on merge, so a fresh `createBranch` succeeds. **That is not GitHub's default** — it is a per-repo setting and it is off unless switched on. | If it is off, merged + `revise` takes the other path entirely: `createBranch` throws `AlreadyExists`, the stale branch is updated in place, and the change is never rebased onto current `main`. The design row for T-47 says "a new branch and a new PR" and the code would deliver neither. Not destructive — a human still merges — but the diff would be against a stale base. | **Unverified.** Check the setting on `Portfolio-new`. If it is off, either switch it on or add the branch-survives variant of T-47. |
+| **The PR body goes stale on an `updated` publish.** GitHub does not rewrite a pull request's body when its branch gains a commit, and `renderPrBody` only runs on the create path. | `design.md` → Risks names the PR body as the **only** mitigation for a model inventing `show`/`order`. On a second publish that paragraph still describes the first one. | **Mitigated, not fixed.** The tool now restates the values just written in its own response and says the body describes the first publish. Refreshing the body itself needs `PATCH /pulls/{n}`, which is a new API call and a new decision — it needs an ADR, not a patch here. |
 
 ### Manual verification
 
