@@ -109,6 +109,26 @@ export class GithubConflictError extends Error {
 	}
 }
 
+// The token is missing a permission. GitHub answers 404 for most things a
+// token cannot see — which is why no message here claims a path is absent —
+// but it answers a plain 403 for an endpoint the token's *scopes* exclude,
+// and that distinction is worth keeping.
+//
+// Verified live 2026-08-03 during M-1: `POST /pulls` with a token holding
+// `Contents: write` but not `Pull requests: write` returns
+// 403 "Resource not accessible by personal access token". They are separate
+// fine-grained permissions, and ADR-005 decision 8 was wrong to say opening a
+// pull request came through the same one as committing.
+export class GithubForbiddenError extends Error {
+	constructor(
+		readonly repo: Repo,
+		readonly subject: string,
+	) {
+		super(`The token is not permitted to do that on the ${repo} repo.`);
+		this.name = "GithubForbiddenError";
+	}
+}
+
 // A create — a write with no `sha` — aimed at a path that already holds a file.
 export class GithubAlreadyExistsError extends Error {
 	constructor(
@@ -246,6 +266,12 @@ export function createGithub(token: string): Github {
 		);
 		if (response.status === 404) {
 			throw new GithubNotFoundError(repo, subject);
+		}
+		// Checked before the rest: a missing scope is a setup problem, and it
+		// looks nothing like the states below. Saying so by name is what turns
+		// "GitHub did not complete the request" into an actionable sentence.
+		if (response.status === 403) {
+			throw new GithubForbiddenError(repo, subject);
 		}
 		// 409 and 422 are verified, not assumed: M-1 made both rejections happen
 		// against the real repo on 2026-08-02 and the live API returned exactly

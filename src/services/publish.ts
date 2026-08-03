@@ -3,6 +3,7 @@ import {
 	type Github,
 	GithubAlreadyExistsError,
 	GithubConflictError,
+	GithubForbiddenError,
 	GithubNotFoundError,
 } from "../lib/github";
 import {
@@ -329,6 +330,13 @@ export async function publish(
 function describeGithubFailure(error: unknown): string {
 	if (error instanceof GithubNotFoundError) {
 		return "GitHub refused the request. Either the path is not there or the token cannot reach it.";
+	}
+	// The one failure a retry can never fix, so it must not read like the
+	// others. Found during M-1: the token had `Contents: write` but not
+	// `Pull requests: write`, and the generic message sent the reader looking
+	// for a network fault.
+	if (error instanceof GithubForbiddenError) {
+		return "The GitHub token is missing a permission. Publishing needs Contents: read and write AND Pull requests: read and write on the portfolio repo. Nothing further was written.";
 	}
 	// Reachable in one real case: a slug merged minutes ago is not yet in
 	// `content.json` (the site prerenders), so the published check passes and

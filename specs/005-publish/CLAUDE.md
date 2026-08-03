@@ -98,6 +98,10 @@ Checked live on 2026-08-03. Re-checking costs a call and risks writing a guess i
 - Published files in `portfolio` are hand-written **JS object literals** with unquoted keys.
   `renderDraft` emits JSON-shaped metadata. Both are valid JS and MDX compiles either.
 - `list_content`'s `state` is **required**, not optional. `get_content` mirrors it.
+- **The token needs `Contents: write` AND `Pull requests: write` on `portfolio`.** They are
+  separate fine-grained permissions. ADR-005 decision 8 says otherwise and is wrong —
+  verified live during M-1, `POST /pulls` returns 403 without the second one.
+- **`delete_branch_on_merge` is OFF on `Portfolio-new`**, so a merged publish branch survives.
 - Repo constants live in `lib/github.ts`, never in env. The site repo is `Portfolio-new`;
   the domain word stays `portfolio`.
 - `zod` is v4. `@modelcontextprotocol/server@2.0.0` wants `inputSchema` as a `z.object({})`.

@@ -490,15 +490,15 @@ listed here, there is no test for it, and it does not get built.
 | T-51 | `revise` on a featured project keeps it featured | unit | `yapper` + `show: true, order: 2` → the written file carries both |
 | T-64 | **Added, slice 4 review, 2026-08-03.** A first publish sends no `sha` | unit | a fresh branch, no file on the destination yet → `writeFile`'s `options.sha` is `undefined` |
 
-### Known-unverified facts
+### Facts checked during M-1, 2026-08-03
 
-Recorded rather than assumed. Both were surfaced by slice 4's review and neither could be
-closed from inside this repo.
+Both were open questions before the first live run. Neither could be settled from inside
+this repo, and one of them contradicts the source ADR.
 
-| Fact | Why it matters | Status |
-|---|---|---|
-| **`delete_branch_on_merge` on `portfolio`.** T-47 (merged PR + `revise`) is written assuming GitHub deletes the branch on merge, so a fresh `createBranch` succeeds. **That is not GitHub's default** — it is a per-repo setting and it is off unless switched on. | If it is off, merged + `revise` takes the other path entirely: `createBranch` throws `AlreadyExists`, the stale branch is updated in place, and the change is never rebased onto current `main`. The design row for T-47 says "a new branch and a new PR" and the code would deliver neither. Not destructive — a human still merges — but the diff would be against a stale base. | **Unverified.** Check the setting on `Portfolio-new`. If it is off, either switch it on or add the branch-survives variant of T-47. |
-| **The PR body goes stale on an `updated` publish.** GitHub does not rewrite a pull request's body when its branch gains a commit, and `renderPrBody` only runs on the create path. | `design.md` → Risks names the PR body as the **only** mitigation for a model inventing `show`/`order`. On a second publish that paragraph still describes the first one. | **Mitigated, not fixed.** The tool now restates the values just written in its own response and says the body describes the first publish. Refreshing the body itself needs `PATCH /pulls/{n}`, which is a new API call and a new decision — it needs an ADR, not a patch here. |
+| Fact | Finding |
+|---|---|
+| **`Contents: write` does NOT grant opening a pull request.** | **ADR-005 decision 8 is wrong on this point.** It says *"GitHub grants committing to `main` and opening a PR through the same permission"*. They are separate fine-grained permissions — `Contents` and `Pull requests`. Verified live: `POST /pulls` with a token holding `Contents: write` but not `Pull requests: write` returns **403 `Resource not accessible by personal access token`**. The token needs **both**. The decision itself still stands — `Contents: write` alone really does permit committing to `main`, so the ruleset is still the only thing preventing it — but the stated reason was half wrong, and a reader sizing the token from that sentence under-scopes it. This is recorded here rather than by editing the ADR, which is append-only. |
+| **`delete_branch_on_merge` on `Portfolio-new` is OFF.** | Confirmed by the owner. So a merged publish branch **survives**. T-47's fixture comment said GitHub deletes it, which is not the default and is not true here. The assertions T-47 makes still hold either way — `createBranch` is called once and throws, `createPullRequest` is called once — but the comment was wrong and the branch-survives path is the real one. On `revise` after a merge, the surviving branch is updated rather than cut fresh from `main`. That is still correct: the branch was merged into `main`, so it is an ancestor, and the new pull request shows only the new commit. |
 
 ### Manual verification
 
