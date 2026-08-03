@@ -26,12 +26,19 @@ import { createHandler } from "./index";
 // exercised here reaches the publish path, so this throws rather than
 // return a plausible value: an accidental call fails loudly instead of
 // passing silently.
+// Test revision, 2026-08-03 (second) — see Test revisions table in
+// specs/005-publish/implementation.md. Task 6 widens `Site` with
+// `fetchDocument`, so every fake must carry it to typecheck. Same reasoning:
+// throws rather than returning a plausible value.
 const fakeSite: Site = {
 	async fetchContent() {
 		return [];
 	},
 	async fetchSchema(): Promise<never> {
 		throw new Error("fetchSchema is not part of this test");
+	},
+	async fetchDocument(): Promise<never> {
+		throw new Error("fetchDocument is not part of this test");
 	},
 };
 
@@ -317,6 +324,9 @@ const fakeSiteWithPublishedPost: Site = {
 	},
 	async fetchSchema(): Promise<never> {
 		throw new Error("fetchSchema is not part of this test");
+	},
+	async fetchDocument(): Promise<never> {
+		throw new Error("fetchDocument is not part of this test");
 	},
 };
 

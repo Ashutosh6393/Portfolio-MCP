@@ -44,6 +44,35 @@ export const schemaEnvelopeSchema = z.object({
 
 export type SchemaEnvelope = z.infer<typeof schemaEnvelopeSchema>;
 
+// One published item, from `api/{kind}/{slug}`. `body` is raw MDX **without**
+// the metadata block — the route imports the real object and hands it back
+// separately, which is why published content is read here and never through
+// GitHub. `readDraft` pointed at a `portfolio` file would return null or
+// plausible-looking wrong metadata (ADR-005 decision 7).
+//
+// No `sha`: there is no draft to overwrite, so there is nothing to pass back.
+export const documentSchema = z.object({
+	metadata: z.record(z.string(), z.unknown()),
+	body: z.string(),
+});
+
+export type SiteDocument = z.infer<typeof documentSchema>;
+
+// The site answered, and said there is no such slug. Distinct from the site
+// being unreachable: one means a wrong slug, the other means a dead host, and
+// they send the reader in different directions (T-23 vs T-24). Follows the
+// `GithubNotFoundError` precedent — callers branch on `instanceof`, never on
+// a message string.
+export class SiteNotFoundError extends Error {
+	constructor(
+		readonly kind: "writing" | "project",
+		readonly slug: string,
+	) {
+		super(`No published ${kind} at "${slug}"`);
+		this.name = "SiteNotFoundError";
+	}
+}
+
 const contentUrl = {
 	writing: "https://ashutoshverma.dev/api/writing/content.json",
 	project: "https://ashutoshverma.dev/api/projects/content.json",
@@ -51,9 +80,23 @@ const contentUrl = {
 
 const schemaUrl = "https://ashutoshverma.dev/api/schema.json";
 
+// The same singular/plural asymmetry as `contentUrl` above, and for the same
+// reason: the site's routes are `/api/writing` and `/api/projects` while the
+// domain word for the latter is singular. Both are correct in their own place.
+// This map is the only place the two spellings meet, which is deliberate —
+// interpolating the kind into a URL by hand is how the plural gets lost.
+const documentUrl = {
+	writing: (slug: string) => `https://ashutoshverma.dev/api/writing/${slug}`,
+	project: (slug: string) => `https://ashutoshverma.dev/api/projects/${slug}`,
+};
+
 export type Site = {
 	fetchContent(kind: "writing" | "project"): Promise<unknown>;
 	fetchSchema(): Promise<SchemaEnvelope>;
+	fetchDocument(
+		kind: "writing" | "project",
+		slug: string,
+	): Promise<SiteDocument>;
 };
 
 // Types derived from the schemas above, for the service layer (Task 6) —
@@ -84,5 +127,18 @@ export const site: Site = {
 			);
 		}
 		return schemaEnvelopeSchema.parse(await response.json());
+	},
+
+	async fetchDocument(kind, slug) {
+		const response = await fetch(documentUrl[kind](slug));
+		// A 404 here is unambiguous, unlike GitHub's: the site is public, so
+		// there is no token scope that could hide a post that exists.
+		if (response.status === 404) {
+			throw new SiteNotFoundError(kind, slug);
+		}
+		if (!response.ok) {
+			throw new Error(`Failed to fetch ${kind}/${slug} from ashutoshverma.dev`);
+		}
+		return documentSchema.parse(await response.json());
 	},
 };

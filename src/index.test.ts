@@ -31,12 +31,21 @@ const testEnv = {
 // `fetchSchema()` on every request, so this shared default now needs to
 // resolve like a healthy site; T-19 builds its own throwing `Site` inline
 // instead of relying on this one to fail.
+// Test revision, 2026-08-03 (third) — see Test revisions table in
+// specs/005-publish/implementation.md. Task 6 widens `Site` with
+// `fetchDocument`, so every fake must carry it to typecheck. Nothing in this
+// file reaches the publish path, so this throws rather than returning a
+// plausible value: an accidental call fails loudly instead of passing
+// silently.
 const fakeSite: Site = {
 	async fetchContent() {
 		return [];
 	},
 	async fetchSchema() {
 		return { writing: {}, project: {} };
+	},
+	async fetchDocument(): Promise<never> {
+		throw new Error("fetchDocument is not part of this test");
 	},
 };
 
@@ -160,6 +169,9 @@ describe("GET /{secret}/health", () => {
 			},
 			async fetchSchema(): Promise<never> {
 				throw new Error("fetchSchema is not part of this test");
+			},
+			async fetchDocument(): Promise<never> {
+				throw new Error("fetchDocument is not part of this test");
 			},
 		};
 		const app = createApp(testEnv, { ...testDeps, site: unreachableSite });
@@ -303,6 +315,9 @@ describe("GET /{secret}/health — the schema check", () => {
 			},
 			async fetchSchema(): Promise<never> {
 				throw new Error("simulated schema fetch failure");
+			},
+			async fetchDocument(): Promise<never> {
+				throw new Error("fetchDocument is not part of this test");
 			},
 		};
 		const app = createApp(testEnv, { ...testDeps, site: siteWithBadSchema });

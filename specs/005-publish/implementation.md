@@ -5,10 +5,10 @@ reads this file first and picks up from it.
 
 Update it after every task. Never batch updates.
 
-- **Status:** in-progress — slice 1
+- **Status:** in-progress — slice 2
 - **Branch:** `feat/publish`
 - **Spec:** `design.md` · **ADR:** `docs/adr/005-publish-opens-a-pull-request.md`
-- **Current task:** none — slice 1 complete, awaiting review. Next is task 6.
+- **Current task:** 7 — `services/get-content.ts`, the `state` argument
 
 ---
 
@@ -39,7 +39,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 3 | `lib/validate.ts` — constraints: `minLength`, `enum`, `pattern`, `format`, `minItems`, `items` | 2 | T-05, T-06, T-07, T-08, T-09, T-10 | 1 | `done` | 1/3 | `8b9b286` |
 | 4 | `lib/site.ts` — `fetchSchema` and the two-key envelope schema | — | T-16, T-17 | 1 | `done` | 1/3 | `30008b5` |
 | 5 | `src/index.ts` — the `schema` health check | 4 | T-18, T-19 | 1 | `done` | 1/3 | `2215d76` |
-| 6 | `lib/site.ts` — `fetchDocument(kind, slug)` and its response schema | — | T-20 (via 7) | 2 | `pending` | 0/3 | — |
+| 6 | `lib/site.ts` — `fetchDocument(kind, slug)` and its response schema | — | T-20 (via 7) | 2 | `done` | 1/3 | `pending` |
 | 7 | `services/get-content.ts` — the `state` argument and the published branch | 6 | T-20, T-21, T-22, T-23, T-24, T-25 | 2 | `pending` | 0/3 | — |
 | 8 | `tools/get-content.ts` — `state` in the input schema, description rewritten | 7 | T-26, T-27 | 2 | `pending` | 0/3 | — |
 | 9 | `tools/save-draft.ts` — the slug instruction in the description. **Text only.** | — | none — see note | 2 | `pending` | 0/3 | — |
@@ -122,6 +122,7 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 |---|---|---|---|
 | 2026-08-03 | The 11 `Site` fakes in `src/index.test.ts` (2), `src/services/list-content.test.ts` (5), `src/services/save-draft.test.ts` (2) and `src/tools/index.test.ts` (2), plus the import line in `src/lib/site.test.ts` | Added a `fetchSchema` stub to every `Site` fake so each satisfies the widened `Site`. All stubs throw. Additions only — no assertion, test name, `describe` or fixture value touched, count stays at 107. Separately reformatted the multi-name import in `src/lib/site.test.ts` to satisfy Biome (formatting only, no assertion touched). | Task 4 widens `Site` (`src/lib/site.ts`) with `fetchSchema()`, so every fake must carry it to typecheck — 12 `TS2741` errors otherwise. Same pre-authorised move spec 004 recorded at Task 2 (commit `93fc8ce`): the test agent widens the fakes ahead of the code. Stubs throw rather than return a plausible value: no test in these files should reach the publish path, so an accidental call fails loudly instead of passing silently. |
 | 2026-08-03 | `src/index.test.ts`: the module-level `fakeSite.fetchSchema` stub, plus T-19 | Changed the module-level `fakeSite.fetchSchema` from throwing to resolving `{ writing: {}, project: {} }`, so the shared default represents a healthy site. Gave T-19 its own inline `Site` (`siteWithBadSchema`, mirroring `unreachableSite` in T-17) whose `fetchSchema` throws, so T-19 no longer depends on the shared default failing. No assertion, test name, or any other fixture touched; count stays at 109 (107 + T-18/T-19 added by Task 5). | Task 5 adds a `schema` check to `GET /{secret}/health` that calls `deps.site.fetchSchema()` on every request. That invalidated the Task 4 stub's justification ("nothing in this file reaches the publish path"), so T-05, T-16 and 002-T-04 — which assert on `checks.site`/`checks.github` and have nothing to do with the schema check — started getting an incidental 503 from the shared fake instead of the 200 they test for. `src/index.ts` is correct; the fixture's premise was stale. |
+| 2026-08-03 | The 12 `Site` fakes in `src/index.test.ts` (3), `src/services/list-content.test.ts` (5), `src/services/save-draft.test.ts` (2, via the shared `fetchDocumentNotPartOfThisTest` helper) and `src/tools/index.test.ts` (2) | Added a `fetchDocument` stub to every `Site` fake so each satisfies the widened `Site`. All stubs throw. Additions only — no assertion, test name, `describe` or fixture value touched, count stays at 109. | Task 6 widens `Site` (`src/lib/site.ts`) with `fetchDocument(kind, slug)`, so every fake must carry it to typecheck — 12 `TS2741` errors otherwise. Same pre-authorised move as the Task 4 row above. Stubs throw rather than return a plausible value: no test in these files should reach the publish-document read path, so an accidental call fails loudly instead of passing silently. |
 
 ---
 

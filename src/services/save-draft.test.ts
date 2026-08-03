@@ -75,6 +75,14 @@ async function fetchSchemaNotPartOfThisTest(): Promise<never> {
 	throw new Error("fetchSchema is not part of this test");
 }
 
+// Test revision, 2026-08-03 (second) — see Test revisions table in
+// specs/005-publish/implementation.md. Task 6 widens `Site` with
+// `fetchDocument`, so every fake must carry it to typecheck too. Same
+// reasoning as fetchSchemaNotPartOfThisTest above.
+async function fetchDocumentNotPartOfThisTest(): Promise<never> {
+	throw new Error("fetchDocument is not part of this test");
+}
+
 // A site whose fetchContent returns whatever items are handed to it,
 // regardless of kind — the tests only ever exercise one kind at a time.
 function siteReturning(items: Writing[] | Project[]): Site {
@@ -83,6 +91,7 @@ function siteReturning(items: Writing[] | Project[]): Site {
 			return items;
 		},
 		fetchSchema: fetchSchemaNotPartOfThisTest,
+		fetchDocument: fetchDocumentNotPartOfThisTest,
 	};
 }
 
@@ -94,6 +103,7 @@ function siteThatThrows(): Site {
 			throw new Error("ashutoshverma.dev did not respond");
 		},
 		fetchSchema: fetchSchemaNotPartOfThisTest,
+		fetchDocument: fetchDocumentNotPartOfThisTest,
 	};
 }
 
