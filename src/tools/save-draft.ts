@@ -4,8 +4,16 @@ import type { Github } from "../lib/github";
 import type { Site } from "../lib/site";
 import { saveDraft } from "../services/save-draft";
 
-// design.md → Approach → The tool descriptions → `save_draft`: specified
-// verbatim, not authored here. Never reword.
+// The slug paragraph gained its second and third sentences in spec 005
+// (ADR-005 decision 4b). Nothing else here changed, and `save_draft`'s
+// behaviour is untouched — drafts are still not validated (ADR-004).
+//
+// The instruction has no enforcement and cannot have any: the server never
+// sees the conversation, so it can never know whether the question was
+// asked. Refusing a slug that matches the kebab-cased title was considered
+// and rejected — that is very often the slug a human would genuinely choose,
+// so it would refuse the correct answer most of the time. The backstop is
+// the PR body, which leads with the permanent URL.
 const description = `Save a draft of a writing or a project to the private workshop repo.
 
 Drafts are not validated and they are not published. Any JSON object is
@@ -17,7 +25,9 @@ kind:
   "project"  a portfolio project page
 
 slug is the kebab-case URL segment the draft is filed under. It must not
-already be published.
+already be published. It becomes the permanent public URL once the post
+is merged, so if the human has not named one, ask — do not derive it
+from the title.
 
 Saving without a sha creates a new draft, and fails if one already exists
 at that slug. To change an existing draft, call get_content first, edit

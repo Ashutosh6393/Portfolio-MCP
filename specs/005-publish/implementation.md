@@ -8,7 +8,7 @@ Update it after every task. Never batch updates.
 - **Status:** in-progress — slice 2
 - **Branch:** `feat/publish`
 - **Spec:** `design.md` · **ADR:** `docs/adr/005-publish-opens-a-pull-request.md`
-- **Current task:** 9 — `tools/save-draft.ts`, the slug instruction
+- **Current task:** none — slice 2 complete, awaiting review. Next is M-2.
 
 ---
 
@@ -42,7 +42,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 6 | `lib/site.ts` — `fetchDocument(kind, slug)` and its response schema | — | T-20 (via 7) | 2 | `done` | 1/3 | `pending` |
 | 7 | `services/get-content.ts` — the `state` argument and the published branch | 6 | T-20, T-21, T-22, T-23, T-24, T-25 | 2 | `done` | 1/3 | `pending` |
 | 8 | `tools/get-content.ts` — `state` in the input schema, description rewritten | 7 | T-26, T-27 | 2 | `done` | 1/3 | `pending` |
-| 9 | `tools/save-draft.ts` — the slug instruction in the description. **Text only.** | — | none — see note | 2 | `pending` | 0/3 | — |
+| 9 | `tools/save-draft.ts` — the slug instruction in the description. **Text only.** | — | none — see note | 2 | `done` | 1/3 | `pending` |
 | — | **M-2 — prove the ruleset refuses a push to `main`.** The ruleset is already configured; this proves it refuses *this* token. Blocks slice 3. | — | M-2 | 3 | `pending` | — | — |
 | 10 | `lib/github.ts` — generalise `request` to take a path suffix. **Refactor only, no new behaviour.** | M-2 | none — existing suite stays green | 3 | `pending` | 0/3 | — |
 | 11 | `lib/github.ts` — `getBranchHead`, `createBranch`, `createPullRequest`; a `branch` option on `writeFile`; narrow the write functions' `repo` parameter | 10 | none — see design.md → Seams | 3 | `pending` | 0/3 | — |
@@ -101,7 +101,7 @@ Max 5–7 files (excluding tests) and 500 lines per slice.
 | Slice | Contains | Files | State | PR |
 |---|---|---|---|---|
 | 1 | Tasks 1–5 — the schema arrives, health reports it | 4 | `awaiting review` | — |
-| 2 | Tasks 6–9 — `get_content` reads published content | 4 | `pending` | — |
+| 2 | Tasks 6–9 — `get_content` reads published content | 4 | `awaiting review` | — |
 | 3 | M-2, Tasks 10–14, M-1 — the PR path | 5 | `pending` | — |
 | 4 | Tasks 15–18, M-3 — idempotency and `revise` | 2 | `pending` | — |
 
