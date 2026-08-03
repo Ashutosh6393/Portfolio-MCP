@@ -5,10 +5,10 @@ reads this file first and picks up from it.
 
 Update it after every task. Never batch updates.
 
-- **Status:** in-progress — slice 2
+- **Status:** in-progress — slice 3
 - **Branch:** `feat/publish`
 - **Spec:** `design.md` · **ADR:** `docs/adr/005-publish-opens-a-pull-request.md`
-- **Current task:** none — slice 2 complete, awaiting review. Next is M-2.
+- **Current task:** 10 — `lib/github.ts`, generalise `request`. M-2 has passed.
 
 ---
 
@@ -43,7 +43,7 @@ In dependency order. Each task must be independently testable and map to test ID
 | 7 | `services/get-content.ts` — the `state` argument and the published branch | 6 | T-20, T-21, T-22, T-23, T-24, T-25 | 2 | `done` | 1/3 | `6b97c8c` |
 | 8 | `tools/get-content.ts` — `state` in the input schema, description rewritten | 7 | T-26, T-27 | 2 | `done` | 1/3 | `6b97c8c` |
 | 9 | `tools/save-draft.ts` — the slug instruction in the description. **Text only.** | — | none — see note | 2 | `done` | 1/3 | `48cf191` |
-| — | **M-2 — prove the ruleset refuses a push to `main`.** The ruleset is already configured; this proves it refuses *this* token. Blocks slice 3. | — | M-2 | 3 | `pending` | — | — |
+| — | **M-2 — prove the ruleset refuses a push to `main`.** The ruleset is already configured; this proves it refuses *this* token. Blocks slice 3. | — | M-2 | 3 | `done` 2026-08-03 | — | see below |
 | 10 | `lib/github.ts` — generalise `request` to take a path suffix. **Refactor only, no new behaviour.** | M-2 | none — existing suite stays green | 3 | `pending` | 0/3 | — |
 | 11 | `lib/github.ts` — `getBranchHead`, `createBranch`, `createPullRequest`; a `branch` option on `writeFile`; narrow the write functions' `repo` parameter | 10 | none — see design.md → Seams | 3 | `pending` | 0/3 | — |
 | 12 | `lib/publish.ts` — `publishedPath`, `branchName`, `publicUrl`, `renderPrBody`. Pure. | — | T-39, T-40 | 3 | `pending` | 0/3 | — |
@@ -133,6 +133,25 @@ A revision on a task that was failing gets extra scrutiny from the human reviewe
 ## Session notes
 
 Newest first. Keep entries short — this is a handoff, not a diary.
+
+### 2026-08-03 — M-2 passed
+
+**M-2 is closed. Slice 3 is unblocked.** Run by hand against the real repo with the
+widened token. A direct push of an empty commit to `Portfolio-new`'s `main` was refused:
+
+```
+remote: error: GH013: Repository rule violations found for refs/heads/main.
+remote: - Changes must be made through a pull request.
+ ! [remote rejected] main -> main (push declined due to repository rule violations)
+```
+
+The token was deliberately used rather than the owner's own git credentials — a repo
+admin is usually on the ruleset's bypass list, so testing as the admin would have proved
+nothing about the actor the server actually runs as.
+
+The token used for this check was exposed in the session transcript and was rotated
+immediately afterwards. M-2's result is unaffected: it proves the ruleset, not one
+token string.
 
 ### 2026-08-03 — slices 1 and 2, and the review
 
