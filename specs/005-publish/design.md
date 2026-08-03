@@ -8,8 +8,8 @@ described here.
 > This document assumes that decision is made and describes how it lands in the codebase.
 
 - **Source ADR:** `docs/adr/005-publish-opens-a-pull-request.md`
-- **Status:** draft
-- **Approved by:** —
+- **Status:** approved
+- **Approved by:** Ashutosh Verma, 2026-08-03
 
 > Implementation does not start until Status is `approved`.
 
