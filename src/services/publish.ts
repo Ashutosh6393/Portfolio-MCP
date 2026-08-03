@@ -2,11 +2,12 @@ import { draftPath, isSlug, readDraft, renderDraft } from "../lib/draft";
 import {
 	type Github,
 	GithubAlreadyExistsError,
+	GithubConflictError,
 	GithubNotFoundError,
 } from "../lib/github";
 import {
 	branchName,
-	publicUrl,
+	branchUrl,
 	publishedPath,
 	pullRequestTitle,
 	renderPrBody,
@@ -65,14 +66,18 @@ export async function publish(
 		};
 	}
 
-	if (
-		args.kind === "project" &&
-		(args.show === undefined || args.order === undefined)
-	) {
-		return {
-			ok: false,
-			error: `Publishing a project needs show and order. They are not computed — ask which the project should have, then pass both. The current values are in list_content.`,
-		};
+	// Narrowed once, here, rather than cast at each use. TypeScript cannot see
+	// that the guard above makes the two defined, and a cast is exactly the
+	// construct that would survive somebody reordering this.
+	let homepage: { show: boolean; order: number } | undefined;
+	if (args.kind === "project") {
+		if (args.show === undefined || args.order === undefined) {
+			return {
+				ok: false,
+				error: `Publishing a project needs show and order. They are not computed — ask which the project should have, then pass both. The current values are in list_content.`,
+			};
+		}
+		homepage = { show: args.show, order: args.order };
 	}
 
 	const published = await listContent(deps, { kind: args.kind });
@@ -148,10 +153,9 @@ export async function publish(
 	// `additionalProperties: false` and omits both keys, so attaching first
 	// fails every project publish; skipping the attach drops a featured project
 	// off the homepage. T-31 asserts the ordering, not just the result.
-	const metadata: Record<string, unknown> =
-		args.kind === "project"
-			? { ...validated, show: args.show, order: args.order }
-			: validated;
+	const metadata: Record<string, unknown> = homepage
+		? { ...validated, ...homepage }
+		: validated;
 
 	const branch = branchName(args.kind, args.slug);
 	const destination = publishedPath(args.kind, args.slug);
@@ -204,8 +208,10 @@ export async function publish(
 					: renderPrBody({
 							kind: "project",
 							slug: args.slug,
-							show: args.show as boolean,
-							order: args.order as number,
+							// `homepage` is defined whenever kind is "project" — the
+							// guard above returns otherwise.
+							show: homepage?.show ?? false,
+							order: homepage?.order ?? 0,
 						}),
 			head: branch,
 			base: "main",
@@ -216,9 +222,15 @@ export async function publish(
 		// The branch survives a failure here on purpose. Deleting it would throw
 		// away the commit, and the branch name is deterministic, so a retry
 		// finds it rather than duplicating work.
+		//
+		// This is the only path that can leave `portfolio` half-written — a
+		// branch, maybe a commit, and no pull request — so the message has to
+		// say where to look. That is the branch on GitHub, not the live site:
+		// the post is not published, so its public URL is a 404 and knows
+		// nothing about pull requests.
 		return {
 			ok: false,
-			error: `${describeGithubFailure(error)} The branch ${branch} may exist — check ${publicUrl(args.kind, args.slug)} has no open pull request before retrying.`,
+			error: `${describeGithubFailure(error)} The branch ${branch} may already exist with the commit on it. Check ${branchUrl(branch)} before retrying.`,
 		};
 	}
 }
@@ -226,10 +238,25 @@ export async function publish(
 // A 404 never claims the path is absent. GitHub answers 404, not 403, for a
 // write the token may not make, so "missing" and "mis-scoped token" are the
 // same response from here.
+//
+// Nothing interpolates an unknown error's `.message`. Two of the calls on this
+// path parse their response with Zod, so the generic branch would otherwise
+// hand the model a multi-line issue dump (CLAUDE.md → Don't). "Unreachable" is
+// also not said unless it is meant: a 409 or a 422 means GitHub answered, and
+// sending the reader to check the network wastes the turn.
 function describeGithubFailure(error: unknown): string {
 	if (error instanceof GithubNotFoundError) {
 		return "GitHub refused the request. Either the path is not there or the token cannot reach it.";
 	}
-	const message = error instanceof Error ? error.message : "unknown error";
-	return `GitHub is unreachable: ${message}`;
+	// Reachable in one real case: a slug merged minutes ago is not yet in
+	// `content.json` (the site prerenders), so the published check passes and
+	// the write lands on a file that already exists. Nothing was overwritten —
+	// no `sha` was sent, which is why GitHub refused rather than replacing it.
+	if (error instanceof GithubAlreadyExistsError) {
+		return "That file already exists in the portfolio repo, so this was probably published already — the site's catalogue can lag a few minutes behind a merge. Nothing was overwritten.";
+	}
+	if (error instanceof GithubConflictError) {
+		return "The file changed in the portfolio repo since it was read. Nothing was written.";
+	}
+	return "GitHub did not complete the request, and nothing further was written.";
 }

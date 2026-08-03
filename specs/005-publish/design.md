@@ -438,6 +438,9 @@ listed here, there is no test for it, and it does not get built.
 | T-41 | An existing branch refuses cleanly | unit | the branch already exists → a refusal naming it, not a crash and not a silent overwrite |
 | T-42 | Through the MCP handler | integration | `publish` → the PR URL comes back; a refusal is `isError: true` at HTTP 200 |
 | T-43 | Nothing is written to `portfolio` on any refusal | unit | each refusal path above → the github fake records zero writes |
+| T-61 | **Added, slice 3 review, 2026-08-03.** A project without `show`/`order` refuses | unit | `kind: "project"` with `order` omitted → a refusal naming both `show` and `order`, zero calls to `createBranch`, `writeFile`, `createPullRequest` |
+| T-62 | **Added, slice 3 review, 2026-08-03.** `writeFile` fails after the branch was cut | unit | the commit step throws → a refusal naming the branch and the GitHub branch URL (`github.com/.../tree/publish/...`), never the live site URL, `createPullRequest` never called |
+| T-63 | **Added, slice 3 review, 2026-08-03.** `createPullRequest` fails after the commit landed | unit | the PR step throws → a refusal naming the branch and the GitHub branch URL, not claiming GitHub is unreachable |
 
 ### Slice 4 — idempotency and revise
 

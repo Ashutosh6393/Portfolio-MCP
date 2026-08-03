@@ -633,3 +633,95 @@ describe("publish — nothing is ever written to portfolio on a refusal (T-43)",
 		expect(result.ok).toBe(false);
 	});
 });
+
+// Slice 3 review, 2026-08-03 — see Test revisions in
+// specs/005-publish/implementation.md. T-32 already covers a writing
+// carrying show/order; design.md → "show and order" states the rule in both
+// directions and only one had a test.
+describe("publish — a project without show/order (T-61)", () => {
+	test("T-61: a project published without show/order refuses, naming both, before any write", async () => {
+		const { github, calls } = githubFake({
+			draft: draftFile(validProjectDraftMetadata(), shortBody),
+		});
+		const site = siteFake({});
+
+		const result = await publish(
+			{ github, site },
+			{ kind: "project", slug: "scaffold-ai", show: true, order: undefined },
+		);
+
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("expected an error result");
+		expect(result.error).toContain("show");
+		expect(result.error).toContain("order");
+
+		expect(calls.createBranch).toHaveLength(0);
+		expect(calls.writeFile).toHaveLength(0);
+		expect(calls.createPullRequest).toHaveLength(0);
+	});
+});
+
+// Slice 3 review, 2026-08-03 — the two paths that can leave `portfolio`
+// half-written: a commit that never gets a PR, and a branch cut but never
+// committed to. Both must point recovery at the GitHub branch URL, never the
+// live site URL (a real bug the review caught: the post is not published, so
+// its public URL is a 404 and knows nothing about pull requests).
+describe("publish — half-written portfolio state (T-62, T-63)", () => {
+	test("T-62: writeFile fails after the branch was cut — refusal names the branch and the GitHub branch URL, not the live site", async () => {
+		const sentinel = "ZOD_ISSUE_DUMP_SENTINEL_DO_NOT_LEAK";
+		const { github, calls } = githubFake({
+			draft: draftFile(validWritingDraftMetadata(), shortBody),
+		});
+		// writeFile throws after createBranch already recorded a call — the
+		// commit step is the one that fails.
+		github.writeFile = (async () => {
+			throw new Error(sentinel);
+		}) as typeof github.writeFile;
+		const site = siteFake({});
+
+		const result = await publish(
+			{ github, site },
+			{ kind: "writing", slug: "crdts" },
+		);
+
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("expected an error result");
+		expect(result.error).toContain("publish/writing/crdts");
+		expect(result.error).toContain(
+			"github.com/Ashutosh6393/Portfolio-new/tree/publish/writing/crdts",
+		);
+		expect(result.error).not.toContain("ashutoshverma.dev");
+		expect(result.error).not.toContain(sentinel);
+
+		expect(calls.createBranch).toHaveLength(1);
+		expect(calls.createPullRequest).toHaveLength(0);
+	});
+
+	test("T-63: createPullRequest fails after the commit landed — refusal names the branch and the GitHub branch URL, and does not claim GitHub is unreachable", async () => {
+		const sentinel = "ZOD_ISSUE_DUMP_SENTINEL_DO_NOT_LEAK";
+		const { github, calls } = githubFake({
+			draft: draftFile(validWritingDraftMetadata(), shortBody),
+		});
+		github.createPullRequest = (async () => {
+			throw new Error(sentinel);
+		}) as typeof github.createPullRequest;
+		const site = siteFake({});
+
+		const result = await publish(
+			{ github, site },
+			{ kind: "writing", slug: "crdts" },
+		);
+
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("expected an error result");
+		expect(result.error).toContain("publish/writing/crdts");
+		expect(result.error).toContain(
+			"github.com/Ashutosh6393/Portfolio-new/tree/publish/writing/crdts",
+		);
+		expect(result.error.toLowerCase()).not.toContain("unreachable");
+		expect(result.error).not.toContain(sentinel);
+
+		expect(calls.createBranch).toHaveLength(1);
+		expect(calls.writeFile).toHaveLength(1);
+	});
+});

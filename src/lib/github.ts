@@ -1,15 +1,24 @@
-// The GitHub reader and writer. `site.ts` with a token and five methods — if it
-// starts looking like anything else, stop (specs/002-github-access/CLAUDE.md).
+// The GitHub reader and writer. `site.ts` with a token and eight methods — if
+// it starts looking like anything else, stop (specs/002-github-access/CLAUDE.md).
 //
 // Purpose:            read files and directory listings out of the two repos
-//                     this server touches, and write to one of them.
-// Constraints:        the token is read **and write** on `workshop`, and stays
-//                     **read-only on `portfolio`** (ADR-004). Nothing here may
-//                     widen that: a write aimed at `portfolio` is a bug, not a
-//                     feature waiting for a scope change.
+//                     this server touches, and write to both.
+// Constraints:        **This changed in ADR-005 decision 8.** The token used to
+//                     be read-only on `portfolio`, and this header used to say
+//                     a write aimed there was a bug. It is now `contents: write`
+//                     on both repos, because GitHub grants committing to `main`
+//                     and opening a pull request through the same permission and
+//                     a fine-grained PAT cannot be scoped to a branch.
+//
+//                     So the guarantee moved out of the token and into two
+//                     places: a ruleset on `portfolio`'s `main` that requires a
+//                     pull request (proven to refuse this token by M-2,
+//                     2026-08-03), and the rule that **every `portfolio` write
+//                     names a branch**. Nothing here may target `main`. The
+//                     ruleset would refuse it, but the code must never try.
 // Non-responsibilities: no parsing (the service owns that), no caching, no
 //                     retry, no rate limiting — ~15 calls a week against 5,000
-//                     an hour.
+//                     an hour. No merging, ever.
 
 import { z } from "zod";
 
@@ -107,13 +116,27 @@ export type Github = {
 	): Promise<{ content: string; sha: string }>;
 	// `branch` is what keeps a publish off `main`. Omitted, GitHub commits to
 	// the repo's default branch — which on `portfolio` is exactly the thing
-	// ADR-005 decision 8 exists to prevent. The ruleset refuses it regardless
-	// (M-2 proved that), but the code must never try.
+	// ADR-005 decision 8 exists to prevent.
+	//
+	// So it is not optional there. The overload makes `branch` **required** for
+	// a `portfolio` write and absent from a `workshop` one, which turns "the
+	// code must never try" from a convention somebody has to remember into a
+	// compile error. The ruleset is the real guarantee; this is the guard that
+	// stops a future caller ever reaching it by accident.
 	writeFile(
-		repo: Repo,
-		path: string,
-		content: string,
-		options: { message: string; sha?: string; branch?: string },
+		...args:
+			| [
+					repo: "workshop",
+					path: string,
+					content: string,
+					options: { message: string; sha?: string },
+			  ]
+			| [
+					repo: "portfolio",
+					path: string,
+					content: string,
+					options: { message: string; sha?: string; branch: string },
+			  ]
 	): Promise<void>;
 	// Narrowed to `workshop`. Nothing deletes from `portfolio` — unpublishing
 	// is by hand, with a redirect (design.md → Out of scope) — and now that the
@@ -281,9 +304,10 @@ export function createGithub(token: string): Github {
 					message: options.message,
 					content: Buffer.from(content, "utf8").toString("base64"),
 					...(options.sha ? { sha: options.sha } : {}),
-					// Omitted for a draft, always present for a publish. Without it
+					// Absent for a `workshop` draft, required for a `portfolio`
+					// publish — the overload above is what enforces that. Without it
 					// GitHub writes to the default branch.
-					...(options.branch ? { branch: options.branch } : {}),
+					...("branch" in options ? { branch: options.branch } : {}),
 				},
 			});
 		},
@@ -301,6 +325,12 @@ export function createGithub(token: string): Github {
 		// A 422 here means the ref already exists, which is a clean refusal
 		// rather than a crash: publishing the same slug twice must not silently
 		// overwrite the branch (T-41). Slice 4 turns that into an update.
+		//
+		// `POST /git/refs` also answers 422 for a bad base sha and an invalid
+		// ref name, which would both be reported as "already exists". Neither is
+		// reachable from here — `fromSha` comes from `getBranchHead` and the
+		// branch name is built from an `isSlug`-guarded slug — so the trade is
+		// deliberate rather than overlooked.
 		async createBranch(repo, branch, fromSha) {
 			await request(
 				repo,

@@ -78,7 +78,8 @@ correctly. Add to this table whenever a misunderstanding surfaces.
   `discard_draft`.
 - Secret-path auth, and a `/health` route that really checks its dependencies — one
   check per external system, each arriving with the slice that needs it.
-- The `publish` path: schema validation, MDX parse, branch, PR, idempotency.
+- The `publish` path: schema validation, branch, PR, idempotency. **No MDX parse** —
+  ADR-005 decision 2 dropped it; the Vercel preview build on the PR is the check.
 
 ### We are explicitly not building
 

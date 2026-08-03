@@ -1,5 +1,5 @@
 // Where a published post lives, what branch carries it, and what the pull
-// request says. Four pure functions, no network, no state.
+// request says. Pure functions only — no network, no state.
 //
 // Purpose:            hold the strings the publish path depends on being
 //                     exactly right, in one place, under test.
@@ -32,8 +32,16 @@ export function branchName(kind: "writing" | "project", slug: string): string {
 
 // No scheme. This goes in front of a human in a PR body, where
 // `ashutoshverma.dev/writing/x` is what they would type.
+//
+// It describes where the post *will* live after a merge. It is never the right
+// URL for a recovery instruction — before the merge it is a 404.
 export function publicUrl(kind: "writing" | "project", slug: string): string {
 	return `ashutoshverma.dev/${kindDirectory[kind]}/${slug}`;
+}
+
+// Where to look when a publish fails partway and leaves a branch behind.
+export function branchUrl(branch: string): string {
+	return `https://github.com/Ashutosh6393/Portfolio-new/tree/${branch}`;
 }
 
 export type RenderPrBodyArgs =

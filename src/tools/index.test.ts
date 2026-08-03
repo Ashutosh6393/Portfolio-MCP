@@ -311,7 +311,7 @@ const fakeDraftGithub: Github = {
 		if (!file) throw new GithubNotFoundError("workshop", path);
 		return file;
 	},
-	async writeFile(_repo, path, content) {
+	async writeFile(_repo, path, content, _options) {
 		draftFiles[path] = { content, sha: "draft-sha-2" };
 	},
 	// Task 9 needs this to actually delete: discard_draft reads the sha via

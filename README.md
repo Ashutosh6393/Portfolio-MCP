@@ -7,9 +7,10 @@ Six tools that move bytes. The model does the writing; the server reads content,
 skills, saves drafts, and opens a pull request. **It never merges.** The merge button is
 the gate, and it is somewhere the model cannot reach.
 
-**Status: deployed, and five of the six tools are live.** `list_content`, `get_skill`,
-`save_draft`, `get_content` and `discard_draft` all work from Claude Code, claude.ai and the
-phone. `publish` is next, and it is the one that opens the pull request.
+**Status: all six tools are built.** `list_content`, `get_skill`, `save_draft`,
+`get_content` and `discard_draft` are deployed and work from Claude Code, claude.ai and the
+phone. `publish` — the one that opens the pull request — is written and green, and is
+waiting on its first run against the real repo before it can be called live.
 
 ---
 
