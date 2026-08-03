@@ -32,7 +32,19 @@ const documentKeywords = new Set([
 	"additionalProperties",
 ]);
 
-const propertyKeywords = new Set(["type"]);
+const propertyKeywords = new Set([
+	"type",
+	"minLength",
+	"enum",
+	"pattern",
+	"format",
+	"minItems",
+	"items",
+]);
+
+// `items` in the live schema is a single subschema carrying nothing but a
+// `type`. Nesting past that is refused by the same rule as everything else.
+const itemsKeywords = new Set(["type"]);
 
 // The `type` values in use across both live documents.
 const typeCheckers: Record<string, (value: unknown) => boolean> = {
@@ -42,6 +54,111 @@ const typeCheckers: Record<string, (value: unknown) => boolean> = {
 
 function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// `format` has exactly one real implementation.
+//
+// `uri` is checked with the platform's own URL parser — no dependency, and no
+// second opinion about what a URL is.
+//
+// **`date` is accepted as satisfied on purpose, and that is not an oversight.**
+// The live schema puts a full `pattern` beside it on `writing.date` which is
+// strictly stronger than any date check this file would write, so `pattern`
+// below is what actually rejects `2026-13-45` (T-07 proves it). A second date
+// parser here could disagree with the site's own regex and produce a refusal
+// nobody can explain.
+//
+// The cost, stated so it is visible: if the site ever drops that `pattern` and
+// keeps only `format: "date"`, dates stop being checked and nothing detects it
+// (design.md → Risks). Any format value other than these two is still an
+// error, by the same rule as an unknown keyword.
+function checkFormat(field: string, format: string, value: string): string[] {
+	if (format === "date") return [];
+
+	if (format === "uri") {
+		try {
+			new URL(value);
+			return [];
+		} catch {
+			return [`\`${field}\` must be a URL.`];
+		}
+	}
+
+	return [
+		`The schema wants \`${field}\` to be format \`${format}\`, which this validator does not implement.`,
+	];
+}
+
+// The constraint keywords, for one field whose `type` already matched.
+function checkConstraints(
+	field: string,
+	subschema: Record<string, unknown>,
+	value: unknown,
+): string[] {
+	const errors: string[] = [];
+
+	if (Array.isArray(subschema.enum) && !subschema.enum.includes(value)) {
+		// The allowed values are listed because the model is being told what to
+		// write next, not just that it was wrong.
+		errors.push(`\`${field}\` must be one of: ${subschema.enum.join(", ")}.`);
+	}
+
+	if (typeof value === "string") {
+		if (
+			typeof subschema.minLength === "number" &&
+			value.length < subschema.minLength
+		) {
+			errors.push(
+				`\`${field}\` must be at least ${subschema.minLength} character${subschema.minLength === 1 ? "" : "s"} long.`,
+			);
+		}
+
+		if (
+			typeof subschema.pattern === "string" &&
+			!new RegExp(subschema.pattern).test(value)
+		) {
+			errors.push(`\`${field}\` is not in the format the site expects.`);
+		}
+
+		if (typeof subschema.format === "string") {
+			errors.push(...checkFormat(field, subschema.format, value));
+		}
+	}
+
+	if (Array.isArray(value)) {
+		if (
+			typeof subschema.minItems === "number" &&
+			value.length < subschema.minItems
+		) {
+			errors.push(
+				`\`${field}\` must have at least ${subschema.minItems} item${subschema.minItems === 1 ? "" : "s"}.`,
+			);
+		}
+
+		if (isObject(subschema.items)) {
+			for (const keyword of Object.keys(subschema.items)) {
+				if (!itemsKeywords.has(keyword)) {
+					errors.push(
+						`The schema constrains the items of \`${field}\` with \`${keyword}\`, which this validator does not implement.`,
+					);
+				}
+			}
+
+			const expected = subschema.items.type;
+			if (typeof expected === "string") {
+				const checker = typeCheckers[expected];
+				if (!checker) {
+					errors.push(
+						`The schema wants the items of \`${field}\` to be type \`${expected}\`, which this validator does not implement.`,
+					);
+				} else if (!value.every(checker)) {
+					errors.push(`Every item in \`${field}\` must be ${expected}.`);
+				}
+			}
+		}
+	}
+
+	return errors;
 }
 
 export function validate(
@@ -114,8 +231,13 @@ export function validate(
 		}
 
 		if (!checker(value)) {
+			// A wrong type makes every constraint below meaningless — `minLength`
+			// on a number would report nothing useful. Report the type and move on.
 			errors.push(`\`${field}\` must be ${expected}.`);
+			continue;
 		}
+
+		errors.push(...checkConstraints(field, subschema, value));
 	}
 
 	return errors;

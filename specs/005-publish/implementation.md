@@ -8,7 +8,7 @@ Update it after every task. Never batch updates.
 - **Status:** in-progress — slice 1
 - **Branch:** `feat/publish`
 - **Spec:** `design.md` · **ADR:** `docs/adr/005-publish-opens-a-pull-request.md`
-- **Current task:** 3 — `lib/validate.ts`, constraints
+- **Current task:** 4 — `lib/site.ts`, `fetchSchema`
 
 ---
 
@@ -35,8 +35,8 @@ In dependency order. Each task must be independently testable and map to test ID
 | # | Task | Depends on | Tests | Slice | State | Attempts | Commit |
 |---|---|---|---|---|---|---|---|
 | 1 | `lib/reading-time.ts` — words ÷ 200, `{n} min`, floor of one minute | — | T-13, T-14, T-15 | 1 | `done` | 1/3 | `98eb726` |
-| 2 | `lib/validate.ts` — structure: `type`, `properties`, `required`, `additionalProperties`, and the **unknown-keyword refusal** | — | T-01, T-02, T-03, T-04, T-11, T-12 | 1 | `done` | 1/3 | `pending` |
-| 3 | `lib/validate.ts` — constraints: `minLength`, `enum`, `pattern`, `format`, `minItems`, `items` | 2 | T-05, T-06, T-07, T-08, T-09, T-10 | 1 | `pending` | 0/3 | — |
+| 2 | `lib/validate.ts` — structure: `type`, `properties`, `required`, `additionalProperties`, and the **unknown-keyword refusal** | — | T-01, T-02, T-03, T-04, T-11, T-12 | 1 | `done` | 1/3 | `da25fc0` |
+| 3 | `lib/validate.ts` — constraints: `minLength`, `enum`, `pattern`, `format`, `minItems`, `items` | 2 | T-05, T-06, T-07, T-08, T-09, T-10 | 1 | `done` | 1/3 | `pending` |
 | 4 | `lib/site.ts` — `fetchSchema` and the two-key envelope schema | — | T-16, T-17 | 1 | `pending` | 0/3 | — |
 | 5 | `src/index.ts` — the `schema` health check | 4 | T-18, T-19 | 1 | `pending` | 0/3 | — |
 | 6 | `lib/site.ts` — `fetchDocument(kind, slug)` and its response schema | — | T-20 (via 7) | 2 | `pending` | 0/3 | — |
