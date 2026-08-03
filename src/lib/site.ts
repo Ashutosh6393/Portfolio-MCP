@@ -28,13 +28,32 @@ export const projectListSchema = z.array(
 	}),
 );
 
+// The write schema, served whole: `{ writing: {...}, project: {...} }`, two
+// complete draft-2020-12 documents (specs/005-publish/design.md → Live facts).
+//
+// The envelope's only job is proving both keys arrived. What is *inside* them
+// is not described here on purpose — `lib/validate.ts` is what interprets a
+// schema document, and a Zod mirror of JSON Schema here would be a second
+// definition of the same thing, drifting the day the site adds a keyword.
+//
+// A consumer selects `schema[kind]`. Never hand the envelope to a validator.
+export const schemaEnvelopeSchema = z.object({
+	writing: z.record(z.string(), z.unknown()),
+	project: z.record(z.string(), z.unknown()),
+});
+
+export type SchemaEnvelope = z.infer<typeof schemaEnvelopeSchema>;
+
 const contentUrl = {
 	writing: "https://ashutoshverma.dev/api/writing/content.json",
 	project: "https://ashutoshverma.dev/api/projects/content.json",
 };
 
+const schemaUrl = "https://ashutoshverma.dev/api/schema.json";
+
 export type Site = {
 	fetchContent(kind: "writing" | "project"): Promise<unknown>;
+	fetchSchema(): Promise<SchemaEnvelope>;
 };
 
 // Types derived from the schemas above, for the service layer (Task 6) —
@@ -51,5 +70,19 @@ export const site: Site = {
 			throw new Error(`Failed to fetch ${kind} content from ashutoshverma.dev`);
 		}
 		return response.json();
+	},
+
+	// Unlike fetchContent, this one parses here rather than in a service.
+	// It has two callers with nothing in common — the health check and the
+	// publish service — so there is no single service to own the parse, and
+	// both want the same guarantee: both keys arrived, or this throws.
+	async fetchSchema() {
+		const response = await fetch(schemaUrl);
+		if (!response.ok) {
+			throw new Error(
+				"Failed to fetch the write schema from ashutoshverma.dev",
+			);
+		}
+		return schemaEnvelopeSchema.parse(await response.json());
 	},
 };

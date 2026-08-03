@@ -23,9 +23,18 @@ const testEnv = {
 // `createApp`'s `deps` parameter is now required. T-04..T-07 were written when
 // createApp took one argument; they now pass this fake explicitly so no test in
 // this file can silently fall back to the real site singleton.
+// Test revision, 2026-08-03 — see Test revisions table in
+// specs/005-publish/implementation.md. Task 4 widens `Site` with
+// `fetchSchema`, so every fake must carry it to typecheck. Nothing in this
+// file reaches the publish path, so this throws rather than return a
+// plausible value: an accidental call fails loudly instead of passing
+// silently.
 const fakeSite: Site = {
 	async fetchContent() {
 		return [];
+	},
+	async fetchSchema(): Promise<never> {
+		throw new Error("fetchSchema is not part of this test");
 	},
 };
 
@@ -146,6 +155,9 @@ describe("GET /{secret}/health", () => {
 		const unreachableSite: Site = {
 			async fetchContent() {
 				throw new Error("simulated site outage");
+			},
+			async fetchSchema(): Promise<never> {
+				throw new Error("fetchSchema is not part of this test");
 			},
 		};
 		const app = createApp(testEnv, { ...testDeps, site: unreachableSite });

@@ -20,9 +20,18 @@ import { createHandler } from "./index";
 // result (`isError: true`, a `content` array), not a JSON-RPC error object
 // and not an HTTP error.
 
+// Test revision, 2026-08-03 — see Test revisions table in
+// specs/005-publish/implementation.md. Task 4 widens `Site` with
+// `fetchSchema`, so every fake must carry it to typecheck. No tool
+// exercised here reaches the publish path, so this throws rather than
+// return a plausible value: an accidental call fails loudly instead of
+// passing silently.
 const fakeSite: Site = {
 	async fetchContent() {
 		return [];
+	},
+	async fetchSchema(): Promise<never> {
+		throw new Error("fetchSchema is not part of this test");
 	},
 };
 
@@ -305,6 +314,9 @@ const fakeSiteWithPublishedPost: Site = {
 				summary: "already live",
 			},
 		];
+	},
+	async fetchSchema(): Promise<never> {
+		throw new Error("fetchSchema is not part of this test");
 	},
 };
 

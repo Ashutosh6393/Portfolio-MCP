@@ -66,6 +66,15 @@ const writingItem = (slug: string): Writing => ({
 	summary: "Already published.",
 });
 
+// Test revision, 2026-08-03 — see Test revisions table in
+// specs/005-publish/implementation.md. Task 4 widens `Site` with
+// `fetchSchema`, so every fake must carry it to typecheck. saveDraft never
+// reaches the publish path, so this throws rather than return a plausible
+// value: an accidental call fails loudly instead of passing silently.
+async function fetchSchemaNotPartOfThisTest(): Promise<never> {
+	throw new Error("fetchSchema is not part of this test");
+}
+
 // A site whose fetchContent returns whatever items are handed to it,
 // regardless of kind — the tests only ever exercise one kind at a time.
 function siteReturning(items: Writing[] | Project[]): Site {
@@ -73,6 +82,7 @@ function siteReturning(items: Writing[] | Project[]): Site {
 		async fetchContent() {
 			return items;
 		},
+		fetchSchema: fetchSchemaNotPartOfThisTest,
 	};
 }
 
@@ -83,6 +93,7 @@ function siteThatThrows(): Site {
 		async fetchContent() {
 			throw new Error("ashutoshverma.dev did not respond");
 		},
+		fetchSchema: fetchSchemaNotPartOfThisTest,
 	};
 }
 
