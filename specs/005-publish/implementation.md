@@ -39,10 +39,10 @@ In dependency order. Each task must be independently testable and map to test ID
 | 3 | `lib/validate.ts` — constraints: `minLength`, `enum`, `pattern`, `format`, `minItems`, `items` | 2 | T-05, T-06, T-07, T-08, T-09, T-10 | 1 | `done` | 1/3 | `8b9b286` |
 | 4 | `lib/site.ts` — `fetchSchema` and the two-key envelope schema | — | T-16, T-17 | 1 | `done` | 1/3 | `30008b5` |
 | 5 | `src/index.ts` — the `schema` health check | 4 | T-18, T-19 | 1 | `done` | 1/3 | `2215d76` |
-| 6 | `lib/site.ts` — `fetchDocument(kind, slug)` and its response schema | — | T-20 (via 7) | 2 | `done` | 1/3 | `pending` |
-| 7 | `services/get-content.ts` — the `state` argument and the published branch | 6 | T-20, T-21, T-22, T-23, T-24, T-25 | 2 | `done` | 1/3 | `pending` |
-| 8 | `tools/get-content.ts` — `state` in the input schema, description rewritten | 7 | T-26, T-27 | 2 | `done` | 1/3 | `pending` |
-| 9 | `tools/save-draft.ts` — the slug instruction in the description. **Text only.** | — | none — see note | 2 | `done` | 1/3 | `pending` |
+| 6 | `lib/site.ts` — `fetchDocument(kind, slug)` and its response schema | — | T-20 (via 7) | 2 | `done` | 1/3 | `4b01a66` |
+| 7 | `services/get-content.ts` — the `state` argument and the published branch | 6 | T-20, T-21, T-22, T-23, T-24, T-25 | 2 | `done` | 1/3 | `6b97c8c` |
+| 8 | `tools/get-content.ts` — `state` in the input schema, description rewritten | 7 | T-26, T-27 | 2 | `done` | 1/3 | `6b97c8c` |
+| 9 | `tools/save-draft.ts` — the slug instruction in the description. **Text only.** | — | none — see note | 2 | `done` | 1/3 | `48cf191` |
 | — | **M-2 — prove the ruleset refuses a push to `main`.** The ruleset is already configured; this proves it refuses *this* token. Blocks slice 3. | — | M-2 | 3 | `pending` | — | — |
 | 10 | `lib/github.ts` — generalise `request` to take a path suffix. **Refactor only, no new behaviour.** | M-2 | none — existing suite stays green | 3 | `pending` | 0/3 | — |
 | 11 | `lib/github.ts` — `getBranchHead`, `createBranch`, `createPullRequest`; a `branch` option on `writeFile`; narrow the write functions' `repo` parameter | 10 | none — see design.md → Seams | 3 | `pending` | 0/3 | — |
